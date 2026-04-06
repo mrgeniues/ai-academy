@@ -15,7 +15,11 @@ type DbCourse = {
   updated_at: string;
 };
 
-function formatCourse(course: DbCourse, lessonCount: number, enrollmentCount: number) {
+function formatCourse(
+  course: DbCourse,
+  lessonCount: number,
+  enrollmentCount: number,
+) {
   return {
     id: course.id,
     title: course.title,
@@ -29,28 +33,6 @@ function formatCourse(course: DbCourse, lessonCount: number, enrollmentCount: nu
   };
 }
 
-async function getCourseWithCounts(courseId: number) {
-  const { data: course } = await supabase
-    .from("courses")
-    .select("*")
-    .eq("id", courseId)
-    .maybeSingle();
-
-  if (!course) return null;
-
-  const { count: lessonCount } = await supabase
-    .from("lessons")
-    .select("*", { count: "exact", head: true })
-    .eq("course_id", courseId);
-
-  const { count: enrollmentCount } = await supabase
-    .from("enrollments")
-    .select("*", { count: "exact", head: true })
-    .eq("course_id", courseId);
-
-  return formatCourse(course as DbCourse, lessonCount ?? 0, enrollmentCount ?? 0);
-}
-
 router.get("/courses", requireAuth, async (_req, res): Promise<void> => {
   const { data: courses, error } = await supabase
     .from("courses")
@@ -62,19 +44,34 @@ router.get("/courses", requireAuth, async (_req, res): Promise<void> => {
     return;
   }
 
-  const enriched = await Promise.all((courses ?? []).map(async (course) => {
-    const { count: lessonCount } = await supabase
-      .from("lessons")
-      .select("*", { count: "exact", head: true })
-      .eq("course_id", course.id);
+  const courseIds = (courses ?? []).map(c => c.id);
 
-    const { count: enrollmentCount } = await supabase
-      .from("enrollments")
-      .select("*", { count: "exact", head: true })
-      .eq("course_id", course.id);
+  if (courseIds.length === 0) {
+    res.json([]);
+    return;
+  }
 
-    return formatCourse(course as DbCourse, lessonCount ?? 0, enrollmentCount ?? 0);
-  }));
+  const [{ data: lessonRows }, { data: enrollmentRows }] = await Promise.all([
+    supabase.from("lessons").select("course_id").in("course_id", courseIds),
+    supabase.from("enrollments").select("course_id").in("course_id", courseIds),
+  ]);
+
+  const lessonCountMap = new Map<number, number>();
+  const enrollmentCountMap = new Map<number, number>();
+  for (const l of lessonRows ?? []) {
+    lessonCountMap.set(l.course_id, (lessonCountMap.get(l.course_id) ?? 0) + 1);
+  }
+  for (const e of enrollmentRows ?? []) {
+    enrollmentCountMap.set(e.course_id, (enrollmentCountMap.get(e.course_id) ?? 0) + 1);
+  }
+
+  const enriched = (courses ?? []).map(course =>
+    formatCourse(
+      course as DbCourse,
+      lessonCountMap.get(course.id) ?? 0,
+      enrollmentCountMap.get(course.id) ?? 0,
+    )
+  );
 
   res.json(enriched);
 });
@@ -118,27 +115,27 @@ router.get("/courses/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const course = await getCourseWithCounts(id);
+  const [
+    { data: course },
+    { data: lessons },
+    { data: enrollment },
+    { count: lessonCount },
+    { count: enrollmentCount },
+  ] = await Promise.all([
+    supabase.from("courses").select("*").eq("id", id).maybeSingle(),
+    supabase.from("lessons").select("*").eq("course_id", id).order("order", { ascending: true }),
+    supabase.from("enrollments").select("*").eq("course_id", id).eq("user_id", req.userId!).maybeSingle(),
+    supabase.from("lessons").select("*", { count: "exact", head: true }).eq("course_id", id),
+    supabase.from("enrollments").select("*", { count: "exact", head: true }).eq("course_id", id),
+  ]);
+
   if (!course) {
     res.status(404).json({ error: "Course not found" });
     return;
   }
 
-  const { data: lessons } = await supabase
-    .from("lessons")
-    .select("*")
-    .eq("course_id", id)
-    .order("order", { ascending: true });
-
-  const { data: enrollment } = await supabase
-    .from("enrollments")
-    .select("*")
-    .eq("course_id", id)
-    .eq("user_id", req.userId!)
-    .maybeSingle();
-
   res.json({
-    ...course,
+    ...formatCourse(course as DbCourse, lessonCount ?? 0, enrollmentCount ?? 0),
     lessons: (lessons ?? []).map(l => ({
       id: l.id,
       courseId: l.course_id,
@@ -177,17 +174,20 @@ router.patch("/courses/:id", requireAuth, async (req, res): Promise<void> => {
   if (parsed.data.description !== undefined) updates.description = parsed.data.description;
   if (parsed.data.thumbnail !== undefined) updates.thumbnail = parsed.data.thumbnail;
 
-  await supabase
-    .from("courses")
-    .update(updates)
-    .eq("id", id);
+  await supabase.from("courses").update(updates).eq("id", id);
 
-  const updatedWithCounts = await getCourseWithCounts(id);
-  if (!updatedWithCounts) {
+  const [{ data: updated }, { count: lc }, { count: ec }] = await Promise.all([
+    supabase.from("courses").select("*").eq("id", id).maybeSingle(),
+    supabase.from("lessons").select("*", { count: "exact", head: true }).eq("course_id", id),
+    supabase.from("enrollments").select("*", { count: "exact", head: true }).eq("course_id", id),
+  ]);
+
+  if (!updated) {
     res.status(404).json({ error: "Course not found" });
     return;
   }
-  res.json(updatedWithCounts);
+
+  res.json(formatCourse(updated as DbCourse, lc ?? 0, ec ?? 0));
 });
 
 router.delete("/courses/:id", requireAuth, async (req, res): Promise<void> => {

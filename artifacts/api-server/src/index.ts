@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { initializeDatabase } from "./lib/db-init";
 
 const rawPort = process.env["PORT"];
 
@@ -15,11 +16,16 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
+app.listen(port, async (err) => {
   if (err) {
     logger.error({ err }, "Error listening on port");
     process.exit(1);
   }
 
   logger.info({ port }, "Server listening");
+
+  // Auto-initialize DB (create tables + seed if needed)
+  await initializeDatabase().catch((e) =>
+    logger.warn({ err: e?.message }, "DB init check failed")
+  );
 });
