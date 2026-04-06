@@ -85,41 +85,63 @@ router.post("/courses/:courseId/lessons", requireAuth, async (req, res): Promise
   res.status(201).json(formatLesson(lesson));
 });
 
+async function recalculateProgress(userId: number, courseId: number): Promise<{ progress: number; completedLessons: number; totalLessons: number }> {
+  const { data: allLessons } = await supabase.from("lessons").select("id").eq("course_id", courseId);
+  const lessonIds = (allLessons ?? []).map(l => l.id);
+  const total = lessonIds.length;
+
+  let completed = 0;
+  if (total > 0) {
+    const { count, error: countErr } = await supabase
+      .from("lesson_completions")
+      .select("lesson_id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .in("lesson_id", lessonIds);
+    if (countErr) console.error("[recalculateProgress] lesson_completions query error:", countErr.message, countErr.code);
+    completed = count ?? 0;
+  }
+
+  const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const { error: updateErr } = await supabase
+    .from("enrollments")
+    .update({ progress })
+    .eq("user_id", userId)
+    .eq("course_id", courseId);
+  if (updateErr) console.error("[recalculateProgress] enrollments update error:", updateErr.message, updateErr.code);
+
+  return { progress, completedLessons: completed, totalLessons: total };
+}
+
 // Mark a lesson as complete
 router.post("/lessons/:id/complete", requireAuth, async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const lessonId = parseInt(rawId, 10);
   if (isNaN(lessonId)) { res.status(400).json({ error: "Invalid lesson id" }); return; }
 
-  const { data: lesson } = await supabase.from("lessons").select("course_id").eq("id", lessonId).maybeSingle();
+  const { data: lesson, error: lessonErr } = await supabase.from("lessons").select("course_id").eq("id", lessonId).maybeSingle();
+  if (lessonErr) console.error("[POST /complete] lesson fetch error:", lessonErr.message);
   if (!lesson) { res.status(404).json({ error: "Lesson not found" }); return; }
 
-  // Check enrolled
-  const { data: enrollment } = await supabase
+  const { data: enrollment, error: enrollErr } = await supabase
     .from("enrollments")
     .select("id")
     .eq("user_id", req.userId!)
     .eq("course_id", lesson.course_id)
     .maybeSingle();
+  if (enrollErr) console.error("[POST /complete] enrollment check error:", enrollErr.message);
   if (!enrollment) { res.status(403).json({ error: "Not enrolled in this course" }); return; }
 
-  await supabase.from("lesson_completions").upsert({ user_id: req.userId!, lesson_id: lessonId }, { onConflict: "user_id,lesson_id" });
+  const { error: upsertErr } = await supabase
+    .from("lesson_completions")
+    .upsert({ user_id: req.userId!, lesson_id: lessonId }, { onConflict: "user_id,lesson_id" });
+  if (upsertErr) {
+    console.error("[POST /complete] lesson_completions upsert error:", upsertErr.message, upsertErr.code);
+    res.status(500).json({ error: "Failed to mark lesson complete. Make sure lesson_completions table exists in Supabase." });
+    return;
+  }
 
-  // Recalculate progress
-  const [{ count: total }, { count: completed }] = await Promise.all([
-    supabase.from("lessons").select("*", { count: "exact", head: true }).eq("course_id", lesson.course_id),
-    supabase.from("lesson_completions")
-      .select("lesson_id", { count: "exact", head: true })
-      .eq("user_id", req.userId!)
-      .in("lesson_id",
-        (await supabase.from("lessons").select("id").eq("course_id", lesson.course_id)).data?.map(l => l.id) ?? []
-      ),
-  ]);
-
-  const progress = total ? Math.round(((completed ?? 0) / total) * 100) : 0;
-  await supabase.from("enrollments").update({ progress }).eq("user_id", req.userId!).eq("course_id", lesson.course_id);
-
-  res.json({ progress, completedLessons: completed ?? 0, totalLessons: total ?? 0 });
+  const result = await recalculateProgress(req.userId!, lesson.course_id);
+  res.json(result);
 });
 
 // Undo lesson completion
@@ -128,25 +150,23 @@ router.delete("/lessons/:id/complete", requireAuth, async (req, res): Promise<vo
   const lessonId = parseInt(rawId, 10);
   if (isNaN(lessonId)) { res.status(400).json({ error: "Invalid lesson id" }); return; }
 
-  const { data: lesson } = await supabase.from("lessons").select("course_id").eq("id", lessonId).maybeSingle();
+  const { data: lesson, error: lessonErr } = await supabase.from("lessons").select("course_id").eq("id", lessonId).maybeSingle();
+  if (lessonErr) console.error("[DELETE /complete] lesson fetch error:", lessonErr.message);
   if (!lesson) { res.status(404).json({ error: "Lesson not found" }); return; }
 
-  await supabase.from("lesson_completions").delete().eq("user_id", req.userId!).eq("lesson_id", lessonId);
+  const { error: deleteErr } = await supabase
+    .from("lesson_completions")
+    .delete()
+    .eq("user_id", req.userId!)
+    .eq("lesson_id", lessonId);
+  if (deleteErr) {
+    console.error("[DELETE /complete] lesson_completions delete error:", deleteErr.message, deleteErr.code);
+    res.status(500).json({ error: "Failed to undo lesson completion. Make sure lesson_completions table exists in Supabase." });
+    return;
+  }
 
-  const [{ count: total }, { count: completed }] = await Promise.all([
-    supabase.from("lessons").select("*", { count: "exact", head: true }).eq("course_id", lesson.course_id),
-    supabase.from("lesson_completions")
-      .select("lesson_id", { count: "exact", head: true })
-      .eq("user_id", req.userId!)
-      .in("lesson_id",
-        (await supabase.from("lessons").select("id").eq("course_id", lesson.course_id)).data?.map(l => l.id) ?? []
-      ),
-  ]);
-
-  const progress = total ? Math.round(((completed ?? 0) / total) * 100) : 0;
-  await supabase.from("enrollments").update({ progress }).eq("user_id", req.userId!).eq("course_id", lesson.course_id);
-
-  res.json({ progress, completedLessons: completed ?? 0, totalLessons: total ?? 0 });
+  const result = await recalculateProgress(req.userId!, lesson.course_id);
+  res.json(result);
 });
 
 router.patch("/lessons/:id", requireAuth, async (req, res): Promise<void> => {

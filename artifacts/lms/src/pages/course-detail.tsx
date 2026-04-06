@@ -85,17 +85,41 @@ export default function CourseDetailPage() {
     setCompletingLesson(lessonId);
     try {
       const token = localStorage.getItem("lms_token");
-      
       const method = isCompleted ? "DELETE" : "POST";
       const resp = await fetch(`/api/lessons/${lessonId}/complete`, {
         method,
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!resp.ok) throw new Error("Failed to update progress");
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({})) as { error?: string };
+        throw new Error(errData.error || "Failed to update progress");
+      }
+      const result = await resp.json() as { progress: number; completedLessons: number; totalLessons: number };
+
+      // Immediately update cached course data so UI reflects change without waiting for refetch
+      queryClient.setQueryData(getGetCourseQueryKey(courseId), (old: unknown) => {
+        if (!old || typeof old !== "object") return old;
+        const course = old as ExtendedCourse & { isEnrolled?: boolean };
+        return {
+          ...course,
+          progress: result.progress,
+          completedLessons: result.completedLessons,
+          lessons: (course.lessons ?? []).map((l) =>
+            l.id === lessonId ? { ...l, isCompleted: !isCompleted } : l
+          ),
+        };
+      });
+
       queryClient.invalidateQueries({ queryKey: getGetCourseQueryKey(courseId) });
       queryClient.invalidateQueries({ queryKey: getListMyEnrollmentsQueryKey() });
-    } catch {
-      toast({ title: "Failed to update progress", variant: "destructive" });
+
+      toast({
+        title: isCompleted ? "Marked as incomplete" : "Lesson completed!",
+        description: `${result.completedLessons} of ${result.totalLessons} lessons done — ${result.progress}%`,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update progress";
+      toast({ title: message, variant: "destructive" });
     } finally {
       setCompletingLesson(null);
     }
