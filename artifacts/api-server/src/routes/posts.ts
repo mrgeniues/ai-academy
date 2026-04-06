@@ -29,13 +29,27 @@ router.get("/posts", requireAuth, async (req, res): Promise<void> => {
     .select("*, author:users(*)")
     .order("created_at", { ascending: false });
 
-  if (isVipFilter) {
-    query = query.eq("is_vip", true);
-  } else {
-    query = query.eq("is_vip", false);
-  }
+  // Try filtering by is_vip; fall back to returning all posts if the column doesn't exist yet
+  let filteredQuery = isVipFilter ? query.eq("is_vip", true) : query.eq("is_vip", false);
+  let { data: posts, error } = await filteredQuery;
 
-  const { data: posts, error } = await query;
+  if (error && (error.message?.includes("is_vip") || error.code === "42703" || error.code === "PGRST204")) {
+    // Column doesn't exist yet — return empty list for vip, all posts for community
+    if (isVipFilter) {
+      res.json([]);
+      return;
+    }
+    const fallback = await supabase
+      .from("posts")
+      .select("*, author:users(*)")
+      .order("created_at", { ascending: false });
+    if (fallback.error) {
+      res.status(500).json({ error: "Failed to fetch posts" });
+      return;
+    }
+    posts = fallback.data;
+    error = null;
+  }
 
   if (error) {
     console.error("[GET /posts] Supabase error:", error);
@@ -103,11 +117,23 @@ router.post("/posts", requireAuth, async (req, res): Promise<void> => {
   if (imageUrl) insertPayload.image_url = imageUrl;
   if (videoUrl) insertPayload.video_url = videoUrl;
 
-  const { data: post, error } = await supabase
+  let { data: post, error } = await supabase
     .from("posts")
     .insert(insertPayload)
     .select("*, author:users(*)")
     .single();
+
+  // Fallback: if is_vip column doesn't exist yet, retry without it
+  if (error && (error.message?.includes("is_vip") || error.code === "42703" || error.code === "PGRST204")) {
+    const { is_vip: _dropped, ...payloadWithoutVip } = insertPayload as Record<string, unknown> & { is_vip?: unknown };
+    const retry = await supabase
+      .from("posts")
+      .insert(payloadWithoutVip)
+      .select("*, author:users(*)")
+      .single();
+    post = retry.data;
+    error = retry.error;
+  }
 
   if (error || !post) {
     console.error("[POST /posts] Supabase error:", error);
