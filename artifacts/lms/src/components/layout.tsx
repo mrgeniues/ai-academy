@@ -53,7 +53,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <GraduationCap className="w-5 h-5 text-white" />
         </div>
         <span className="font-bold text-lg text-sidebar-foreground tracking-tight flex-1">LearnHub</span>
-        <NotificationBell />
+        <NotificationBell align="left" />
       </div>
 
       {/* Navigation */}

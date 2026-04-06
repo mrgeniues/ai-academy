@@ -45,7 +45,7 @@ function authHeaders(token: string | null): Record<string, string> {
   };
 }
 
-export function NotificationBell() {
+export function NotificationBell({ align = "right" }: { align?: "left" | "right" }) {
   const { token } = useAuth();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("all");
@@ -135,7 +135,7 @@ export function NotificationBell() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.2, ease: "easeOut" }}
-          className="absolute right-0 top-full mt-2 w-80 bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden"
+          className={`absolute top-full mt-2 w-80 bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden ${align === "left" ? "left-0" : "right-0"}`}
         >
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
