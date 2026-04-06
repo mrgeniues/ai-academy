@@ -96,28 +96,53 @@ router.post("/courses", requireAuth, async (req, res): Promise<void> => {
 
   const { title, description, thumbnail, externalUrl, visibility, lessons } = parsed.data;
 
-  const { data: course, error } = await supabase
+  // Build insert payload dynamically so missing optional columns don't crash the insert
+  const coursePayload: Record<string, unknown> = {
+    title,
+    description: description ?? null,
+    created_by: req.userId!,
+  };
+  if (thumbnail != null) coursePayload.thumbnail = thumbnail;
+  if (externalUrl != null) coursePayload.external_url = externalUrl;
+  coursePayload.visibility = visibility;
+
+  let { data: course, error } = await supabase
     .from("courses")
-    .insert({ title, description: description ?? null, thumbnail: thumbnail ?? null, external_url: externalUrl ?? null, visibility, created_by: req.userId! })
+    .insert(coursePayload)
     .select()
     .single();
 
+  // If visibility/external_url columns don't exist yet (pending migration), retry without them
+  if (error && (error.message.includes('"visibility"') || error.message.includes('"external_url"'))) {
+    console.warn("[POST /courses] Optional column missing, retrying without it:", error.message);
+    const fallbackPayload = { title: coursePayload.title, description: coursePayload.description, thumbnail: coursePayload.thumbnail, created_by: coursePayload.created_by };
+    const retry = await supabase.from("courses").insert(fallbackPayload).select().single();
+    course = retry.data;
+    error = retry.error;
+  }
+
   if (error || !course) {
-    res.status(500).json({ error: "Failed to create course" });
+    console.error("[POST /courses] Supabase error:", error?.message, error?.details, error?.hint);
+    res.status(500).json({ error: error?.message ?? "Failed to create course" });
     return;
   }
 
   type LessonInput = { title: string; description?: string | null; videoUrl?: string | null };
   if (lessons && lessons.length > 0) {
-    await supabase.from("lessons").insert(
-      (lessons as LessonInput[]).map((l, i) => ({
+    const lessonPayload = (lessons as LessonInput[]).map((l, i) => {
+      const row: Record<string, unknown> = {
         course_id: course.id,
         title: l.title,
-        description: l.description ?? null,
-        video_url: l.videoUrl ?? null,
         order: i + 1,
-      }))
-    );
+      };
+      if (l.description != null) row.description = l.description;
+      if (l.videoUrl != null) row.video_url = l.videoUrl;
+      return row;
+    });
+    const { error: lessonError } = await supabase.from("lessons").insert(lessonPayload);
+    if (lessonError) {
+      console.error("[POST /courses] Lesson insert error:", lessonError.message);
+    }
   }
 
   broadcastNotification({
@@ -127,7 +152,7 @@ router.post("/courses", requireAuth, async (req, res): Promise<void> => {
     courseId: course.id,
     isVip: true,
     excludeUserId: req.userId!,
-  });
+  }).catch(err => console.error("[broadcastNotification] Failed:", err));
 
   res.status(201).json(formatCourse(course as DbCourse, lessons?.length ?? 0, 0));
 });
