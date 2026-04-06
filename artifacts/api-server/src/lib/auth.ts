@@ -41,12 +41,17 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
   const { data: user } = await supabase
     .from("users")
-    .select("id, role")
+    .select("id, role, is_blocked")
     .eq("id", payload.userId)
     .maybeSingle();
 
   if (!user) {
     res.status(401).json({ error: "User not found" });
+    return;
+  }
+
+  if ((user as { is_blocked?: boolean }).is_blocked) {
+    res.status(403).json({ error: "Your account has been blocked. Contact admin for help." });
     return;
   }
 

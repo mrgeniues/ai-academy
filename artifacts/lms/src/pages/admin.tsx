@@ -9,17 +9,30 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trash2, Users, BookOpen, MessageSquare, TrendingUp, Shield } from "lucide-react";
+import { Trash2, Users, BookOpen, MessageSquare, TrendingUp, Shield, Ban, CheckCircle, Clock, Calendar } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
+
+type UserRow = {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  avatar?: string | null;
+  bio?: string | null;
+  isBlocked?: boolean;
+  lastLogin?: string | null;
+  createdAt?: string;
+};
 
 export default function AdminPage() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [blockingId, setBlockingId] = useState<number | null>(null);
 
   if (user && user.role !== "admin") {
     setLocation("/dashboard");
@@ -53,6 +66,29 @@ export default function AdminPage() {
     }
   };
 
+  const handleToggleBlock = async (u: UserRow) => {
+    const newBlocked = !u.isBlocked;
+    setBlockingId(u.id);
+    try {
+      const token = localStorage.getItem("lms_token");
+      const resp = await fetch(`/api/users/${u.id}/block`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ blocked: newBlocked }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Failed to update block status");
+      }
+      queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+      toast({ title: newBlocked ? `${u.name} has been blocked` : `${u.name} has been unblocked` });
+    } catch (err) {
+      toast({ title: (err as Error).message, variant: "destructive" });
+    } finally {
+      setBlockingId(null);
+    }
+  };
+
   const handleDeleteCourse = async (courseId: number) => {
     try {
       await deleteCourseMutation.mutateAsync({ id: courseId });
@@ -71,12 +107,6 @@ export default function AdminPage() {
     } catch {
       toast({ title: "Failed to delete post", variant: "destructive" });
     }
-  };
-
-  const roleColors: Record<string, string> = {
-    admin: "destructive",
-    creator: "default",
-    member: "secondary",
   };
 
   return (
@@ -120,52 +150,125 @@ export default function AdminPage() {
             <TabsTrigger value="posts" data-testid="tab-posts">Posts</TabsTrigger>
           </TabsList>
 
-          {/* Users tab */}
+          {/* ── Users tab ─────────────────────────────────────────────── */}
           <TabsContent value="users" className="mt-4">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">All Users ({users?.length ?? 0})</CardTitle>
+                <CardTitle className="text-base flex items-center gap-2">
+                  All Users
+                  <Badge variant="secondary" className="text-xs font-normal">{users?.length ?? 0}</Badge>
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 {usersLoading ? (
-                  <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+                  <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}</div>
                 ) : (
-                  <div className="space-y-2">
-                    {users?.map(u => (
-                      <div key={u.id} data-testid={`user-row-${u.id}`} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
-                        <Avatar className="w-9 h-9 flex-shrink-0">
-                          <AvatarImage src={u.avatar ?? undefined} />
-                          <AvatarFallback className="text-xs bg-muted">{u.name.slice(0, 2).toUpperCase()}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{u.name}</p>
-                          <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                  <div className="divide-y divide-border">
+                    {(users as UserRow[] | undefined)?.map(u => {
+                      const isCurrentUser = u.id === user?.id;
+                      const isBlocked = u.isBlocked ?? false;
+                      const isProcessing = blockingId === u.id;
+
+                      return (
+                        <div
+                          key={u.id}
+                          data-testid={`user-row-${u.id}`}
+                          className={`flex items-start gap-3 py-4 ${isBlocked ? "opacity-60" : ""}`}
+                        >
+                          {/* Avatar */}
+                          <div className="relative flex-shrink-0">
+                            <Avatar className="w-10 h-10">
+                              <AvatarImage src={u.avatar ?? undefined} />
+                              <AvatarFallback className="text-xs bg-muted font-semibold">
+                                {u.name.slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            {isBlocked && (
+                              <span className="absolute -bottom-0.5 -right-0.5 bg-destructive rounded-full p-0.5">
+                                <Ban className="w-2.5 h-2.5 text-white" />
+                              </span>
+                            )}
+                          </div>
+
+                          {/* User info */}
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-semibold truncate">{u.name}</span>
+                              {isBlocked && (
+                                <Badge variant="destructive" className="text-xs px-1.5 py-0">Blocked</Badge>
+                              )}
+                              {isCurrentUser && (
+                                <Badge variant="outline" className="text-xs px-1.5 py-0">You</Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                            {u.bio && (
+                              <p className="text-xs text-muted-foreground line-clamp-1 italic">"{u.bio}"</p>
+                            )}
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                              {u.createdAt && (
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="w-3 h-3" />
+                                  Joined {formatDistanceToNow(new Date(u.createdAt), { addSuffix: true })}
+                                </span>
+                              )}
+                              {u.lastLogin && (
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  Last seen {formatDistanceToNow(new Date(u.lastLogin), { addSuffix: true })}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Controls */}
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {/* Role selector */}
+                            <Select
+                              value={u.role}
+                              onValueChange={role => handleRoleChange(u.id, role)}
+                              disabled={isCurrentUser || isBlocked}
+                            >
+                              <SelectTrigger data-testid={`select-role-${u.id}`} className="w-24 h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="member">Member</SelectItem>
+                                <SelectItem value="creator">Creator</SelectItem>
+                                <SelectItem value="admin">Admin</SelectItem>
+                              </SelectContent>
+                            </Select>
+
+                            {/* Block / Unblock */}
+                            {!isCurrentUser && (
+                              <Button
+                                data-testid={`button-block-${u.id}`}
+                                size="sm"
+                                variant={isBlocked ? "outline" : "destructive"}
+                                className={`h-8 gap-1 text-xs ${isBlocked ? "border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20" : ""}`}
+                                onClick={() => handleToggleBlock(u)}
+                                disabled={isProcessing}
+                              >
+                                {isProcessing ? (
+                                  <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                                ) : isBlocked ? (
+                                  <><CheckCircle className="w-3 h-3" /> Unblock</>
+                                ) : (
+                                  <><Ban className="w-3 h-3" /> Block</>
+                                )}
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Select
-                            value={u.role}
-                            onValueChange={role => handleRoleChange(u.id, role)}
-                            disabled={u.id === user?.id}
-                          >
-                            <SelectTrigger data-testid={`select-role-${u.id}`} className="w-28 h-8 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="member">Member</SelectItem>
-                              <SelectItem value="creator">Creator</SelectItem>
-                              <SelectItem value="admin">Admin</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Courses tab */}
+          {/* ── Courses tab ───────────────────────────────────────────── */}
           <TabsContent value="courses" className="mt-4">
             <Card>
               <CardHeader className="pb-2">
@@ -203,7 +306,7 @@ export default function AdminPage() {
             </Card>
           </TabsContent>
 
-          {/* Posts tab */}
+          {/* ── Posts tab ─────────────────────────────────────────────── */}
           <TabsContent value="posts" className="mt-4">
             <Card>
               <CardHeader className="pb-2">

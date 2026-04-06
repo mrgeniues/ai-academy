@@ -18,6 +18,7 @@ type DbUser = {
   social_links: Record<string, string | null> | null;
   last_login: string | null;
   last_logout: string | null;
+  is_blocked: boolean | null;
   created_at: string;
   updated_at: string;
 };
@@ -34,6 +35,7 @@ export function formatUser(user: DbUser) {
     socialLinks: user.social_links ?? {},
     lastLogin: user.last_login ?? null,
     lastLogout: user.last_logout ?? null,
+    isBlocked: user.is_blocked ?? false,
     createdAt: user.created_at,
   };
 }
@@ -103,6 +105,11 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   const valid = await bcrypt.compare(password, (user as DbUser).password_hash);
   if (!valid) {
     res.status(401).json({ error: "Invalid email or password" });
+    return;
+  }
+
+  if ((user as DbUser).is_blocked) {
+    res.status(403).json({ error: "Your account has been blocked. Contact admin for help." });
     return;
   }
 
