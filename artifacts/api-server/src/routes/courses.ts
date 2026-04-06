@@ -112,10 +112,15 @@ router.post("/courses", requireAuth, async (req, res): Promise<void> => {
     .select()
     .single();
 
-  // If visibility/external_url columns don't exist yet (pending migration), retry without them
-  if (error && (error.message.includes('"visibility"') || error.message.includes('"external_url"'))) {
-    console.warn("[POST /courses] Optional column missing, retrying without it:", error.message);
-    const fallbackPayload = { title: coursePayload.title, description: coursePayload.description, thumbnail: coursePayload.thumbnail, created_by: coursePayload.created_by };
+  // If optional columns don't exist yet (pending migration), retry with only the core columns
+  if (error && (error.message.includes("visibility") || error.message.includes("external_url"))) {
+    console.warn("[POST /courses] Optional column missing, retrying with core fields only:", error.message);
+    const fallbackPayload = {
+      title: coursePayload.title,
+      description: coursePayload.description,
+      created_by: coursePayload.created_by,
+      ...(coursePayload.thumbnail != null ? { thumbnail: coursePayload.thumbnail } : {}),
+    };
     const retry = await supabase.from("courses").insert(fallbackPayload).select().single();
     course = retry.data;
     error = retry.error;
