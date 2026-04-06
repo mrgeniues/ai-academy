@@ -1,0 +1,102 @@
+You are a senior Next.js developer.
+
+Implement ANIMATIONS in an existing SaaS web app using Framer Motion.
+
+IMPORTANT:
+
+* Do NOT change UI design
+* Do NOT add new features
+* Do NOT modify layout or structure
+* ONLY add animations where specified
+
+=====================================
+GOAL:
+Add smooth, minimal, professional animations to improve user experience.
+
+=====================================
+SETUP:
+
+* Install Framer Motion:
+  npm install framer-motion
+
+* Use only Framer Motion for animations
+
+=====================================
+ANIMATION AREAS (ONLY THESE):
+
+1. PAGE TRANSITIONS:
+
+* When navigating between pages:
+
+  * Add smooth fade animation
+
+* Effect:
+
+  * opacity: 0 → 1
+  * duration: 0.3s
+
+=====================================
+2. BUTTON INTERACTIONS:
+
+* Apply to ALL buttons:
+
+* On hover:
+  scale: 1.05
+
+* On click (tap):
+  scale: 0.95
+
+=====================================
+3. CARD HOVER (Courses, Posts):
+
+* On hover:
+
+  * slight scale increase (1.02)
+  * smooth transition
+
+=====================================
+4. NOTIFICATION DROPDOWN:
+
+* When opening notification panel:
+
+  * fade + slide down animation
+
+* Effect:
+
+  * opacity: 0 → 1
+  * translateY: -10px → 0
+
+=====================================
+5. MODALS / POPUPS:
+
+* When opening:
+
+  * scale from 0.95 → 1
+  * opacity: 0 → 1
+
+=====================================
+6. LOADING STATES:
+
+* Add simple fade-in for content after loading
+
+=====================================
+PERFORMANCE RULES:
+
+* Animation duration must be between 0.2s – 0.4s
+* Animations must be smooth and lightweight
+* Do NOT use heavy animations
+
+=====================================
+STRICT RULES:
+
+* Do NOT add new UI components
+* Do NOT add extra animation types
+* Do NOT modify colors, spacing, or layout
+* Only apply animations to existing elements
+
+=====================================
+OUTPUT:
+
+* Provide code using Framer Motion
+* Apply animations exactly as defined
+* Ensure no bugs or performance issues

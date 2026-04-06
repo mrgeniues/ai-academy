@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Bell, BookOpen, MessageSquare, FileText, Crown, Check, CheckCheck } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/lib/auth";
 
 const API = "/api";
@@ -127,8 +128,15 @@ export function NotificationBell() {
         )}
       </button>
 
+      <AnimatePresence>
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden">
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          className="absolute right-0 top-full mt-2 w-80 bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden"
+        >
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <span className="font-semibold text-sm text-foreground">Notifications</span>
@@ -208,8 +216,9 @@ export function NotificationBell() {
               ))
             )}
           </div>
-        </div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   );
 }

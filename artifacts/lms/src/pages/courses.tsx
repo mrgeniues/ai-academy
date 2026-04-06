@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { motion } from "framer-motion";
 import { useListCourses, useListMyEnrollments, useEnrollInCourse, getListCoursesQueryKey, getListMyEnrollmentsQueryKey } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { Layout } from "@/components/layout";
@@ -297,7 +298,12 @@ export default function CoursesPage() {
             ))}
           </div>
         ) : courses && courses.length > 0 ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <motion.div
+            className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
+          >
             {(courses as CourseWithExtras[]).map(course => {
               const isEnrolled = enrolledIds.has(course.id);
               const progress = progressMap.get(course.id) ?? 0;
@@ -305,7 +311,12 @@ export default function CoursesPage() {
               const canAccess = !isPrivate || isAdmin;
 
               return (
-                <Card key={course.id} data-testid={`card-course-${course.id}`} className="overflow-hidden hover:shadow-md transition-shadow flex flex-col">
+                <motion.div
+                  key={course.id}
+                  whileHover={{ scale: 1.02 }}
+                  transition={{ type: "tween", duration: 0.2 }}
+                >
+                <Card data-testid={`card-course-${course.id}`} className="overflow-hidden hover:shadow-md transition-shadow flex flex-col">
                   {/* Thumbnail */}
                   <div className="relative">
                     {course.thumbnail ? (
@@ -397,9 +408,10 @@ export default function CoursesPage() {
                     </div>
                   </CardContent>
                 </Card>
+                </motion.div>
               );
             })}
-          </div>
+          </motion.div>
         ) : (
           <div className="text-center py-16 text-muted-foreground">
             <GraduationCap className="w-12 h-12 mx-auto mb-3 opacity-30" />

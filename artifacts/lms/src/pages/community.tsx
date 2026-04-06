@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { motion } from "framer-motion";
 import { useAuth } from "@/lib/auth";
 import { Layout } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -355,6 +356,7 @@ function PostCard({ post, token, onDelete }: { post: Post; token: string | null;
   const initials = post.author.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
 
   return (
+    <motion.div whileHover={{ scale: 1.02 }} transition={{ type: "tween", duration: 0.2 }}>
     <Card data-testid={`post-${post.id}`}>
       <CardContent className="pt-4 pb-3 px-4">
         <div className="flex items-start justify-between mb-3">
@@ -415,6 +417,7 @@ function PostCard({ post, token, onDelete }: { post: Post; token: string | null;
         {showComments && <CommentSection postId={post.id} token={token} />}
       </CardContent>
     </Card>
+    </motion.div>
   );
 }
 
@@ -571,7 +574,12 @@ export default function CommunityPage() {
             ))}
           </div>
         ) : posts.length > 0 ? (
-          <div className="space-y-4">
+          <motion.div
+            className="space-y-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
+          >
             {posts.map(post => (
               <PostCard
                 key={post.id}
@@ -580,7 +588,7 @@ export default function CommunityPage() {
                 onDelete={id => setPosts(prev => prev.filter(p => p.id !== id))}
               />
             ))}
-          </div>
+          </motion.div>
         ) : (
           <div className="text-center py-16 text-muted-foreground">
             <MessageCircle className="w-10 h-10 mx-auto mb-3 opacity-30" />

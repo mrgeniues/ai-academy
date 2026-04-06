@@ -1,4 +1,5 @@
 import { useGetDashboardStats, useGetRecentActivity, getGetDashboardStatsQueryKey, getGetRecentActivityQueryKey } from "@workspace/api-client-react";
+import { motion } from "framer-motion";
 import { useAuth } from "@/lib/auth";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -64,14 +65,28 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-            <StatCard title="Total Members" value={stats?.totalUsers ?? 0} icon={Users} color="bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" />
-            <StatCard title="Total Courses" value={stats?.totalCourses ?? 0} icon={BookOpen} color="bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400" />
-            <StatCard title="Enrollments" value={stats?.totalEnrollments ?? 0} icon={TrendingUp} color="bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400" />
-            <StatCard title="Community Posts" value={stats?.totalPosts ?? 0} icon={MessageSquare} color="bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400" />
-            <StatCard title="My Courses" value={stats?.myEnrollments ?? 0} icon={Award} description="Enrolled courses" color="bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400" />
-            <StatCard title="Avg Progress" value={`${stats?.myProgress ?? 0}%`} icon={Clock} description="Across all courses" color="bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400" />
-          </div>
+          <motion.div
+            className="grid grid-cols-2 lg:grid-cols-3 gap-4"
+            initial="hidden"
+            animate="visible"
+            variants={{
+              hidden: {},
+              visible: { transition: { staggerChildren: 0.08 } }
+            }}
+          >
+            {[
+              { title: "Total Members", value: stats?.totalUsers ?? 0, icon: Users, color: "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" },
+              { title: "Total Courses", value: stats?.totalCourses ?? 0, icon: BookOpen, color: "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400" },
+              { title: "Enrollments", value: stats?.totalEnrollments ?? 0, icon: TrendingUp, color: "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400" },
+              { title: "Community Posts", value: stats?.totalPosts ?? 0, icon: MessageSquare, color: "bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400" },
+              { title: "My Courses", value: stats?.myEnrollments ?? 0, icon: Award, description: "Enrolled courses", color: "bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400" },
+              { title: "Avg Progress", value: `${stats?.myProgress ?? 0}%`, icon: Clock, description: "Across all courses", color: "bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400" },
+            ].map(card => (
+              <motion.div key={card.title} variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0 } }} transition={{ duration: 0.3 }}>
+                <StatCard title={card.title} value={card.value} icon={card.icon} description={card.description} color={card.color} />
+              </motion.div>
+            ))}
+          </motion.div>
         )}
 
         {/* User info */}
