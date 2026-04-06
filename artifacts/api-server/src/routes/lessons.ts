@@ -62,20 +62,26 @@ router.post("/courses/:courseId/lessons", requireAuth, async (req, res): Promise
     .select("*", { count: "exact", head: true })
     .eq("course_id", courseId);
 
+  const lessonRow: Record<string, unknown> = {
+    course_id: courseId,
+    title: parsed.data.title,
+    order: parsed.data.order ?? (existingCount ?? 0) + 1,
+  };
+  if (parsed.data.description != null) lessonRow.description = parsed.data.description;
+  if (parsed.data.videoUrl != null) lessonRow.video_url = parsed.data.videoUrl;
+  if (parsed.data.content != null) lessonRow.content = parsed.data.content;
+
   const { data: lesson, error } = await supabase
     .from("lessons")
-    .insert({
-      course_id: courseId,
-      title: parsed.data.title,
-      description: parsed.data.description ?? null,
-      video_url: parsed.data.videoUrl ?? null,
-      content: parsed.data.content ?? null,
-      order: parsed.data.order ?? (existingCount ?? 0) + 1,
-    })
+    .insert(lessonRow)
     .select()
     .single();
 
-  if (error || !lesson) { res.status(500).json({ error: "Failed to create lesson" }); return; }
+  if (error || !lesson) {
+    console.error("[POST /courses/:courseId/lessons] Supabase error:", error?.message, error?.details, error?.hint, error?.code);
+    res.status(500).json({ error: error?.message ?? "Failed to create lesson" });
+    return;
+  }
   res.status(201).json(formatLesson(lesson));
 });
 

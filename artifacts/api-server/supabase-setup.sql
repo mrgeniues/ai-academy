@@ -160,3 +160,38 @@ CREATE TABLE IF NOT EXISTS notifications (
 ALTER TABLE notifications DISABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS notifications_user_id_idx ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS notifications_is_read_idx ON notifications(user_id, is_read);
+
+-- ============================================================
+-- User feature columns
+-- ============================================================
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_blocked BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS theme TEXT NOT NULL DEFAULT 'light';
+
+-- ============================================================
+-- Course feature columns
+-- ============================================================
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'public';
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS external_url TEXT;
+
+-- ============================================================
+-- Lesson feature columns (in case created with older schema)
+-- ============================================================
+ALTER TABLE lessons ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE lessons ADD COLUMN IF NOT EXISTS video_url TEXT;
+ALTER TABLE lessons ADD COLUMN IF NOT EXISTS content TEXT;
+
+-- ============================================================
+-- VIP posts column
+-- ============================================================
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS is_vip BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Disable RLS on all tables (service role key bypasses anyway)
+ALTER TABLE users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE courses DISABLE ROW LEVEL SECURITY;
+ALTER TABLE lessons DISABLE ROW LEVEL SECURITY;
+ALTER TABLE enrollments DISABLE ROW LEVEL SECURITY;
+ALTER TABLE lesson_completions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE posts DISABLE ROW LEVEL SECURITY;
+ALTER TABLE comments DISABLE ROW LEVEL SECURITY;
+ALTER TABLE likes DISABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications DISABLE ROW LEVEL SECURITY;

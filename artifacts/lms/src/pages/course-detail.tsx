@@ -290,7 +290,7 @@ export default function CourseDetailPage() {
         </div>
 
         {/* Lesson content area */}
-        {course.isEnrolled && course.lessons && course.lessons.length > 0 ? (
+        {(course.isEnrolled || isAdmin) && course.lessons && course.lessons.length > 0 ? (
           <div className="grid lg:grid-cols-3 gap-6">
             {/* Lesson list */}
             <div className="space-y-1.5">
@@ -375,36 +375,38 @@ export default function CourseDetailPage() {
                       </div>
                     )}
 
-                    {/* Mark complete / undo */}
-                    <div className="flex items-center gap-3 pt-2 border-t border-border">
-                      {activeLesson.isCompleted ? (
-                        <Button
-                          data-testid="button-update-progress"
-                          size="sm"
-                          variant="outline"
-                          className="gap-2 text-green-600 border-green-300 hover:bg-green-50"
-                          onClick={() => handleToggleComplete(activeLesson.id, true)}
-                          disabled={completingLesson === activeLesson.id}
-                        >
-                          <CheckCircle className="w-4 h-4" />
-                          {completingLesson === activeLesson.id ? "Updating..." : "Completed — Click to Undo"}
-                        </Button>
-                      ) : (
-                        <Button
-                          data-testid="button-update-progress"
-                          size="sm"
-                          className="gap-2"
-                          onClick={() => handleToggleComplete(activeLesson.id, false)}
-                          disabled={completingLesson === activeLesson.id}
-                        >
-                          <Circle className="w-4 h-4" />
-                          {completingLesson === activeLesson.id ? "Updating..." : "Mark as Complete"}
-                        </Button>
-                      )}
-                      <span className="text-xs text-muted-foreground">
-                        {completedLessons}/{totalLessons} lessons completed
-                      </span>
-                    </div>
+                    {/* Mark complete / undo — only for enrolled non-admin users */}
+                    {course.isEnrolled && !isAdmin && (
+                      <div className="flex items-center gap-3 pt-2 border-t border-border">
+                        {activeLesson.isCompleted ? (
+                          <Button
+                            data-testid="button-update-progress"
+                            size="sm"
+                            variant="outline"
+                            className="gap-2 text-green-600 border-green-300 hover:bg-green-50"
+                            onClick={() => handleToggleComplete(activeLesson.id, true)}
+                            disabled={completingLesson === activeLesson.id}
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                            {completingLesson === activeLesson.id ? "Updating..." : "Completed — Click to Undo"}
+                          </Button>
+                        ) : (
+                          <Button
+                            data-testid="button-update-progress"
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => handleToggleComplete(activeLesson.id, false)}
+                            disabled={completingLesson === activeLesson.id}
+                          >
+                            <Circle className="w-4 h-4" />
+                            {completingLesson === activeLesson.id ? "Updating..." : "Mark as Complete"}
+                          </Button>
+                        )}
+                        <span className="text-xs text-muted-foreground">
+                          {completedLessons}/{totalLessons} lessons completed
+                        </span>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               ) : (
@@ -414,7 +416,7 @@ export default function CourseDetailPage() {
               )}
             </div>
           </div>
-        ) : !course.isEnrolled && canAccess ? (
+        ) : !course.isEnrolled && !isAdmin && canAccess ? (
           <Card>
             <CardContent className="py-12 text-center">
               <BookOpen className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
