@@ -1,0 +1,124 @@
+Implement MEDIA and EMOJI SUPPORT in the COMMUNITY SYSTEM with STRICT rules. Do NOT add any extra features, UI elements, or assumptions beyond what is written.
+
+=====================================
+GOAL:
+Allow users to create POSTS and COMMENTS with:
+
+text
+image
+video
+emojis
+
+Apply EXACT SAME functionality to both POSTS and COMMENTS.
+
+=====================================
+POST FEATURES:
+
+Users must be able to:
+
+Add TEXT (required)
+Upload IMAGE (optional)
+Upload VIDEO (optional)
+Insert EMOJIS (full emoji support)
+
+=====================================
+COMMENT FEATURES:
+
+Users must be able to:
+
+Add TEXT (required)
+Upload IMAGE (optional)
+Upload VIDEO (optional)
+Insert EMOJIS (full emoji support)
+
+=====================================
+MEDIA STORAGE:
+
+Use Supabase Storage for:
+images
+videos
+Store uploaded file URLs in database
+
+=====================================
+DATABASE UPDATE:
+
+Posts table must include:
+
+image_url (nullable)
+video_url (nullable)
+
+Comments table must include:
+
+image_url (nullable)
+video_url (nullable)
+
+=====================================
+EMOJI SYSTEM:
+
+Add emoji picker in:
+post input
+comment input
+User must be able to:
+select any emoji
+insert emoji into text field
+Support full emoji list
+
+=====================================
+UI REQUIREMENTS:
+
+POST INPUT:
+
+Text area
+Image upload button
+Video upload button
+Emoji picker button
+
+COMMENT INPUT:
+
+Same as post input:
+text
+image
+video
+emoji
+
+=====================================
+DISPLAY REQUIREMENTS:
+
+POST DISPLAY:
+
+Show text
+Show image if available
+Show video if available
+
+COMMENT DISPLAY:
+
+Show text
+Show image if available
+Show video if available
+
+=====================================
+STRICT RULES:
+
+Do NOT add any extra features
+Do NOT add tagging, sharing, or reactions
+Do NOT modify existing system logic
+Do NOT add any UI beyond what is defined
+Follow instructions exactly
+
+=====================================
+TECH:
+
+Next.js (App Router)
+Supabase (Database + Storage)
+
+=====================================
+OUTPUT:
+
+Provide working code for:
+Media upload (image + video)
+Supabase storage integration
+Emoji picker integration
+Updated post and comment UI
+Display logic
+
+Ensure everything works without bugs.

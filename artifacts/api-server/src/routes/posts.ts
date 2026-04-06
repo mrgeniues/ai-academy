@@ -1,11 +1,23 @@
 import { Router, type IRouter } from "express";
 import { requireAuth } from "../lib/auth";
 import { formatUser } from "./auth";
-import { CreatePostBody, CreateCommentBody } from "@workspace/api-zod";
 import { supabase } from "../lib/supabase";
 import { broadcastNotification } from "../lib/notifications";
+import { z } from "zod";
 
 const router: IRouter = Router();
+
+const CreatePostSchema = z.object({
+  content: z.string().min(1),
+  imageUrl: z.string().url().optional().nullable(),
+  videoUrl: z.string().url().optional().nullable(),
+});
+
+const CreateCommentSchema = z.object({
+  comment: z.string().min(1),
+  imageUrl: z.string().url().optional().nullable(),
+  videoUrl: z.string().url().optional().nullable(),
+});
 
 router.get("/posts", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
@@ -43,6 +55,8 @@ router.get("/posts", requireAuth, async (req, res): Promise<void> => {
     id: post.id,
     userId: post.user_id,
     content: post.content,
+    imageUrl: post.image_url ?? null,
+    videoUrl: post.video_url ?? null,
     likeCount: likeCountMap.get(post.id) ?? 0,
     commentCount: commentCountMap.get(post.id) ?? 0,
     isLiked: myLikeSet.has(post.id),
@@ -54,15 +68,22 @@ router.get("/posts", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.post("/posts", requireAuth, async (req, res): Promise<void> => {
-  const parsed = CreatePostBody.safeParse(req.body);
+  const parsed = CreatePostSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
 
+  const { content, imageUrl, videoUrl } = parsed.data;
+
   const { data: post, error } = await supabase
     .from("posts")
-    .insert({ user_id: req.userId!, content: parsed.data.content })
+    .insert({
+      user_id: req.userId!,
+      content,
+      image_url: imageUrl ?? null,
+      video_url: videoUrl ?? null,
+    })
     .select("*, author:users(*)")
     .single();
 
@@ -72,7 +93,7 @@ router.post("/posts", requireAuth, async (req, res): Promise<void> => {
   }
 
   const isAdmin = req.userRole === "admin";
-  const preview = parsed.data.content.slice(0, 80) + (parsed.data.content.length > 80 ? "…" : "");
+  const preview = content.slice(0, 80) + (content.length > 80 ? "…" : "");
 
   broadcastNotification({
     type: isAdmin ? "admin_post" : "post",
@@ -87,6 +108,8 @@ router.post("/posts", requireAuth, async (req, res): Promise<void> => {
     id: post.id,
     userId: post.user_id,
     content: post.content,
+    imageUrl: post.image_url ?? null,
+    videoUrl: post.video_url ?? null,
     likeCount: 0,
     commentCount: 0,
     isLiked: false,
@@ -174,6 +197,8 @@ router.get("/posts/:postId/comments", requireAuth, async (req, res): Promise<voi
     postId: comment.post_id,
     userId: comment.user_id,
     comment: comment.comment,
+    imageUrl: comment.image_url ?? null,
+    videoUrl: comment.video_url ?? null,
     createdAt: comment.created_at,
     author: formatUser(comment.author),
   })));
@@ -187,19 +212,27 @@ router.post("/posts/:postId/comments", requireAuth, async (req, res): Promise<vo
     return;
   }
 
-  const parsed = CreateCommentBody.safeParse(req.body);
+  const parsed = CreateCommentSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
 
-  const { data: comment, error } = await supabase
+  const { comment, imageUrl, videoUrl } = parsed.data;
+
+  const { data: newComment, error } = await supabase
     .from("comments")
-    .insert({ post_id: postId, user_id: req.userId!, comment: parsed.data.comment })
+    .insert({
+      post_id: postId,
+      user_id: req.userId!,
+      comment,
+      image_url: imageUrl ?? null,
+      video_url: videoUrl ?? null,
+    })
     .select("*, author:users(*)")
     .single();
 
-  if (error || !comment) {
+  if (error || !newComment) {
     res.status(500).json({ error: "Failed to create comment" });
     return;
   }
@@ -207,19 +240,21 @@ router.post("/posts/:postId/comments", requireAuth, async (req, res): Promise<vo
   broadcastNotification({
     type: "comment",
     title: "New Comment",
-    message: `${comment.author?.name ?? "Someone"} commented on a post`,
+    message: `${newComment.author?.name ?? "Someone"} commented on a post`,
     postId: postId,
     isVip: false,
     excludeUserId: req.userId!,
   });
 
   res.status(201).json({
-    id: comment.id,
-    postId: comment.post_id,
-    userId: comment.user_id,
-    comment: comment.comment,
-    createdAt: comment.created_at,
-    author: formatUser(comment.author),
+    id: newComment.id,
+    postId: newComment.post_id,
+    userId: newComment.user_id,
+    comment: newComment.comment,
+    imageUrl: newComment.image_url ?? null,
+    videoUrl: newComment.video_url ?? null,
+    createdAt: newComment.created_at,
+    author: formatUser(newComment.author),
   });
 });
 

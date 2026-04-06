@@ -8,6 +8,7 @@ import enrollmentsRouter from "./enrollments";
 import postsRouter from "./posts";
 import dashboardRouter from "./dashboard";
 import notificationsRouter from "./notifications";
+import uploadRouter from "./upload";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(enrollmentsRouter);
 router.use(postsRouter);
 router.use(dashboardRouter);
 router.use(notificationsRouter);
+router.use(uploadRouter);
 
 export default router;

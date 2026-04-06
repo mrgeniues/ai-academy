@@ -135,6 +135,14 @@ INSERT INTO posts (user_id, content) VALUES
   (1, 'Platform update: We''ve added progress tracking and new community features. Keep learning!');
 
 -- ============================================================
+-- Media columns for posts and comments
+-- ============================================================
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS video_url TEXT;
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS video_url TEXT;
+
+-- ============================================================
 -- Notifications table
 -- ============================================================
 CREATE TABLE IF NOT EXISTS notifications (
