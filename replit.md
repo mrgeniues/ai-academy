@@ -36,9 +36,11 @@ Supabase is used as the database backend. Tables are accessed via the Supabase J
 > **IMPORTANT**: Direct PostgreSQL connections to Supabase are blocked from Replit's network (IPv6 only for direct host, pooler blocked). All DB access uses the Supabase REST API via `@supabase/supabase-js`.
 
 ### To create tables + seed data:
-1. Go to [Supabase Dashboard](https://supabase.com/dashboard/project/hpntmfiurmnkvtysbqio)
+1. Go to your [Supabase Dashboard](https://supabase.com/dashboard) and open your project
 2. Navigate to **SQL Editor**
 3. Run the contents of `artifacts/api-server/supabase-setup.sql`
+
+The API server startup logs the SQL Editor URL derived from `SUPABASE_URL` automatically if tables are missing.
 
 ### Demo users (password: `password123`):
 - `admin@lms.com` — admin role
@@ -47,11 +49,15 @@ Supabase is used as the database backend. Tables are accessed via the Supabase J
 
 ## Environment Variables / Secrets
 
-- `SUPABASE_URL` — Supabase project URL
-- `SUPABASE_ANON_KEY` — Supabase anon key
-- `SUPABASE_SERVICE_ROLE_KEY` — Supabase service role key (used by backend)
-- `SUPABASE_DB_PASSWORD` — Database password (stored but unused; direct pg blocked)
+### Required at runtime (API server will fail fast if missing):
+- `SUPABASE_URL` — Supabase project URL (e.g. `https://<ref>.supabase.co`)
+- `SUPABASE_SERVICE_ROLE_KEY` — Supabase service role key (backend-only, never exposed to client)
 - `SESSION_SECRET` — used for signing JWT tokens (as `JWT_SECRET` in api-server)
+
+### Optional / future use:
+- `SUPABASE_ANON_KEY` — Supabase anon key (available if frontend ever calls Supabase directly)
+- `SUPABASE_DATABASE_URL` — Direct PostgreSQL connection string (wired in lib/db for Drizzle push, blocked from Replit at runtime)
+- `SUPABASE_DB_PASSWORD` — Database password
 - `PORT` — auto-assigned by Replit per artifact
 - `BASE_PATH` — auto-assigned by Replit per artifact
 
