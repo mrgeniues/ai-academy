@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useListCourses, useListMyEnrollments, useEnrollInCourse, getListCoursesQueryKey, getListMyEnrollmentsQueryKey } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { Layout } from "@/components/layout";
@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { BookOpen, Users, Plus, GraduationCap, Lock, Globe, Trash2, Link as LinkIcon, MessageCircle } from "lucide-react";
+import { BookOpen, Users, Plus, GraduationCap, Lock, Globe, Trash2, ImageIcon, X } from "lucide-react";
 import { Link } from "wouter";
 
 
@@ -46,11 +46,13 @@ export default function CoursesPage() {
   // Course form state
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [externalUrl, setExternalUrl] = useState("");
   const [visibility, setVisibility] = useState<"public" | "private">("public");
   const [lessonDrafts, setLessonDrafts] = useState<LessonDraft[]>([emptyLesson()]);
   const [creating, setCreating] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const { data: courses, isLoading: coursesLoading } = useListCourses({
     query: { queryKey: getListCoursesQueryKey() }
@@ -66,8 +68,21 @@ export default function CoursesPage() {
   const isAdmin = user?.role === "admin";
 
   const resetForm = () => {
-    setTitle(""); setDescription(""); setImageUrl(""); setExternalUrl("");
+    setTitle(""); setDescription(""); setImageFile(null); setImagePreview(null); setExternalUrl("");
     setVisibility("public"); setLessonDrafts([emptyLesson()]);
+  };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  const clearImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    if (imageInputRef.current) imageInputRef.current.value = "";
   };
 
   const addLessonDraft = () => setLessonDrafts(d => [...d, emptyLesson()]);
@@ -83,14 +98,28 @@ export default function CoursesPage() {
     setCreating(true);
     try {
       const token = localStorage.getItem("lms_token");
-      
+
+      let uploadedImageUrl: string | null = null;
+      if (imageFile) {
+        const fd = new FormData();
+        fd.append("file", imageFile);
+        const uploadResp = await fetch(`/api/upload`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        });
+        if (!uploadResp.ok) throw new Error("Failed to upload image");
+        const uploadData = await uploadResp.json() as { url: string };
+        uploadedImageUrl = uploadData.url;
+      }
+
       const resp = await fetch(`/api/courses`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           title: title.trim(),
           description: description.trim(),
-          thumbnail: imageUrl.trim() || null,
+          thumbnail: uploadedImageUrl,
           externalUrl: externalUrl.trim() || null,
           visibility,
           lessons: validLessons.map(l => ({
@@ -164,8 +193,30 @@ export default function CoursesPage() {
                       <Textarea className="mt-1" placeholder="What will students learn?" value={description} onChange={e => setDescription(e.target.value)} rows={3} />
                     </div>
                     <div>
-                      <Label>Image URL</Label>
-                      <Input className="mt-1" placeholder="https://example.com/image.jpg" value={imageUrl} onChange={e => setImageUrl(e.target.value)} />
+                      <Label>Course Image</Label>
+                      <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelect} />
+                      {imagePreview ? (
+                        <div className="mt-1 relative w-full h-36 rounded-lg overflow-hidden border border-border">
+                          <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={clearImage}
+                            className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => imageInputRef.current?.click()}
+                          className="mt-1 w-full h-28 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                        >
+                          <ImageIcon className="w-6 h-6" />
+                          <span className="text-sm font-medium">Click to upload image</span>
+                          <span className="text-xs">PNG, JPG, GIF up to 10MB</span>
+                        </button>
+                      )}
                     </div>
                     <div>
                       <Label>External URL</Label>
