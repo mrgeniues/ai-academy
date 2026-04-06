@@ -4,13 +4,14 @@ import { useAuth } from "@/lib/auth";
 import { Layout } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Heart, MessageCircle, Trash2, Send, ChevronDown, ChevronUp,
-  Smile, ImageIcon, Video, X, Loader2, Crown, Lock
+  Smile, ImageIcon, Video, X, Loader2, Crown, Lock, Link2, ExternalLink
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -66,6 +67,48 @@ async function uploadFile(file: File, token: string | null): Promise<string> {
   if (!res.ok) throw new Error("Upload failed");
   const data = await res.json();
   return data.url as string;
+}
+
+const URL_REGEX = /(https?:\/\/[^\s]+)/g;
+
+function ContentWithLinks({ text }: { text: string }) {
+  const parts = text.split(URL_REGEX);
+  return (
+    <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">
+      {parts.map((part, i) =>
+        URL_REGEX.test(part) ? (
+          <a
+            key={i}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline underline-offset-2 hover:text-primary/80 inline-flex items-center gap-0.5 break-all"
+          >
+            {part}<ExternalLink className="w-3 h-3 flex-shrink-0 inline" />
+          </a>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </p>
+  );
+}
+
+function LinkPreviewChip({ url, onRemove }: { url: string; onRemove?: () => void }) {
+  let hostname = url;
+  try { hostname = new URL(url).hostname.replace("www.", ""); } catch {}
+  return (
+    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 text-xs w-fit max-w-full">
+      <Link2 className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+      <a href={url} target="_blank" rel="noopener noreferrer"
+        className="text-primary hover:underline truncate max-w-[220px]">{hostname}</a>
+      {onRemove && (
+        <button onClick={onRemove} className="text-muted-foreground hover:text-destructive ml-1 flex-shrink-0">
+          <X className="w-3 h-3" />
+        </button>
+      )}
+    </div>
+  );
 }
 
 function MediaPreview({
@@ -138,6 +181,8 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
   const { user } = useAuth();
   const { toast } = useToast();
   const [commentText, setCommentText] = useState("");
+  const [commentLink, setCommentLink] = useState("");
+  const [showCommentLink, setShowCommentLink] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -156,7 +201,9 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
   useEffect(() => { fetchComments(); }, [postId]);
 
   const handleSubmit = async () => {
-    if (!commentText.trim() && !imageFile && !videoFile) return;
+    const linkPart = commentLink.trim();
+    const fullComment = [commentText.trim(), linkPart].filter(Boolean).join("\n") || "📎";
+    if (!commentText.trim() && !linkPart && !imageFile && !videoFile) return;
     setUploading(true);
     try {
       let imageUrl: string | null = null;
@@ -166,10 +213,12 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
       const res = await fetch(`${API}/posts/${postId}/comments`, {
         method: "POST",
         headers: { ...authHeaders(token), "Content-Type": "application/json" },
-        body: JSON.stringify({ comment: commentText.trim() || "📎", imageUrl, videoUrl }),
+        body: JSON.stringify({ comment: fullComment, imageUrl, videoUrl }),
       });
       if (!res.ok) throw new Error();
       setCommentText("");
+      setCommentLink("");
+      setShowCommentLink(false);
       setImageFile(null);
       setVideoFile(null);
       fetchComments();
@@ -184,6 +233,8 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
       setComments(prev => prev.filter(c => c.id !== id));
     } catch {}
   };
+
+  const canSubmit = (commentText.trim() || commentLink.trim() || imageFile || videoFile) && !uploading;
 
   return (
     <div className="mt-3 pt-3 border-t border-border space-y-3">
@@ -213,7 +264,7 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
                   </div>
                 </div>
                 {comment.comment && comment.comment !== "📎" && (
-                  <p className="text-sm mt-0.5 break-words">{comment.comment}</p>
+                  <ContentWithLinks text={comment.comment} />
                 )}
                 <MediaPreview imageUrl={comment.imageUrl} videoUrl={comment.videoUrl} />
               </div>
@@ -226,7 +277,7 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
       <div className="flex gap-2">
         <Avatar className="w-7 h-7 flex-shrink-0">
           <AvatarImage src={user?.avatar ?? undefined} />
-          <AvatarFallback className="text-xs bg-primary/10 text-primary font-semibold">
+          <AvatarFallback className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 font-semibold">
             {user?.name?.slice(0, 2).toUpperCase()}
           </AvatarFallback>
         </Avatar>
@@ -242,6 +293,14 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
             />
             <div className="flex items-center gap-0.5 flex-shrink-0">
               <EmojiButton onEmojiSelect={e => setCommentText(t => t + e)} small />
+              <button
+                type="button"
+                onClick={() => setShowCommentLink(s => !s)}
+                className={`transition-colors p-1 rounded ${showCommentLink ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+                title="Add link"
+              >
+                <Link2 className="w-4 h-4" />
+              </button>
               <button type="button" onClick={() => imageInputRef.current?.click()}
                 className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded" title="Add image">
                 <ImageIcon className="w-4 h-4" />
@@ -250,12 +309,32 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
                 className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded" title="Add video">
                 <Video className="w-4 h-4" />
               </button>
-              <button onClick={handleSubmit} disabled={!commentText.trim() && !imageFile && !videoFile}
+              <button onClick={handleSubmit} disabled={!canSubmit}
                 className="text-primary hover:text-primary/80 disabled:opacity-30 transition-colors p-1 rounded">
                 {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               </button>
             </div>
           </div>
+
+          {showCommentLink && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg border border-amber-300/40">
+              <Link2 className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+              <input
+                type="url"
+                value={commentLink}
+                onChange={e => setCommentLink(e.target.value)}
+                placeholder="https://..."
+                className="flex-1 text-xs bg-transparent border-0 outline-none min-w-0"
+                onKeyDown={e => e.key === "Enter" && handleSubmit()}
+              />
+              {commentLink && (
+                <button onClick={() => setCommentLink("")} className="text-muted-foreground hover:text-destructive">
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          )}
+
           {(imageFile || videoFile) && (
             <MediaPreview imageFile={imageFile} videoFile={videoFile}
               onRemoveImage={() => setImageFile(null)} onRemoveVideo={() => setVideoFile(null)} />
@@ -342,7 +421,7 @@ function VipPostCard({ post, token, onDelete }: { post: Post; token: string | nu
             )}
           </div>
 
-          <p className="text-sm leading-relaxed break-words">{post.content}</p>
+          <ContentWithLinks text={post.content} />
           <MediaPreview imageUrl={post.imageUrl} videoUrl={post.videoUrl} />
 
           <div className="flex items-center gap-4 mt-3">
@@ -374,6 +453,8 @@ export default function VipPostsPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [newPost, setNewPost] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [showLinkInput, setShowLinkInput] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -390,7 +471,9 @@ export default function VipPostsPage() {
   useEffect(() => { fetchPosts(); }, []);
 
   const handleSubmit = async () => {
-    if (!newPost.trim() && !imageFile && !videoFile) return;
+    const trimmedLink = linkUrl.trim();
+    const fullContent = [newPost.trim(), trimmedLink].filter(Boolean).join("\n") || "📎";
+    if (!newPost.trim() && !trimmedLink && !imageFile && !videoFile) return;
     setUploading(true);
     try {
       let imageUrl: string | null = null;
@@ -401,12 +484,14 @@ export default function VipPostsPage() {
       const res = await fetch(`${API}/posts`, {
         method: "POST",
         headers: { ...authHeaders(token), "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newPost.trim() || "📎", imageUrl, videoUrl, isVip: true }),
+        body: JSON.stringify({ content: fullContent, imageUrl, videoUrl, isVip: true }),
       });
       if (!res.ok) throw new Error();
       const created = await res.json();
       setPosts(prev => [created, ...prev]);
       setNewPost("");
+      setLinkUrl("");
+      setShowLinkInput(false);
       setImageFile(null);
       setVideoFile(null);
     } catch {
@@ -414,7 +499,7 @@ export default function VipPostsPage() {
     } finally { setUploading(false); }
   };
 
-  const canSubmit = (newPost.trim() || imageFile || videoFile) && !uploading;
+  const canSubmit = (newPost.trim() || linkUrl.trim() || imageFile || videoFile) && !uploading;
   const initials = user?.name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) ?? "?";
 
   return (
@@ -462,13 +547,42 @@ export default function VipPostsPage() {
                     className="min-h-[80px] resize-none bg-muted/40"
                     onKeyDown={e => { if (e.key === "Enter" && e.ctrlKey) handleSubmit(); }}
                   />
+
+                  {/* Link input */}
+                  {showLinkInput && (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-xl border border-amber-300/40">
+                      <Link2 className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                      <Input
+                        type="url"
+                        value={linkUrl}
+                        onChange={e => setLinkUrl(e.target.value)}
+                        placeholder="https://paste-your-link-here.com"
+                        className="flex-1 text-sm border-0 bg-transparent p-0 h-auto focus-visible:ring-0 shadow-none"
+                      />
+                      {linkUrl && (
+                        <button onClick={() => setLinkUrl("")} className="text-muted-foreground hover:text-destructive">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {(imageFile || videoFile) && (
                     <MediaPreview imageFile={imageFile} videoFile={videoFile}
                       onRemoveImage={() => setImageFile(null)} onRemoveVideo={() => setVideoFile(null)} />
                   )}
+
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1">
                       <EmojiButton onEmojiSelect={e => setNewPost(t => t + e)} />
+                      <button
+                        type="button"
+                        onClick={() => setShowLinkInput(s => !s)}
+                        className={`transition-colors p-1 rounded ${showLinkInput ? "text-amber-500" : "text-muted-foreground hover:text-foreground"}`}
+                        title="Add link"
+                      >
+                        <Link2 className="w-4 h-4" />
+                      </button>
                       <button type="button" onClick={() => imageInputRef.current?.click()}
                         className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded" title="Add image">
                         <ImageIcon className="w-4 h-4" />
@@ -477,6 +591,9 @@ export default function VipPostsPage() {
                         className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded" title="Add video">
                         <Video className="w-4 h-4" />
                       </button>
+                      {linkUrl && !showLinkInput && (
+                        <LinkPreviewChip url={linkUrl} onRemove={() => { setLinkUrl(""); setShowLinkInput(false); }} />
+                      )}
                     </div>
                     <Button
                       data-testid="button-submit-vip-post"
