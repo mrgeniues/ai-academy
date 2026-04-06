@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Cropper from "react-easy-crop";
+import type { Area, Point } from "react-easy-crop";
 import { useAuth } from "@/lib/auth";
 import { useTheme, type Theme } from "@/lib/theme";
 import { useUpdateUser, useListMyEnrollments, getGetMeQueryKey, getListMyEnrollmentsQueryKey } from "@workspace/api-client-react";
@@ -11,11 +13,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { SiFacebook, SiInstagram, SiTiktok, SiX, SiWhatsapp } from "react-icons/si";
-import { Linkedin, BookOpen, Camera, Loader2, Sun, Moon, Palette } from "lucide-react";
+import { Linkedin, BookOpen, Camera, Loader2, Sun, Moon, Palette, ZoomIn, ZoomOut, RotateCw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
@@ -48,6 +51,40 @@ const themes: { value: Theme; label: string; icon: React.ComponentType<{ classNa
   { value: "purple", label: "Purple", icon: Palette },
 ];
 
+async function getCroppedImageBlob(imageSrc: string, pixelCrop: Area): Promise<Blob> {
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = imageSrc;
+  });
+
+  const canvas = document.createElement("canvas");
+  const size = 400;
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+
+  ctx.drawImage(
+    image,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    size,
+    size,
+  );
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("Canvas toBlob failed"));
+    }, "image/jpeg", 0.92);
+  });
+}
+
 export default function ProfilePage() {
   const { user, token } = useAuth();
   const { theme, setTheme } = useTheme();
@@ -57,6 +94,12 @@ export default function ProfilePage() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [themeSaving, setThemeSaving] = useState(false);
+
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [crop, setCrop] = useState<Point>({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState(0);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
 
   const updateMutation = useUpdateUser();
   const { data: enrollments } = useListMyEnrollments({
@@ -99,16 +142,33 @@ export default function ProfilePage() {
     fileInputRef.current?.click();
   };
 
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !user) return;
+    if (!file) return;
+    const objectUrl = URL.createObjectURL(file);
+    setCropSrc(objectUrl);
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setRotation(0);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
-    setAvatarPreview(URL.createObjectURL(file));
+  const onCropComplete = useCallback((_: Area, pixels: Area) => {
+    setCroppedAreaPixels(pixels);
+  }, []);
+
+  const handleCropApply = async () => {
+    if (!cropSrc || !croppedAreaPixels || !user) return;
     setAvatarUploading(true);
+    setCropSrc(null);
 
     try {
+      const blob = await getCroppedImageBlob(cropSrc, croppedAreaPixels);
+      const previewUrl = URL.createObjectURL(blob);
+      setAvatarPreview(previewUrl);
+
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", blob, "avatar.jpg");
       const res = await fetch("/api/upload", {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -125,8 +185,11 @@ export default function ProfilePage() {
       setAvatarPreview(null);
     } finally {
       setAvatarUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  };
+
+  const handleCropCancel = () => {
+    setCropSrc(null);
   };
 
   const handleThemeSelect = async (selected: Theme) => {
@@ -203,7 +266,7 @@ export default function ProfilePage() {
                     type="file"
                     accept="image/jpeg,image/png,image/gif,image/webp"
                     className="hidden"
-                    onChange={handleAvatarChange}
+                    onChange={handleFileSelected}
                   />
                 </div>
 
@@ -373,6 +436,77 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Crop dialog */}
+      <Dialog open={!!cropSrc} onOpenChange={(open) => { if (!open) handleCropCancel(); }}>
+        <DialogContent className="max-w-lg p-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-5 pb-0">
+            <DialogTitle className="flex items-center gap-2">
+              <Camera className="w-4 h-4 text-primary" />
+              Crop your photo
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* Crop area */}
+          <div className="relative w-full" style={{ height: 340 }}>
+            {cropSrc && (
+              <Cropper
+                image={cropSrc}
+                crop={crop}
+                zoom={zoom}
+                rotation={rotation}
+                aspect={1}
+                cropShape="round"
+                showGrid={false}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={onCropComplete}
+              />
+            )}
+          </div>
+
+          {/* Controls */}
+          <div className="px-6 py-3 space-y-3 bg-muted/40">
+            <div className="flex items-center gap-3">
+              <ZoomOut className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+              <input
+                type="range"
+                min={1}
+                max={3}
+                step={0.05}
+                value={zoom}
+                onChange={(e) => setZoom(Number(e.target.value))}
+                className="flex-1 accent-primary h-1.5 rounded cursor-pointer"
+              />
+              <ZoomIn className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+              <span className="text-xs text-muted-foreground w-8 text-right">{zoom.toFixed(1)}×</span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <RotateCw className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+              <input
+                type="range"
+                min={0}
+                max={360}
+                step={1}
+                value={rotation}
+                onChange={(e) => setRotation(Number(e.target.value))}
+                className="flex-1 accent-primary h-1.5 rounded cursor-pointer"
+              />
+              <span className="text-xs text-muted-foreground w-8 text-right">{rotation}°</span>
+            </div>
+          </div>
+
+          <DialogFooter className="px-6 py-4 flex gap-2">
+            <Button variant="outline" onClick={handleCropCancel} className="flex-1">
+              Cancel
+            </Button>
+            <Button onClick={handleCropApply} className="flex-1">
+              Apply Crop
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
