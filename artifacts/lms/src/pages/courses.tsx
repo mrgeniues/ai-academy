@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { BookOpen, Users, Plus, GraduationCap, Lock, Globe, Trash2, ImageIcon, X, MessageCircle, Link as LinkIcon } from "lucide-react";
+import { BookOpen, Users, Plus, GraduationCap, Lock, Globe, Trash2, ImageIcon, X, MessageCircle, Link as LinkIcon, Pencil } from "lucide-react";
 import { Link } from "wouter";
 
 
@@ -44,7 +44,7 @@ export default function CoursesPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [privateAlertCourse, setPrivateAlertCourse] = useState<CourseWithExtras | null>(null);
 
-  // Course form state
+  // Create form state
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -54,6 +54,17 @@ export default function CoursesPage() {
   const [lessonDrafts, setLessonDrafts] = useState<LessonDraft[]>([emptyLesson()]);
   const [creating, setCreating] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
+
+  // Edit dialog state
+  const [editCourse, setEditCourse] = useState<CourseWithExtras | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editExternalUrl, setEditExternalUrl] = useState("");
+  const [editVisibility, setEditVisibility] = useState<"public" | "private">("public");
+  const [editImageFile, setEditImageFile] = useState<File | null>(null);
+  const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const editImageInputRef = useRef<HTMLInputElement>(null);
 
   const { data: courses, isLoading: coursesLoading } = useListCourses({
     query: { queryKey: getListCoursesQueryKey() }
@@ -68,6 +79,7 @@ export default function CoursesPage() {
 
   const isAdmin = user?.role === "admin";
 
+  // ── Create form helpers ──────────────────────────────────────────────────
   const resetForm = () => {
     setTitle(""); setDescription(""); setImageFile(null); setImagePreview(null); setExternalUrl("");
     setVisibility("public"); setLessonDrafts([emptyLesson()]);
@@ -145,6 +157,83 @@ export default function CoursesPage() {
     }
   };
 
+  // ── Edit dialog helpers ──────────────────────────────────────────────────
+  const openEditDialog = (course: CourseWithExtras) => {
+    setEditCourse(course);
+    setEditTitle(course.title);
+    setEditDescription(course.description ?? "");
+    setEditExternalUrl(course.externalUrl ?? "");
+    setEditVisibility((course.visibility as "public" | "private") ?? "public");
+    setEditImageFile(null);
+    setEditImagePreview(course.thumbnail ?? null);
+  };
+
+  const handleEditImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setEditImageFile(file);
+    setEditImagePreview(URL.createObjectURL(file));
+  };
+
+  const clearEditImage = () => {
+    setEditImageFile(null);
+    setEditImagePreview(null);
+    if (editImageInputRef.current) editImageInputRef.current.value = "";
+  };
+
+  const handleEditSave = async () => {
+    if (!editCourse) return;
+    if (!editTitle.trim()) { toast({ title: "Title is required", variant: "destructive" }); return; }
+
+    setEditSaving(true);
+    try {
+      const token = localStorage.getItem("lms_token");
+
+      let thumbnailUrl: string | null | undefined = undefined;
+      if (editImageFile) {
+        const fd = new FormData();
+        fd.append("file", editImageFile);
+        const uploadResp = await fetch(`/api/upload`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        });
+        if (!uploadResp.ok) throw new Error("Failed to upload image");
+        const uploadData = await uploadResp.json() as { url: string };
+        thumbnailUrl = uploadData.url;
+      } else if (editImagePreview === null) {
+        thumbnailUrl = null;
+      }
+
+      const body: Record<string, unknown> = {
+        title: editTitle.trim(),
+        description: editDescription.trim() || null,
+        externalUrl: editExternalUrl.trim() || null,
+        visibility: editVisibility,
+      };
+      if (thumbnailUrl !== undefined) body.thumbnail = thumbnailUrl;
+
+      const resp = await fetch(`/api/courses/${editCourse.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Failed to update course");
+      }
+
+      queryClient.invalidateQueries({ queryKey: getListCoursesQueryKey() });
+      setEditCourse(null);
+      toast({ title: "Course updated successfully" });
+    } catch (err) {
+      toast({ title: (err as Error).message ?? "Failed to update course", variant: "destructive" });
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  // ── Enroll / private-click ───────────────────────────────────────────────
   const handleEnroll = async (courseId: number) => {
     try {
       await enrollMutation.mutateAsync({ data: { courseId } });
@@ -183,7 +272,6 @@ export default function CoursesPage() {
                   <DialogTitle>Create New Course</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-5 py-2">
-                  {/* Basic info */}
                   <div className="space-y-3">
                     <div>
                       <Label>Title <span className="text-destructive">*</span></Label>
@@ -199,20 +287,12 @@ export default function CoursesPage() {
                       {imagePreview ? (
                         <div className="mt-1 relative w-full h-36 rounded-lg overflow-hidden border border-border">
                           <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={clearImage}
-                            className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
-                          >
+                          <button type="button" onClick={clearImage} className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors">
                             <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => imageInputRef.current?.click()}
-                          className="mt-1 w-full h-28 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
-                        >
+                        <button type="button" onClick={() => imageInputRef.current?.click()} className="mt-1 w-full h-28 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors">
                           <ImageIcon className="w-6 h-6" />
                           <span className="text-sm font-medium">Click to upload image</span>
                           <span className="text-xs">PNG, JPG, GIF up to 10MB</span>
@@ -226,9 +306,7 @@ export default function CoursesPage() {
                     <div>
                       <Label>Visibility</Label>
                       <Select value={visibility} onValueChange={(v: "public" | "private") => setVisibility(v)}>
-                        <SelectTrigger className="mt-1">
-                          <SelectValue />
-                        </SelectTrigger>
+                        <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="public"><span className="flex items-center gap-2"><Globe className="w-3.5 h-3.5" /> Public — anyone can enroll</span></SelectItem>
                           <SelectItem value="private"><span className="flex items-center gap-2"><Lock className="w-3.5 h-3.5" /> Private — contact admin to access</span></SelectItem>
@@ -237,7 +315,6 @@ export default function CoursesPage() {
                     </div>
                   </div>
 
-                  {/* Lessons */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <Label className="text-base font-semibold">Lessons ({lessonDrafts.length})</Label>
@@ -256,33 +333,17 @@ export default function CoursesPage() {
                               </button>
                             )}
                           </div>
-                          <Input
-                            placeholder="Lesson title *"
-                            value={lesson.title}
-                            onChange={e => updateLessonDraft(i, "title", e.target.value)}
-                          />
-                          <Textarea
-                            placeholder="Lesson description"
-                            value={lesson.description}
-                            onChange={e => updateLessonDraft(i, "description", e.target.value)}
-                            rows={2}
-                          />
-                          <Input
-                            placeholder="Video URL (YouTube, Vimeo, etc.)"
-                            value={lesson.videoUrl}
-                            onChange={e => updateLessonDraft(i, "videoUrl", e.target.value)}
-                          />
+                          <Input placeholder="Lesson title *" value={lesson.title} onChange={e => updateLessonDraft(i, "title", e.target.value)} />
+                          <Textarea placeholder="Lesson description" value={lesson.description} onChange={e => updateLessonDraft(i, "description", e.target.value)} rows={2} />
+                          <Input placeholder="Video URL (YouTube, Vimeo, etc.)" value={lesson.videoUrl} onChange={e => updateLessonDraft(i, "videoUrl", e.target.value)} />
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  {/* Actions */}
                   <div className="flex gap-2 justify-end pt-2">
                     <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-                    <Button onClick={handleCreate} disabled={creating}>
-                      {creating ? "Creating..." : "Create Course"}
-                    </Button>
+                    <Button onClick={handleCreate} disabled={creating}>{creating ? "Creating..." : "Create Course"}</Button>
                   </div>
                 </div>
               </DialogContent>
@@ -309,6 +370,7 @@ export default function CoursesPage() {
               const progress = progressMap.get(course.id) ?? 0;
               const isPrivate = course.visibility === "private";
               const canAccess = !isPrivate || isAdmin;
+              const showLink = course.externalUrl && (isEnrolled || isAdmin);
 
               return (
                 <motion.div
@@ -326,20 +388,22 @@ export default function CoursesPage() {
                         <GraduationCap className="w-12 h-12 text-primary/40" />
                       </div>
                     )}
-                    {/* Visibility badge */}
-                    {isPrivate && (
-                      <div className="absolute top-2 right-2">
-                        <Badge variant="destructive" className="gap-1 text-xs">
-                          <Lock className="w-3 h-3" /> Private Course
-                        </Badge>
-                      </div>
-                    )}
-                    {!isPrivate && (
-                      <div className="absolute top-2 right-2">
-                        <Badge variant="secondary" className="gap-1 text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                          <Globe className="w-3 h-3" /> Public
-                        </Badge>
-                      </div>
+                    <div className="absolute top-2 right-2">
+                      {isPrivate ? (
+                        <Badge variant="destructive" className="gap-1 text-xs"><Lock className="w-3 h-3" /> Private</Badge>
+                      ) : (
+                        <Badge variant="secondary" className="gap-1 text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"><Globe className="w-3 h-3" /> Public</Badge>
+                      )}
+                    </div>
+                    {/* Admin edit button — top-left of thumbnail */}
+                    {isAdmin && (
+                      <button
+                        onClick={() => openEditDialog(course)}
+                        className="absolute top-2 left-2 p-1.5 rounded-md bg-black/60 hover:bg-primary text-white transition-colors"
+                        title="Edit course"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
                     )}
                   </div>
 
@@ -354,8 +418,8 @@ export default function CoursesPage() {
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" /> {course.lessonCount} lessons</span>
                       <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {course.enrollmentCount} enrolled</span>
-                      {course.externalUrl && (
-                        <a href={course.externalUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline ml-auto">
+                      {showLink && (
+                        <a href={course.externalUrl!} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline ml-auto">
                           <LinkIcon className="w-3 h-3" /> Link
                         </a>
                       )}
@@ -421,7 +485,67 @@ export default function CoursesPage() {
         )}
       </div>
 
-      {/* Private Course Dialog */}
+      {/* ── Edit Course Dialog ───────────────────────────────────────────── */}
+      <Dialog open={!!editCourse} onOpenChange={v => { if (!v) setEditCourse(null); }}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-4 h-4 text-primary" /> Edit Course
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label>Title <span className="text-destructive">*</span></Label>
+              <Input className="mt-1" placeholder="Course title" value={editTitle} onChange={e => setEditTitle(e.target.value)} />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea className="mt-1" placeholder="What will students learn?" value={editDescription} onChange={e => setEditDescription(e.target.value)} rows={3} />
+            </div>
+            <div>
+              <Label>Course Image</Label>
+              <input ref={editImageInputRef} type="file" accept="image/*" className="hidden" onChange={handleEditImageSelect} />
+              {editImagePreview ? (
+                <div className="mt-1 relative w-full h-36 rounded-lg overflow-hidden border border-border">
+                  <img src={editImagePreview} alt="Preview" className="w-full h-full object-cover" />
+                  <button type="button" onClick={clearEditImage} className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => editImageInputRef.current?.click()} className="mt-1 w-full h-28 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors">
+                  <ImageIcon className="w-6 h-6" />
+                  <span className="text-sm font-medium">Click to upload new image</span>
+                  <span className="text-xs">PNG, JPG, GIF up to 10MB</span>
+                </button>
+              )}
+            </div>
+            <div>
+              <Label>External URL</Label>
+              <Input className="mt-1" placeholder="https://external-resource.com" value={editExternalUrl} onChange={e => setEditExternalUrl(e.target.value)} />
+              <p className="text-xs text-muted-foreground mt-1">Only shown to enrolled users</p>
+            </div>
+            <div>
+              <Label>Visibility</Label>
+              <Select value={editVisibility} onValueChange={(v: "public" | "private") => setEditVisibility(v)}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="public"><span className="flex items-center gap-2"><Globe className="w-3.5 h-3.5" /> Public — anyone can enroll</span></SelectItem>
+                  <SelectItem value="private"><span className="flex items-center gap-2"><Lock className="w-3.5 h-3.5" /> Private — contact admin to access</span></SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button type="button" variant="outline" onClick={() => setEditCourse(null)}>Cancel</Button>
+              <Button onClick={handleEditSave} disabled={editSaving}>
+                {editSaving ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Private Course Dialog ────────────────────────────────────────── */}
       <Dialog open={!!privateAlertCourse} onOpenChange={v => { if (!v) setPrivateAlertCourse(null); }}>
         <DialogContent className="max-w-sm text-center">
           <div className="flex flex-col items-center gap-4 py-4">
@@ -434,12 +558,7 @@ export default function CoursesPage() {
                 This course is private. To get access, contact the admin on WhatsApp.
               </p>
             </div>
-            <a
-              href="https://wa.me/923278035433"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full"
-            >
+            <a href="https://wa.me/923278035433" target="_blank" rel="noopener noreferrer" className="w-full">
               <Button className="w-full gap-2 bg-green-500 hover:bg-green-600 text-white">
                 <MessageCircle className="w-4 h-4" />
                 Contact Admin on WhatsApp
