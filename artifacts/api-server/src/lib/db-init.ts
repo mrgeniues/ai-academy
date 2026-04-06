@@ -96,9 +96,15 @@ export async function initializeDatabase(): Promise<void> {
   const exists = await tablesExist();
 
   if (!exists) {
+    const projectRef = (process.env.SUPABASE_URL ?? "")
+      .replace("https://", "")
+      .split(".")[0];
+    const sqlEditorUrl = projectRef
+      ? `https://supabase.com/dashboard/project/${projectRef}/sql/new`
+      : "https://supabase.com/dashboard (open your project > SQL Editor)";
     logger.warn(
       "Database tables not found. Please run the SQL setup script in the Supabase SQL Editor:\n" +
-        "  URL: https://supabase.com/dashboard/project/hpntmfiurmnkvtysbqio/sql/new\n" +
+        `  URL: ${sqlEditorUrl}\n` +
         "  File: artifacts/api-server/supabase-setup.sql",
     );
     return;
