@@ -28,6 +28,7 @@ router.get("/posts", requireAuth, async (req, res): Promise<void> => {
     .order("created_at", { ascending: false });
 
   if (error) {
+    console.error("[GET /posts] Supabase error:", error);
     res.status(500).json({ error: "Failed to fetch posts" });
     return;
   }
@@ -76,18 +77,23 @@ router.post("/posts", requireAuth, async (req, res): Promise<void> => {
 
   const { content, imageUrl, videoUrl } = parsed.data;
 
+  // Build insert payload dynamically — only include media columns if they have values,
+  // so this works even if the image_url/video_url columns haven't been added yet.
+  const insertPayload: Record<string, unknown> = {
+    user_id: req.userId!,
+    content,
+  };
+  if (imageUrl) insertPayload.image_url = imageUrl;
+  if (videoUrl) insertPayload.video_url = videoUrl;
+
   const { data: post, error } = await supabase
     .from("posts")
-    .insert({
-      user_id: req.userId!,
-      content,
-      image_url: imageUrl ?? null,
-      video_url: videoUrl ?? null,
-    })
+    .insert(insertPayload)
     .select("*, author:users(*)")
     .single();
 
   if (error || !post) {
+    console.error("[POST /posts] Supabase error:", error);
     res.status(500).json({ error: "Failed to create post" });
     return;
   }
@@ -102,7 +108,7 @@ router.post("/posts", requireAuth, async (req, res): Promise<void> => {
     postId: post.id,
     isVip: isAdmin,
     excludeUserId: req.userId!,
-  });
+  }).catch(err => console.error("[broadcastNotification] Failed:", err));
 
   res.status(201).json({
     id: post.id,
@@ -220,19 +226,23 @@ router.post("/posts/:postId/comments", requireAuth, async (req, res): Promise<vo
 
   const { comment, imageUrl, videoUrl } = parsed.data;
 
+  // Build insert payload dynamically — only include media columns if they have values.
+  const insertPayload: Record<string, unknown> = {
+    post_id: postId,
+    user_id: req.userId!,
+    comment,
+  };
+  if (imageUrl) insertPayload.image_url = imageUrl;
+  if (videoUrl) insertPayload.video_url = videoUrl;
+
   const { data: newComment, error } = await supabase
     .from("comments")
-    .insert({
-      post_id: postId,
-      user_id: req.userId!,
-      comment,
-      image_url: imageUrl ?? null,
-      video_url: videoUrl ?? null,
-    })
+    .insert(insertPayload)
     .select("*, author:users(*)")
     .single();
 
   if (error || !newComment) {
+    console.error("[POST /posts/:postId/comments] Supabase error:", error);
     res.status(500).json({ error: "Failed to create comment" });
     return;
   }
@@ -244,7 +254,7 @@ router.post("/posts/:postId/comments", requireAuth, async (req, res): Promise<vo
     postId: postId,
     isVip: false,
     excludeUserId: req.userId!,
-  });
+  }).catch(err => console.error("[broadcastNotification] Failed:", err));
 
   res.status(201).json({
     id: newComment.id,

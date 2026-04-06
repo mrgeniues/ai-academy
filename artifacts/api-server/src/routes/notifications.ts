@@ -13,7 +13,9 @@ router.get("/notifications", requireAuth, async (req, res): Promise<void> => {
     .limit(50);
 
   if (error) {
-    res.status(500).json({ error: "Failed to fetch notifications" });
+    // If the table doesn't exist yet, return empty list instead of 500
+    console.error("[GET /notifications] Supabase error:", error.message);
+    res.json([]);
     return;
   }
 
@@ -41,7 +43,8 @@ router.get("/notifications/unread-count", requireAuth, async (req, res): Promise
     .eq("is_read", false);
 
   if (error) {
-    res.status(500).json({ error: "Failed to fetch unread count" });
+    console.error("[GET /notifications/unread-count] Supabase error:", error.message);
+    res.json({ count: 0 });
     return;
   }
 

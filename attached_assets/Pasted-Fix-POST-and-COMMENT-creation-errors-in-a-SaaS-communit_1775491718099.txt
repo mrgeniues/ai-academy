@@ -1,0 +1,103 @@
+Fix POST and COMMENT creation errors in a SaaS community system.
+
+PROBLEM:
+
+When user creates a post → "Failed to create post"
+When user adds a comment → "Failed to post comment"
+UI is working, but backend insert is failing
+
+GOAL:
+Ensure posts and comments are created successfully in Supabase without errors.
+
+=====================================
+REQUIREMENTS (STRICT):
+
+AUTH CHECK:
+Before inserting post or comment:
+Get logged-in user using:
+supabase.auth.getUser()
+Ensure:
+user.id is available
+If not → prevent insert and show error
+
+=====================================
+2. FIX POST INSERT:
+
+Insert into "posts" table:
+Fields:
+user_id (must be auth user id)
+content (text)
+image_url (nullable)
+video_url (nullable)
+created_at
+Ensure:
+user_id is passed correctly
+No null errors
+
+=====================================
+3. FIX COMMENT INSERT:
+
+Insert into "comments" table:
+Fields:
+user_id
+post_id
+comment (text)
+image_url (nullable)
+video_url (nullable)
+created_at
+Ensure:
+post_id is valid
+user_id is correct
+
+=====================================
+4. RLS POLICIES (CRITICAL FIX):
+
+Fix Row Level Security so users can insert their own posts/comments.
+
+For posts:
+
+Allow INSERT where:
+auth.uid() = user_id
+
+For comments:
+
+Allow INSERT where:
+auth.uid() = user_id
+
+Also allow SELECT for all users.
+
+=====================================
+5. ERROR HANDLING:
+
+Log full error in console:
+console.error(error)
+Show correct message if insert fails
+
+=====================================
+6. VALIDATION:
+
+Do not allow empty post or comment
+Ensure content OR media exists before insert
+
+=====================================
+7. STRICT RULES:
+
+Do NOT change UI
+Do NOT add extra features
+Do NOT modify structure
+Only fix insert and database issues
+
+=====================================
+TECH:
+
+Next.js (App Router)
+Supabase (Auth + Database)
+
+=====================================
+OUTPUT:
+
+Provide fixed insert code for posts
+Provide fixed insert code for comments
+Provide correct RLS SQL policies
+
+Ensure posting and commenting works without errors.
