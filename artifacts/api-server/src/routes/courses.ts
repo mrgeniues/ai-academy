@@ -5,6 +5,30 @@ import { supabase } from "../lib/supabase";
 
 const router: IRouter = Router();
 
+type DbCourse = {
+  id: number;
+  title: string;
+  description: string | null;
+  thumbnail: string | null;
+  created_by: number;
+  created_at: string;
+  updated_at: string;
+};
+
+function formatCourse(course: DbCourse, lessonCount: number, enrollmentCount: number) {
+  return {
+    id: course.id,
+    title: course.title,
+    description: course.description ?? null,
+    thumbnail: course.thumbnail ?? null,
+    createdBy: course.created_by,
+    lessonCount,
+    enrollmentCount,
+    createdAt: course.created_at,
+    updatedAt: course.updated_at,
+  };
+}
+
 async function getCourseWithCounts(courseId: number) {
   const { data: course } = await supabase
     .from("courses")
@@ -24,15 +48,7 @@ async function getCourseWithCounts(courseId: number) {
     .select("*", { count: "exact", head: true })
     .eq("course_id", courseId);
 
-  return {
-    ...course,
-    description: course.description ?? null,
-    thumbnail: course.thumbnail ?? null,
-    lessonCount: lessonCount ?? 0,
-    enrollmentCount: enrollmentCount ?? 0,
-    createdAt: course.created_at,
-    updatedAt: course.updated_at,
-  };
+  return formatCourse(course as DbCourse, lessonCount ?? 0, enrollmentCount ?? 0);
 }
 
 router.get("/courses", requireAuth, async (_req, res): Promise<void> => {
@@ -57,15 +73,7 @@ router.get("/courses", requireAuth, async (_req, res): Promise<void> => {
       .select("*", { count: "exact", head: true })
       .eq("course_id", course.id);
 
-    return {
-      ...course,
-      description: course.description ?? null,
-      thumbnail: course.thumbnail ?? null,
-      lessonCount: lessonCount ?? 0,
-      enrollmentCount: enrollmentCount ?? 0,
-      createdAt: course.created_at,
-      updatedAt: course.updated_at,
-    };
+    return formatCourse(course as DbCourse, lessonCount ?? 0, enrollmentCount ?? 0);
   }));
 
   res.json(enriched);
@@ -99,15 +107,7 @@ router.post("/courses", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  res.status(201).json({
-    ...course,
-    description: course.description ?? null,
-    thumbnail: course.thumbnail ?? null,
-    lessonCount: 0,
-    enrollmentCount: 0,
-    createdAt: course.created_at,
-    updatedAt: course.updated_at,
-  });
+  res.status(201).json(formatCourse(course as DbCourse, 0, 0));
 });
 
 router.get("/courses/:id", requireAuth, async (req, res): Promise<void> => {
@@ -140,10 +140,12 @@ router.get("/courses/:id", requireAuth, async (req, res): Promise<void> => {
   res.json({
     ...course,
     lessons: (lessons ?? []).map(l => ({
-      ...l,
+      id: l.id,
+      courseId: l.course_id,
+      title: l.title,
       videoUrl: l.video_url ?? null,
       content: l.content ?? null,
-      courseId: l.course_id,
+      order: l.order,
       createdAt: l.created_at,
     })),
     isEnrolled: !!enrollment,
