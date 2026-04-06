@@ -1,0 +1,164 @@
+Implement a COURSE MANAGEMENT SYSTEM with STRICT rules. Do NOT add any extra features, UI changes, or assumptions beyond what is written.
+
+=====================================
+GOAL:
+Allow ONLY ADMIN to upload courses with specific fields, and USERS can view courses with progress tracking and private access control.
+
+=====================================
+ADMIN ACCESS CONTROL:
+
+Only users with role = "admin" can:
+Create course
+Edit course
+Delete course
+Normal users MUST NOT:
+Create or edit any course
+See admin controls
+
+=====================================
+COURSE CREATION (ADMIN ONLY):
+
+Admin must be able to add:
+
+Course Basic Info:
+title (required)
+description (required)
+image (URL or upload)
+external_url (any website link)
+Course Visibility:
+visibility field:
+"public"
+"private"
+
+=====================================
+VIDEO SESSIONS (LESSONS):
+
+Each course must include multiple lessons:
+
+Each lesson must contain:
+
+title
+description
+video_url
+
+Admin must be able to:
+
+Add multiple lessons
+Save all lessons under the course
+
+=====================================
+DATABASE STRUCTURE:
+
+Courses table must include:
+
+id
+title
+description
+image
+external_url
+visibility (public/private)
+created_by
+
+Lessons table:
+
+id
+course_id
+title
+description
+video_url
+
+Enrollments table:
+
+id
+user_id
+course_id
+progress (0–100)
+
+=====================================
+USER VIEW (COURSES PAGE):
+
+Show ALL courses
+
+For each course:
+
+Show image
+Show title
+Show progress percentage (if enrolled)
+
+=====================================
+PROGRESS TRACKING:
+
+Track how many lessons user has completed
+Calculate percentage:
+
+progress = (completed lessons / total lessons) * 100
+
+Show:
+"Progress: XX% completed"
+
+=====================================
+PRIVATE COURSE LOGIC:
+
+If course visibility = "private":
+
+Show course card normally BUT with label:
+"Private Course"
+When user clicks on private course:
+DO NOT open course
+Instead show message:
+"Contact with admin on WhatsApp: +923278035433"
+
+=====================================
+PUBLIC COURSE LOGIC:
+
+If course visibility = "public":
+
+Allow user to open course
+Show lessons
+Allow watching videos
+Track progress
+
+=====================================
+UI REQUIREMENTS:
+
+Courses page:
+Grid of course cards
+Each card shows:
+image, title, progress
+Private badge for private courses
+Admin:
+Show "Create Course" button
+
+=====================================
+SECURITY (IMPORTANT):
+
+Only admin can insert/update/delete courses
+Users can only read courses
+Users can only update their own progress
+
+=====================================
+STRICT RULES:
+
+DO NOT add payment system
+DO NOT add extra fields
+DO NOT modify requirements
+DO NOT assume anything extra
+Follow only what is written
+
+=====================================
+TECH:
+
+Next.js (App Router)
+Supabase (Auth + Database + Storage)
+
+=====================================
+OUTPUT:
+
+Provide complete working code for:
+Admin course creation form
+Lessons input system
+Course listing page
+Private course restriction logic
+Progress calculation logic
+
+Ensure everything works without bugs.

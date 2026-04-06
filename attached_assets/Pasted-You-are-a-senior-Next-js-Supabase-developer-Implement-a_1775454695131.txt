@@ -1,0 +1,148 @@
+You are a senior Next.js + Supabase developer.
+
+Implement a COURSE MANAGEMENT SYSTEM with STRICT requirements. Do NOT add any extra features beyond what is specified.
+
+=====================================
+GOAL:
+Allow only ADMIN to upload courses and users to view them with progress tracking and private access control.
+
+=====================================
+ADMIN COURSE UPLOAD (STRICT):
+
+Only users with role = "admin" can:
+
+* Create new course
+* Upload course image (store URL or Supabase storage)
+* Add course title
+* Add course description
+* Add external URL (any site link)
+* Set course visibility:
+
+  * public
+  * private
+
+=====================================
+COURSE STRUCTURE:
+
+Each course must include:
+
+1. Basic Info:
+
+* title
+* description
+* image
+* external_url
+
+2. Video Sessions:
+
+* Multiple lessons per course
+* Each lesson must include:
+
+  * video_url
+  * title
+  * description
+
+=====================================
+DATABASE REQUIREMENTS:
+
+Modify/add fields in courses table:
+
+* image
+* external_url
+* visibility (public/private)
+
+Lessons table:
+
+* course_id
+* video_url
+* title
+* description
+
+=====================================
+USER VIEW:
+
+On Courses page:
+
+* Show all PUBLIC courses
+* Show PRIVATE courses as locked
+
+For PRIVATE courses:
+
+* Show label: "Private Course"
+* When user clicks:
+  Show message:
+  "Contact with admin on WhatsApp: +923278035433"
+
+=====================================
+PROGRESS TRACKING:
+
+* Track user progress per course
+* Calculate % based on completed lessons
+
+Database:
+enrollments table must include:
+
+* progress (0–100)
+
+Logic:
+
+* If user watches lessons → update progress %
+* Show progress bar on each course card
+
+UI:
+
+* Display:
+  "Progress: XX% completed"
+
+=====================================
+ACCESS CONTROL:
+
+* Only ADMIN can:
+
+  * create course
+  * edit course
+  * delete course
+
+* Normal users:
+
+  * can only view courses
+  * cannot edit or upload anything
+
+=====================================
+DASHBOARD UI:
+
+* Courses page:
+
+  * Show course cards
+  * Show image, title, progress
+  * Show "Private" badge if private
+
+* Admin:
+
+  * Show "Create Course" button
+
+=====================================
+RESTRICTIONS (VERY IMPORTANT):
+
+* Do NOT add payment system
+* Do NOT add extra features
+* Do NOT change structure
+* Follow only these instructions strictly
+
+=====================================
+TECH:
+
+* Next.js (App Router)
+* Supabase (DB + Auth + Storage)
+
+=====================================
+OUTPUT:
+
+* Provide working code for:
+
+  * Admin course upload form
+  * Course listing UI
+  * Progress tracking logic
+  * Private course restriction logic
+
+Ensure system works perfectly without bugs.

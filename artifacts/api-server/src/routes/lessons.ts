@@ -1,18 +1,28 @@
 import { Router, type IRouter } from "express";
 import { requireAuth } from "../lib/auth";
-import { CreateLessonBody, UpdateLessonBody } from "@workspace/api-zod";
 import { supabase } from "../lib/supabase";
+import { z } from "zod";
 
 const router: IRouter = Router();
 
-function formatLesson(lesson: Record<string, unknown>) {
+const CreateLessonBodyExt = z.object({
+  title: z.string().min(1),
+  description: z.string().optional().nullable(),
+  videoUrl: z.string().optional().nullable(),
+  content: z.string().optional().nullable(),
+  order: z.number().optional(),
+});
+
+function formatLesson(lesson: Record<string, unknown>, isCompleted = false) {
   return {
     id: lesson.id,
     courseId: lesson.course_id,
     title: lesson.title,
+    description: (lesson.description as string) ?? null,
     videoUrl: (lesson.video_url as string) ?? null,
     content: (lesson.content as string) ?? null,
     order: lesson.order,
+    isCompleted,
     createdAt: lesson.created_at,
   };
 }
@@ -20,10 +30,7 @@ function formatLesson(lesson: Record<string, unknown>) {
 router.get("/courses/:courseId/lessons", requireAuth, async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.courseId) ? req.params.courseId[0] : req.params.courseId;
   const courseId = parseInt(rawId, 10);
-  if (isNaN(courseId)) {
-    res.status(400).json({ error: "Invalid course id" });
-    return;
-  }
+  if (isNaN(courseId)) { res.status(400).json({ error: "Invalid course id" }); return; }
 
   const { data: lessons } = await supabase
     .from("lessons")
@@ -31,100 +38,137 @@ router.get("/courses/:courseId/lessons", requireAuth, async (req, res): Promise<
     .eq("course_id", courseId)
     .order("order", { ascending: true });
 
-  res.json((lessons ?? []).map(formatLesson));
+  const lessonIds = (lessons ?? []).map(l => l.id);
+  const { data: completions } = lessonIds.length > 0
+    ? await supabase.from("lesson_completions").select("lesson_id").eq("user_id", req.userId!).in("lesson_id", lessonIds)
+    : { data: [] };
+
+  const completedSet = new Set((completions ?? []).map(c => c.lesson_id));
+  res.json((lessons ?? []).map(l => formatLesson(l, completedSet.has(l.id))));
 });
 
 router.post("/courses/:courseId/lessons", requireAuth, async (req, res): Promise<void> => {
-  if (req.userRole !== "admin" && req.userRole !== "creator") {
-    res.status(403).json({ error: "Forbidden" });
-    return;
-  }
+  if (req.userRole !== "admin") { res.status(403).json({ error: "Only admins can add lessons" }); return; }
 
   const rawId = Array.isArray(req.params.courseId) ? req.params.courseId[0] : req.params.courseId;
   const courseId = parseInt(rawId, 10);
-  if (isNaN(courseId)) {
-    res.status(400).json({ error: "Invalid course id" });
-    return;
-  }
+  if (isNaN(courseId)) { res.status(400).json({ error: "Invalid course id" }); return; }
 
-  const parsed = CreateLessonBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+  const parsed = CreateLessonBodyExt.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const { count: existingCount } = await supabase
+    .from("lessons")
+    .select("*", { count: "exact", head: true })
+    .eq("course_id", courseId);
 
   const { data: lesson, error } = await supabase
     .from("lessons")
     .insert({
       course_id: courseId,
       title: parsed.data.title,
+      description: parsed.data.description ?? null,
       video_url: parsed.data.videoUrl ?? null,
       content: parsed.data.content ?? null,
-      order: parsed.data.order ?? 0,
+      order: parsed.data.order ?? (existingCount ?? 0) + 1,
     })
     .select()
     .single();
 
-  if (error || !lesson) {
-    res.status(500).json({ error: "Failed to create lesson" });
-    return;
-  }
-
+  if (error || !lesson) { res.status(500).json({ error: "Failed to create lesson" }); return; }
   res.status(201).json(formatLesson(lesson));
 });
 
+// Mark a lesson as complete
+router.post("/lessons/:id/complete", requireAuth, async (req, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const lessonId = parseInt(rawId, 10);
+  if (isNaN(lessonId)) { res.status(400).json({ error: "Invalid lesson id" }); return; }
+
+  const { data: lesson } = await supabase.from("lessons").select("course_id").eq("id", lessonId).maybeSingle();
+  if (!lesson) { res.status(404).json({ error: "Lesson not found" }); return; }
+
+  // Check enrolled
+  const { data: enrollment } = await supabase
+    .from("enrollments")
+    .select("id")
+    .eq("user_id", req.userId!)
+    .eq("course_id", lesson.course_id)
+    .maybeSingle();
+  if (!enrollment) { res.status(403).json({ error: "Not enrolled in this course" }); return; }
+
+  await supabase.from("lesson_completions").upsert({ user_id: req.userId!, lesson_id: lessonId }, { onConflict: "user_id,lesson_id" });
+
+  // Recalculate progress
+  const [{ count: total }, { count: completed }] = await Promise.all([
+    supabase.from("lessons").select("*", { count: "exact", head: true }).eq("course_id", lesson.course_id),
+    supabase.from("lesson_completions")
+      .select("lesson_id", { count: "exact", head: true })
+      .eq("user_id", req.userId!)
+      .in("lesson_id",
+        (await supabase.from("lessons").select("id").eq("course_id", lesson.course_id)).data?.map(l => l.id) ?? []
+      ),
+  ]);
+
+  const progress = total ? Math.round(((completed ?? 0) / total) * 100) : 0;
+  await supabase.from("enrollments").update({ progress }).eq("user_id", req.userId!).eq("course_id", lesson.course_id);
+
+  res.json({ progress, completedLessons: completed ?? 0, totalLessons: total ?? 0 });
+});
+
+// Undo lesson completion
+router.delete("/lessons/:id/complete", requireAuth, async (req, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const lessonId = parseInt(rawId, 10);
+  if (isNaN(lessonId)) { res.status(400).json({ error: "Invalid lesson id" }); return; }
+
+  const { data: lesson } = await supabase.from("lessons").select("course_id").eq("id", lessonId).maybeSingle();
+  if (!lesson) { res.status(404).json({ error: "Lesson not found" }); return; }
+
+  await supabase.from("lesson_completions").delete().eq("user_id", req.userId!).eq("lesson_id", lessonId);
+
+  const [{ count: total }, { count: completed }] = await Promise.all([
+    supabase.from("lessons").select("*", { count: "exact", head: true }).eq("course_id", lesson.course_id),
+    supabase.from("lesson_completions")
+      .select("lesson_id", { count: "exact", head: true })
+      .eq("user_id", req.userId!)
+      .in("lesson_id",
+        (await supabase.from("lessons").select("id").eq("course_id", lesson.course_id)).data?.map(l => l.id) ?? []
+      ),
+  ]);
+
+  const progress = total ? Math.round(((completed ?? 0) / total) * 100) : 0;
+  await supabase.from("enrollments").update({ progress }).eq("user_id", req.userId!).eq("course_id", lesson.course_id);
+
+  res.json({ progress, completedLessons: completed ?? 0, totalLessons: total ?? 0 });
+});
+
 router.patch("/lessons/:id", requireAuth, async (req, res): Promise<void> => {
-  if (req.userRole !== "admin" && req.userRole !== "creator") {
-    res.status(403).json({ error: "Forbidden" });
-    return;
-  }
+  if (req.userRole !== "admin") { res.status(403).json({ error: "Only admins can edit lessons" }); return; }
 
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
-  if (isNaN(id)) {
-    res.status(400).json({ error: "Invalid lesson id" });
-    return;
-  }
-
-  const parsed = UpdateLessonBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid lesson id" }); return; }
 
   const updates: Record<string, unknown> = {};
-  if (parsed.data.title !== undefined) updates.title = parsed.data.title;
-  if (parsed.data.videoUrl !== undefined) updates.video_url = parsed.data.videoUrl;
-  if (parsed.data.content !== undefined) updates.content = parsed.data.content;
-  if (parsed.data.order !== undefined) updates.order = parsed.data.order;
+  const body = req.body as Record<string, unknown>;
+  if (body.title !== undefined) updates.title = body.title;
+  if (body.description !== undefined) updates.description = body.description;
+  if (body.videoUrl !== undefined) updates.video_url = body.videoUrl;
+  if (body.content !== undefined) updates.content = body.content;
+  if (body.order !== undefined) updates.order = body.order;
 
-  const { data: lesson, error } = await supabase
-    .from("lessons")
-    .update(updates)
-    .eq("id", id)
-    .select()
-    .maybeSingle();
-
-  if (error || !lesson) {
-    res.status(404).json({ error: "Lesson not found" });
-    return;
-  }
-
+  const { data: lesson, error } = await supabase.from("lessons").update(updates).eq("id", id).select().maybeSingle();
+  if (error || !lesson) { res.status(404).json({ error: "Lesson not found" }); return; }
   res.json(formatLesson(lesson));
 });
 
 router.delete("/lessons/:id", requireAuth, async (req, res): Promise<void> => {
-  if (req.userRole !== "admin" && req.userRole !== "creator") {
-    res.status(403).json({ error: "Forbidden" });
-    return;
-  }
+  if (req.userRole !== "admin") { res.status(403).json({ error: "Only admins can delete lessons" }); return; }
 
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
-  if (isNaN(id)) {
-    res.status(400).json({ error: "Invalid lesson id" });
-    return;
-  }
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid lesson id" }); return; }
 
   await supabase.from("lessons").delete().eq("id", id);
   res.sendStatus(204);
