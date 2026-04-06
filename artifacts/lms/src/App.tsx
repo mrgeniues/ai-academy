@@ -10,6 +10,7 @@ import DashboardPage from "@/pages/dashboard";
 import CoursesPage from "@/pages/courses";
 import CourseDetailPage from "@/pages/course-detail";
 import CommunityPage from "@/pages/community";
+import VipPostsPage from "@/pages/vip-posts";
 import ProfilePage from "@/pages/profile";
 import AdminPage from "@/pages/admin";
 import NotFound from "@/pages/not-found";
@@ -76,6 +77,9 @@ function Router() {
       </Route>
       <Route path="/courses/:id">
         <ProtectedRoute component={CourseDetailPage} />
+      </Route>
+      <Route path="/vip-posts">
+        <ProtectedRoute component={VipPostsPage} />
       </Route>
       <Route path="/community">
         <ProtectedRoute component={CommunityPage} />

@@ -11,6 +11,7 @@ const CreatePostSchema = z.object({
   content: z.string().min(1),
   imageUrl: z.string().url().optional().nullable(),
   videoUrl: z.string().url().optional().nullable(),
+  isVip: z.boolean().optional(),
 });
 
 const CreateCommentSchema = z.object({
@@ -21,11 +22,20 @@ const CreateCommentSchema = z.object({
 
 router.get("/posts", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
+  const isVipFilter = req.query.vip === "true";
 
-  const { data: posts, error } = await supabase
+  let query = supabase
     .from("posts")
     .select("*, author:users(*)")
     .order("created_at", { ascending: false });
+
+  if (isVipFilter) {
+    query = query.eq("is_vip", true);
+  } else {
+    query = query.eq("is_vip", false);
+  }
+
+  const { data: posts, error } = await query;
 
   if (error) {
     console.error("[GET /posts] Supabase error:", error);
@@ -58,6 +68,7 @@ router.get("/posts", requireAuth, async (req, res): Promise<void> => {
     content: post.content,
     imageUrl: post.image_url ?? null,
     videoUrl: post.video_url ?? null,
+    isVip: post.is_vip ?? false,
     likeCount: likeCountMap.get(post.id) ?? 0,
     commentCount: commentCountMap.get(post.id) ?? 0,
     isLiked: myLikeSet.has(post.id),
@@ -75,13 +86,19 @@ router.post("/posts", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { content, imageUrl, videoUrl } = parsed.data;
+  const { content, imageUrl, videoUrl, isVip } = parsed.data;
+
+  if (isVip && req.userRole !== "admin") {
+    res.status(403).json({ error: "Only admins can create VIP posts" });
+    return;
+  }
 
   // Build insert payload dynamically — only include media columns if they have values,
   // so this works even if the image_url/video_url columns haven't been added yet.
   const insertPayload: Record<string, unknown> = {
     user_id: req.userId!,
     content,
+    is_vip: isVip ?? false,
   };
   if (imageUrl) insertPayload.image_url = imageUrl;
   if (videoUrl) insertPayload.video_url = videoUrl;
@@ -99,14 +116,15 @@ router.post("/posts", requireAuth, async (req, res): Promise<void> => {
   }
 
   const isAdmin = req.userRole === "admin";
+  const vipPost = isVip ?? false;
   const preview = content.slice(0, 80) + (content.length > 80 ? "…" : "");
 
   broadcastNotification({
-    type: isAdmin ? "admin_post" : "post",
-    title: isAdmin ? "New Admin Post" : "New Post",
+    type: vipPost ? "admin_post" : isAdmin ? "admin_post" : "post",
+    title: vipPost ? "New VIP Post ⭐" : isAdmin ? "New Admin Post" : "New Post",
     message: `${post.author?.name ?? "Someone"}: ${preview}`,
     postId: post.id,
-    isVip: isAdmin,
+    isVip: vipPost,
     excludeUserId: req.userId!,
   }).catch(err => console.error("[broadcastNotification] Failed:", err));
 
@@ -116,6 +134,7 @@ router.post("/posts", requireAuth, async (req, res): Promise<void> => {
     content: post.content,
     imageUrl: post.image_url ?? null,
     videoUrl: post.video_url ?? null,
+    isVip: post.is_vip ?? false,
     likeCount: 0,
     commentCount: 0,
     isLiked: false,

@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { NotificationBell } from "@/components/notification-bell";
 import {
-  LayoutDashboard, BookOpen, Users, User, LogOut, Sun, Moon, Palette, Shield, Menu, GraduationCap
+  LayoutDashboard, BookOpen, Users, User, LogOut, Sun, Moon, Palette, Shield, Menu, GraduationCap, Crown
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -16,6 +16,7 @@ import { initGlobalClickSound } from "@/lib/sound";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/courses", label: "Courses", icon: BookOpen },
+  { href: "/vip-posts", label: "VIP Posts", icon: Crown },
   { href: "/community", label: "Community", icon: Users },
   { href: "/profile", label: "Profile", icon: User },
 ];
