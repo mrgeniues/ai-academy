@@ -51,7 +51,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
 
   req.userId = user.id;
-  req.userRole = user.role;
+  req.userRole = (user.role ?? "member").toLowerCase();
   next();
 }
 
