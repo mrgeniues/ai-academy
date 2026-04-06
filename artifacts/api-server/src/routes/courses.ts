@@ -140,13 +140,15 @@ router.post("/courses", requireAuth, async (req, res): Promise<void> => {
         title: l.title,
         order: i + 1,
       };
-      if (l.description != null) row.description = l.description;
-      if (l.videoUrl != null) row.video_url = l.videoUrl;
+      // Map description → content (more widely supported column in existing DBs)
+      // Only include when non-empty to avoid PGRST204 on missing columns
+      if (l.description) row.content = l.description;
+      if (l.videoUrl) row.video_url = l.videoUrl;
       return row;
     });
     const { error: lessonError } = await supabase.from("lessons").insert(lessonPayload);
     if (lessonError) {
-      console.error("[POST /courses] Lesson insert error:", lessonError.message);
+      console.error("[POST /courses] Lesson insert error:", lessonError.message, lessonError.details, lessonError.hint, lessonError.code);
     }
   }
 
