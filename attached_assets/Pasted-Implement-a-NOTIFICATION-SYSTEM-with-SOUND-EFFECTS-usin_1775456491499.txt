@@ -1,0 +1,125 @@
+Implement a NOTIFICATION SYSTEM with SOUND EFFECTS using STRICT requirements. Do NOT add any extra features beyond what is specified.
+
+=====================================
+GOAL:
+Create a notification system where users receive notifications for posts, comments, and admin actions. Add sound feedback on user interactions.
+
+=====================================
+TRIGGERS (WHEN TO CREATE NOTIFICATION):
+
+Create notification when:
+
+Any user creates a POST
+Any user adds a COMMENT
+Admin creates:
+a POST
+a COURSE
+
+All users must receive notifications.
+
+=====================================
+DATABASE STRUCTURE:
+
+Create table: notifications
+
+Fields:
+
+id
+user_id
+type (post, comment, admin_post, admin_course)
+title
+message
+post_id (nullable)
+course_id (nullable)
+is_read (boolean default false)
+is_vip (boolean default false)
+created_at (timestamp)
+
+=====================================
+VIP LOGIC:
+
+Admin post or course → is_vip = true
+
+=====================================
+NOTIFICATION BELL UI:
+
+Add bell icon in navbar
+Show unread count
+
+On click:
+
+Show dropdown with tabs:
+All
+Unread
+VIP
+
+=====================================
+CLICK ACTION:
+
+Post → redirect to post
+Comment → redirect to post + scroll to comment
+Course → redirect to course
+
+=====================================
+READ / UNREAD:
+
+On click → mark is_read = true
+Unread tab → show only unread
+All tab → show all
+
+=====================================
+VIP TAB:
+
+Show only is_vip = true notifications
+
+=====================================
+SOUND SYSTEM (IMPORTANT):
+
+Add sound effects for user interaction:
+
+Play sound when:
+User clicks any button
+User opens notification bell
+User clicks a notification
+Use a short, smooth, modern UI sound (click/tap sound)
+Implementation:
+Use HTML Audio API or JavaScript Audio object
+Preload sound file
+Play instantly on click
+
+Example logic:
+
+Create sound file (e.g., click.mp3)
+On button click:
+play sound
+Ensure:
+Sound is not too loud
+No delay
+Works on all clicks globally
+
+=====================================
+STRICT RULES:
+
+Do NOT add push notifications
+Do NOT add email notifications
+Do NOT add extra animations
+Do NOT add extra features
+Only implement what is defined
+
+=====================================
+TECH:
+
+Next.js (App Router)
+Supabase
+
+=====================================
+OUTPUT:
+
+SQL for notifications table
+Notification logic (insert + fetch)
+Bell UI with tabs
+Redirect system
+Mark as read system
+Sound system implementation (global click sound)
+
+Ensure everything works perfectly without bugs.

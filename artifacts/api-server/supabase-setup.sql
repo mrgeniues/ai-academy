@@ -133,3 +133,22 @@ INSERT INTO posts (user_id, content) VALUES
   (2, 'Welcome to LearnHub! I just uploaded 3 new courses. Check them out and let me know what topics you''d like next!'),
   (3, 'Just finished the Introduction to Web Development course. Absolutely loved it — highly recommend!'),
   (1, 'Platform update: We''ve added progress tracking and new community features. Keep learning!');
+
+-- ============================================================
+-- Notifications table
+-- ============================================================
+CREATE TABLE IF NOT EXISTS notifications (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  post_id INTEGER REFERENCES posts(id) ON DELETE SET NULL,
+  course_id INTEGER REFERENCES courses(id) ON DELETE SET NULL,
+  is_read BOOLEAN NOT NULL DEFAULT false,
+  is_vip BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE notifications DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS notifications_user_id_idx ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS notifications_is_read_idx ON notifications(user_id, is_read);

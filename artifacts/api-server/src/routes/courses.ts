@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { requireAuth } from "../lib/auth";
 import { supabase } from "../lib/supabase";
 import { z } from "zod";
+import { broadcastNotification } from "../lib/notifications";
 
 const router: IRouter = Router();
 
@@ -118,6 +119,15 @@ router.post("/courses", requireAuth, async (req, res): Promise<void> => {
       }))
     );
   }
+
+  broadcastNotification({
+    type: "admin_course",
+    title: "New Course Available",
+    message: `Admin added a new course: ${title}`,
+    courseId: course.id,
+    isVip: true,
+    excludeUserId: req.userId!,
+  });
 
   res.status(201).json(formatCourse(course as DbCourse, lessons?.length ?? 0, 0));
 });

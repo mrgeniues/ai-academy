@@ -3,6 +3,7 @@ import { requireAuth } from "../lib/auth";
 import { formatUser } from "./auth";
 import { CreatePostBody, CreateCommentBody } from "@workspace/api-zod";
 import { supabase } from "../lib/supabase";
+import { broadcastNotification } from "../lib/notifications";
 
 const router: IRouter = Router();
 
@@ -69,6 +70,18 @@ router.post("/posts", requireAuth, async (req, res): Promise<void> => {
     res.status(500).json({ error: "Failed to create post" });
     return;
   }
+
+  const isAdmin = req.userRole === "admin";
+  const preview = parsed.data.content.slice(0, 80) + (parsed.data.content.length > 80 ? "…" : "");
+
+  broadcastNotification({
+    type: isAdmin ? "admin_post" : "post",
+    title: isAdmin ? "New Admin Post" : "New Post",
+    message: `${post.author?.name ?? "Someone"}: ${preview}`,
+    postId: post.id,
+    isVip: isAdmin,
+    excludeUserId: req.userId!,
+  });
 
   res.status(201).json({
     id: post.id,
@@ -190,6 +203,15 @@ router.post("/posts/:postId/comments", requireAuth, async (req, res): Promise<vo
     res.status(500).json({ error: "Failed to create comment" });
     return;
   }
+
+  broadcastNotification({
+    type: "comment",
+    title: "New Comment",
+    message: `${comment.author?.name ?? "Someone"} commented on a post`,
+    postId: postId,
+    isVip: false,
+    excludeUserId: req.userId!,
+  });
 
   res.status(201).json({
     id: comment.id,

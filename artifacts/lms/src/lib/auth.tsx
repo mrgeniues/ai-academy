@@ -6,6 +6,7 @@ import { setAuthTokenGetter } from "@workspace/api-client-react";
 
 interface AuthContextType {
   user: User | null | undefined;
+  token: string | null;
   isLoading: boolean;
   login: (token: string) => void;
   logout: () => void;
@@ -47,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

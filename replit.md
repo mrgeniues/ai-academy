@@ -84,6 +84,8 @@ The API server startup logs the SQL Editor URL derived from `SUPABASE_URL` autom
 - `GET /posts`, `POST /posts`, `DELETE /posts/:id`, `POST /posts/:id/like`
 - `GET /posts/:id/comments`, `POST /posts/:id/comments`, `DELETE /comments/:id`
 - `GET /dashboard/stats`, `GET /dashboard/activity`
+- `GET /notifications`, `GET /notifications/unread-count`
+- `PATCH /notifications/:id/read`, `PATCH /notifications/read-all`
 
 ## Design
 

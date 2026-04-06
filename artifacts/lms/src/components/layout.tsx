@@ -2,14 +2,15 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { useLogout } from "@workspace/api-client-react";
-import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { NotificationBell } from "@/components/notification-bell";
 import {
-  LayoutDashboard, BookOpen, Users, User, LogOut, Sun, Moon, Shield, Menu, X, GraduationCap
+  LayoutDashboard, BookOpen, Users, User, LogOut, Sun, Moon, Shield, Menu, GraduationCap
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { initGlobalClickSound } from "@/lib/sound";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -26,6 +27,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const logoutMutation = useLogout();
   const queryClient = useQueryClient();
 
+  useEffect(() => {
+    const cleanup = initGlobalClickSound();
+    return cleanup;
+  }, []);
+
   const handleLogout = async () => {
     try {
       await logoutMutation.mutateAsync({});
@@ -41,11 +47,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-6 py-5 border-b border-sidebar-border">
-        <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+      <div className="flex items-center gap-3 px-4 py-4 border-b border-sidebar-border">
+        <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
           <GraduationCap className="w-5 h-5 text-white" />
         </div>
-        <span className="font-bold text-lg text-sidebar-foreground tracking-tight">LearnHub</span>
+        <span className="font-bold text-lg text-sidebar-foreground tracking-tight flex-1">LearnHub</span>
+        <NotificationBell />
       </div>
 
       {/* Navigation */}
@@ -151,10 +158,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <button data-testid="menu-toggle" onClick={() => setSidebarOpen(true)} className="p-1">
             <Menu className="w-5 h-5" />
           </button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-1">
             <GraduationCap className="w-5 h-5 text-primary" />
             <span className="font-bold text-base">LearnHub</span>
           </div>
+          <NotificationBell />
         </header>
 
         <main className="flex-1 overflow-y-auto">
