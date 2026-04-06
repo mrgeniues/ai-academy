@@ -14,6 +14,7 @@ type DbUser = {
   role: string;
   avatar: string | null;
   bio: string | null;
+  theme: string | null;
   social_links: Record<string, string | null> | null;
   last_login: string | null;
   last_logout: string | null;
@@ -29,6 +30,7 @@ export function formatUser(user: DbUser) {
     role: (user.role ?? "member").toLowerCase(),
     avatar: user.avatar ?? null,
     bio: user.bio ?? null,
+    theme: user.theme ?? "light",
     socialLinks: user.social_links ?? {},
     lastLogin: user.last_login ?? null,
     lastLogout: user.last_logout ?? null,

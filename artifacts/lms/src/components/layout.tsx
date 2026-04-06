@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { NotificationBell } from "@/components/notification-bell";
 import {
-  LayoutDashboard, BookOpen, Users, User, LogOut, Sun, Moon, Shield, Menu, GraduationCap
+  LayoutDashboard, BookOpen, Users, User, LogOut, Sun, Moon, Palette, Shield, Menu, GraduationCap
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -21,7 +21,7 @@ const navItems = [
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
-  const { theme, toggleTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const logoutMutation = useLogout();
@@ -96,14 +96,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Footer */}
       <div className="px-3 py-4 border-t border-sidebar-border space-y-2">
-        {/* Theme toggle */}
+        {/* Theme cycle toggle */}
         <button
           data-testid="theme-toggle"
-          onClick={toggleTheme}
+          onClick={() => {
+            const next = theme === "light" ? "dark" : theme === "dark" ? "purple" : "light";
+            setTheme(next);
+          }}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all"
         >
-          {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          {theme === "dark" ? "Light mode" : "Dark mode"}
+          {theme === "dark" ? <Sun className="w-4 h-4" /> : theme === "purple" ? <Palette className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          {theme === "dark" ? "Light mode" : theme === "purple" ? "Light mode" : "Dark mode"}
         </button>
 
         {/* User info */}

@@ -1,0 +1,117 @@
+Implement PROFILE IMAGE UPLOAD and USER THEME SYSTEM with STRICT requirements. Do NOT add any extra features beyond what is specified.
+
+=====================================
+GOAL:
+
+Allow users to upload and display their profile image (avatar)
+Allow users to select a theme, and apply it across the entire app for that specific user only
+
+=====================================
+PROFILE IMAGE UPLOAD:
+
+User must be able to:
+
+Upload profile image from device
+Store image in Supabase Storage
+Save image URL in users table (avatar field)
+
+DATABASE:
+
+users table must include:
+
+avatar (text, URL)
+
+=====================================
+IMAGE DISPLAY:
+
+Show user profile image in:
+Profile page (main avatar)
+Navbar/sidebar user icon
+Posts and comments (replace default letter avatar)
+If no image:
+Show default letter avatar
+
+=====================================
+UPLOAD LOGIC:
+
+On image upload:
+Upload file to Supabase Storage
+Get public URL
+Save URL in users.avatar
+Ensure only logged-in user can update their own avatar
+
+=====================================
+THEME SYSTEM:
+
+User must be able to:
+
+Select a theme from profile page
+Available themes (ONLY these):
+light
+dark
+purple
+
+=====================================
+DATABASE UPDATE:
+
+users table must include:
+
+theme (text)
+
+=====================================
+THEME LOGIC:
+
+When user selects a theme:
+Save selected theme in users.theme
+On app load:
+Fetch user theme from database
+Apply theme globally across entire app
+Theme must affect:
+background colors
+sidebar
+cards
+text colors
+
+=====================================
+USER-SPECIFIC BEHAVIOR:
+
+Theme must be applied ONLY to that user
+Other users must see their own selected theme
+Theme must persist after refresh and login
+
+=====================================
+UI REQUIREMENTS:
+
+Profile page must include:
+
+Avatar upload button
+Theme selection section:
+Light button
+Dark button
+Purple button
+
+=====================================
+STRICT RULES:
+
+Do NOT add extra themes
+Do NOT add theme customization beyond these 3
+Do NOT add extra UI elements
+Do NOT modify other features
+Only implement avatar upload and theme system
+
+=====================================
+TECH:
+
+Next.js (App Router)
+Supabase (Database + Storage + Auth)
+
+=====================================
+OUTPUT:
+
+Avatar upload code
+Supabase storage integration
+Theme selection UI
+Theme apply logic (global)
+Database updates
+
+Ensure everything works without bugs.

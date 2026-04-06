@@ -154,6 +154,7 @@ export const UpdateUserBody = zod.object({
   name: zod.string().optional(),
   avatar: zod.string().nullish(),
   bio: zod.string().nullish(),
+  theme: zod.string().nullish(),
   socialLinks: zod
     .object({
       facebook: zod.string().nullish(),

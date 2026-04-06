@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { useTheme, type Theme } from "@/lib/theme";
 import { useUpdateUser, useListMyEnrollments, getGetMeQueryKey, getListMyEnrollmentsQueryKey } from "@workspace/api-client-react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,14 +15,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { SiFacebook, SiInstagram, SiTiktok, SiX, SiWhatsapp } from "react-icons/si";
-import { Linkedin, BookOpen } from "lucide-react";
+import { Linkedin, BookOpen, Camera, Loader2, Sun, Moon, Palette } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 
 const schema = z.object({
   name: z.string().min(2, "Name required"),
-  avatar: z.string().url("Must be a valid URL").optional().or(z.literal("")),
   bio: z.string().optional(),
   facebook: z.string().url().optional().or(z.literal("")),
   instagram: z.string().url().optional().or(z.literal("")),
@@ -42,10 +42,21 @@ const socialPlatforms = [
   { key: "linkedin" as const, label: "LinkedIn", icon: Linkedin, color: "#0A66C2" },
 ];
 
+const themes: { value: Theme; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { value: "light", label: "Light", icon: Sun },
+  { value: "dark", label: "Dark", icon: Moon },
+  { value: "purple", label: "Purple", icon: Palette },
+];
+
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+  const { theme, setTheme } = useTheme();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [themeSaving, setThemeSaving] = useState(false);
 
   const updateMutation = useUpdateUser();
   const { data: enrollments } = useListMyEnrollments({
@@ -53,12 +64,12 @@ export default function ProfilePage() {
   });
 
   const initials = user?.name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) ?? "?";
+  const displayAvatar = avatarPreview ?? user?.avatar ?? undefined;
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       name: user?.name ?? "",
-      avatar: user?.avatar ?? "",
       bio: user?.bio ?? "",
       facebook: user?.socialLinks?.facebook ?? "",
       instagram: user?.socialLinks?.instagram ?? "",
@@ -73,7 +84,6 @@ export default function ProfilePage() {
     if (user) {
       form.reset({
         name: user.name ?? "",
-        avatar: user.avatar ?? "",
         bio: user.bio ?? "",
         facebook: user.socialLinks?.facebook ?? "",
         instagram: user.socialLinks?.instagram ?? "",
@@ -85,6 +95,54 @@ export default function ProfilePage() {
     }
   }, [user]);
 
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    setAvatarPreview(URL.createObjectURL(file));
+    setAvatarUploading(true);
+
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const { url } = await res.json();
+
+      await updateMutation.mutateAsync({ id: user.id, data: { avatar: url } });
+      queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+      toast({ title: "Profile photo updated" });
+    } catch {
+      toast({ title: "Failed to upload photo", variant: "destructive" });
+      setAvatarPreview(null);
+    } finally {
+      setAvatarUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleThemeSelect = async (selected: Theme) => {
+    if (!user || selected === theme) return;
+    setTheme(selected);
+    setThemeSaving(true);
+    try {
+      await updateMutation.mutateAsync({ id: user.id, data: { theme: selected } });
+      queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+    } catch {
+      toast({ title: "Failed to save theme", variant: "destructive" });
+    } finally {
+      setThemeSaving(false);
+    }
+  };
+
   const handleSubmit = async (data: FormData) => {
     if (!user) return;
     try {
@@ -92,7 +150,6 @@ export default function ProfilePage() {
         id: user.id,
         data: {
           name: data.name,
-          avatar: data.avatar || null,
           bio: data.bio || null,
           socialLinks: {
             facebook: data.facebook || null,
@@ -124,10 +181,42 @@ export default function ProfilePage() {
           <div className="space-y-4">
             <Card>
               <CardContent className="pt-6 flex flex-col items-center text-center space-y-3">
-                <Avatar className="w-20 h-20" data-testid="img-profile-avatar">
-                  <AvatarImage src={user?.avatar ?? undefined} />
-                  <AvatarFallback className="text-2xl bg-primary/10 text-primary font-bold">{initials}</AvatarFallback>
-                </Avatar>
+                {/* Avatar upload */}
+                <div className="relative group">
+                  <Avatar className="w-24 h-24" data-testid="img-profile-avatar">
+                    <AvatarImage src={displayAvatar} />
+                    <AvatarFallback className="text-2xl bg-primary/10 text-primary font-bold">{initials}</AvatarFallback>
+                  </Avatar>
+                  <button
+                    data-testid="button-upload-avatar"
+                    onClick={handleAvatarClick}
+                    disabled={avatarUploading}
+                    className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                  >
+                    {avatarUploading
+                      ? <Loader2 className="w-5 h-5 text-white animate-spin" />
+                      : <Camera className="w-5 h-5 text-white" />
+                    }
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    className="hidden"
+                    onChange={handleAvatarChange}
+                  />
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAvatarClick}
+                  disabled={avatarUploading}
+                  className="text-xs"
+                >
+                  {avatarUploading ? "Uploading..." : "Upload Photo"}
+                </Button>
+
                 <div>
                   <p className="font-semibold text-lg" data-testid="text-profile-name">{user?.name}</p>
                   <Badge variant="secondary" className="mt-1">{user?.role}</Badge>
@@ -166,6 +255,35 @@ export default function ProfilePage() {
                     <p>Joined: {formatDistanceToNow(new Date(user.createdAt), { addSuffix: true })}</p>
                   )}
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Theme selector */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Palette className="w-4 h-4" />
+                  Theme
+                  {themeSaving && <Loader2 className="w-3 h-3 animate-spin ml-auto" />}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex gap-2">
+                {themes.map(({ value, label, icon: Icon }) => (
+                  <button
+                    key={value}
+                    data-testid={`button-theme-${value}`}
+                    onClick={() => handleThemeSelect(value)}
+                    disabled={themeSaving}
+                    className={`flex-1 flex flex-col items-center gap-1.5 py-2.5 px-2 rounded-lg border text-xs font-medium transition-all ${
+                      theme === value
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {label}
+                  </button>
+                ))}
               </CardContent>
             </Card>
 
@@ -208,14 +326,6 @@ export default function ProfilePage() {
                       <FormItem>
                         <FormLabel>Full name</FormLabel>
                         <FormControl><Input data-testid="input-name" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-
-                    <FormField control={form.control} name="avatar" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Avatar URL</FormLabel>
-                        <FormControl><Input data-testid="input-avatar" placeholder="https://..." {...field} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )} />

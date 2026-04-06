@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useGetMe } from "@workspace/api-client-react";
 import type { User } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { setAuthTokenGetter } from "@workspace/api-client-react";
+import { useTheme, type Theme } from "@/lib/theme";
 
 interface AuthContextType {
   user: User | null | undefined;
@@ -17,8 +18,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem("lms_token"));
   const [, setLocation] = useLocation();
+  const { setTheme } = useTheme();
+  const lastAppliedTheme = useRef<string | null>(null);
 
-  const { data: user, isLoading: isUserLoading, refetch } = useGetMe({
+  const { data: user, isLoading: isUserLoading } = useGetMe({
     query: {
       enabled: !!token,
       retry: false,
@@ -26,6 +29,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
 
   const isLoading = isUserLoading && !!token;
+
+  useEffect(() => {
+    if (user?.theme && user.theme !== lastAppliedTheme.current) {
+      lastAppliedTheme.current = user.theme;
+      setTheme(user.theme as Theme);
+    }
+  }, [user?.theme]);
 
   const login = (newToken: string) => {
     localStorage.setItem("lms_token", newToken);
@@ -38,6 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("lms_token");
     setAuthTokenGetter(null);
     setToken(null);
+    lastAppliedTheme.current = null;
     setLocation("/login");
   };
 

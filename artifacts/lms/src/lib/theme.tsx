@@ -1,34 +1,38 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 
-type Theme = "light" | "dark";
+export type Theme = "light" | "dark" | "purple";
 
 interface ThemeContextType {
   theme: Theme;
-  toggleTheme: () => void;
+  setTheme: (theme: Theme) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+function applyThemeClass(theme: Theme) {
+  const root = document.documentElement;
+  root.classList.remove("dark", "purple");
+  if (theme === "dark") root.classList.add("dark");
+  if (theme === "purple") root.classList.add("purple");
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => {
-    const stored = localStorage.getItem("lms_theme");
-    return (stored as Theme) || "light";
+  const [theme, setThemeState] = useState<Theme>(() => {
+    const stored = localStorage.getItem("lms_theme") as Theme | null;
+    return stored === "dark" || stored === "purple" ? stored : "light";
   });
 
   useEffect(() => {
-    const root = document.documentElement;
-    if (theme === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
+    applyThemeClass(theme);
     localStorage.setItem("lms_theme", theme);
   }, [theme]);
 
-  const toggleTheme = () => setTheme(prev => prev === "light" ? "dark" : "light");
+  const setTheme = (t: Theme) => {
+    setThemeState(t);
+  };
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, setTheme }}>
       {children}
     </ThemeContext.Provider>
   );

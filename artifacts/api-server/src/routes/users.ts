@@ -65,17 +65,41 @@ router.patch("/users/:id", requireAuth, async (req, res): Promise<void> => {
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
   if (parsed.data.avatar !== undefined) updates.avatar = parsed.data.avatar;
   if (parsed.data.bio !== undefined) updates.bio = parsed.data.bio;
+  if (parsed.data.theme !== undefined) updates.theme = parsed.data.theme;
   if (parsed.data.socialLinks !== undefined) updates.social_links = parsed.data.socialLinks;
 
-  const { data: user, error } = await supabase
+  let { data: user, error } = await supabase
     .from("users")
     .update(updates)
     .eq("id", id)
     .select()
     .maybeSingle();
 
+  // If update fails because theme column doesn't exist yet, retry without it
+  if (error?.message?.includes("theme")) {
+    const { theme: _theme, ...updatesWithoutTheme } = updates;
+    void _theme;
+    if (Object.keys(updatesWithoutTheme).length === 0) {
+      // theme was the only field — just return current user
+      const { data: currentUser } = await supabase.from("users").select("*").eq("id", id).maybeSingle();
+      if (currentUser) {
+        res.json(formatUser(currentUser as Parameters<typeof formatUser>[0]));
+        return;
+      }
+    } else {
+      const retry = await supabase
+        .from("users")
+        .update(updatesWithoutTheme)
+        .eq("id", id)
+        .select()
+        .maybeSingle();
+      user = retry.data;
+      error = retry.error;
+    }
+  }
+
   if (error || !user) {
-    res.status(404).json({ error: "User not found" });
+    res.status(500).json({ error: error?.message ?? "Failed to update user" });
     return;
   }
 
