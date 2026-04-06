@@ -1,0 +1,163 @@
+You are a senior full-stack developer expert in Next.js and Supabase.
+Build and FIX a complete production-ready SaaS LMS platform like Skool.com with community features and Supabase authentication.
+IMPORTANT:
+REMOVE all Stripe/payment-related functionality completely
+Focus on a stable, bug-free authentication system
+Fix login redirect issues, session issues, and logout issues permanently
+=====================================
+CORE GOAL:
+A fully working SaaS LMS app with:
+Signup → Login → Dashboard → Logout → Login again (NO bugs, NO redirect loop, NO session issues)
+=====================================
+AUTHENTICATION (STRICTLY USING SUPABASE - MUST BE PERFECT):
+SIGNUP:
+Use Supabase Auth (email + password)
+Store user in auth.users
+Automatically insert user into public.users table
+No RLS errors during signup
+LOGIN (FIX ALL BUGS):
+Use:
+supabase.auth.signInWithPassword({ email, password })
+On success:
+Immediately redirect to /dashboard using router.push('/dashboard')
+DO NOT stay on login page
+DO NOT create redirect loop
+Show proper error messages
+SESSION MANAGEMENT (CRITICAL):
+Use:
+supabase.auth.getSession()
+On app load:
+If session exists → redirect to /dashboard
+If not → stay on /login
+Persist session across refresh
+Prevent session loss
+LOGIN PAGE PROTECTION:
+If user is already logged in:
+Automatically redirect to /dashboard
+Never show login page again
+DASHBOARD PROTECTION:
+Only logged-in users can access /dashboard
+If not logged in → redirect to /login
+LOGOUT (FULLY WORKING):
+Use:
+supabase.auth.signOut()
+On logout:
+Update last_logout timestamp in database
+Redirect to /login
+Ensure logout button always works
+USER ACTIVITY TRACKING:
+On login:
+update users set last_login = now()
+On logout:
+update users set last_logout = now()
+DEBUG + STABILITY:
+No infinite redirect loops
+No login stuck issue
+No blank screen
+Console log errors
+=====================================
+DATABASE (SUPABASE POSTGRESQL):
+Tables:
+users (id linked with auth.users.id, email, name, role, avatar, bio, social_links, last_login, last_logout, created_at)
+courses (id, title, description, price, thumbnail, created_by)
+lessons (id, course_id, title, video_url, content, order)
+enrollments (id, user_id, course_id, progress)
+posts (id, user_id, content, created_at)
+comments (id, post_id, user_id, comment, created_at)
+Apply foreign key relationships
+Enable Row Level Security (RLS)
+RLS POLICIES:
+Users can insert their own profile
+Users can read/update only their own data
+Only creators/admins can create courses
+Only enrolled users can access course content
+=====================================
+COURSE SYSTEM:
+Create/edit/delete courses (admin/creator only)
+Add lessons (video + text editor)
+Course player page
+Track user progress
+Enrollment system (FREE only, no payments)
+=====================================
+COMMUNITY SYSTEM:
+Social-style feed (posts, comments, likes)
+Real-time updates using Supabase Realtime
+=====================================
+DASHBOARD:
+Sidebar navigation
+After login ALWAYS show dashboard
+Sections:
+Dashboard
+My Courses
+Community
+Profile
+Admin panel (if admin)
+Display:
+User email
+Role
+Last login
+Last logout
+=====================================
+PROFILE SYSTEM:
+Edit profile (name, avatar, bio)
+Add social media links
+Show enrolled courses
+Show user activity
+=====================================
+SOCIAL MEDIA INTEGRATION:
+Add icons in:
+Navbar, Footer, Profile page
+Platforms:
+Facebook, Instagram, TikTok, Twitter (X), WhatsApp, LinkedIn
+Icons must be clickable
+Users can add/edit links
+Use Lucide or FontAwesome
+Add hover effects and clean UI
+=====================================
+ADMIN PANEL:
+Manage users (roles, access)
+Manage courses
+Manage community posts
+Basic analytics dashboard
+=====================================
+SUPABASE CLIENT SETUP:
+Use @supabase/supabase-js (v2)
+Store keys in environment variables
+Create reusable Supabase client
+=====================================
+SECURITY:
+Role-based access control
+Protected routes using middleware
+Secure API handling
+Proper RLS enforcement
+=====================================
+UI/UX:
+Premium SaaS design (like Skool)
+Clean, modern, minimal UI
+Sidebar layout
+Light + Dark mode
+Fully responsive
+=====================================
+PERFORMANCE:
+Lazy loading
+Optimized images/videos
+Fast navigation
+=====================================
+OUTPUT REQUIREMENTS:
+Provide COMPLETE working code
+Fix ALL authentication bugs:
+login redirect issue
+login loop
+session not persisting
+Ensure dashboard shows after login
+Ensure logout works every time
+NO Stripe or payment code anywhere
+=====================================
+FINAL RESULT:
+A fully functional SaaS LMS platform:
+✔ Signup/Login/Logout working perfectly
+✔ No redirect bugs
+✔ Dashboard working after login
+✔ Session persists
+✔ User activity tracking
+✔ Clean UI + scalable structure
