@@ -2,84 +2,8 @@ import { supabase } from "./supabase";
 import { logger } from "./logger";
 import bcrypt from "bcryptjs";
 
-const SCHEMA_SQL = `
-CREATE TABLE IF NOT EXISTS users (
-  id SERIAL PRIMARY KEY,
-  email TEXT NOT NULL UNIQUE,
-  password_hash TEXT NOT NULL,
-  name TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'member',
-  avatar TEXT,
-  bio TEXT,
-  social_links JSONB,
-  last_login TIMESTAMPTZ,
-  last_logout TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS courses (
-  id SERIAL PRIMARY KEY,
-  title TEXT NOT NULL,
-  description TEXT,
-  thumbnail TEXT,
-  created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS lessons (
-  id SERIAL PRIMARY KEY,
-  course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  video_url TEXT,
-  content TEXT,
-  "order" INTEGER NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS enrollments (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
-  progress INTEGER NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS posts (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  content TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS comments (
-  id SERIAL PRIMARY KEY,
-  post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  comment TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS likes (
-  id SERIAL PRIMARY KEY,
-  post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-`;
-
-async function runSchemaSql(): Promise<boolean> {
-  const { error } = await (supabase as any).rpc("exec_ddl", { sql: SCHEMA_SQL });
-  if (error) {
-    logger.warn({ code: error.code }, "exec_ddl RPC not available, skipping auto-migration");
-    return false;
-  }
-  return true;
-}
-
 async function tablesExist(): Promise<boolean> {
-  const { data, error } = await supabase.from("users").select("id").limit(1);
+  const { error } = await supabase.from("users").select("id").limit(1);
   return !error;
 }
 
@@ -111,7 +35,7 @@ async function seedDemoData(): Promise<void> {
     return;
   }
 
-  const [admin, alice] = users;
+  const [admin, alice, bob] = users;
 
   const { data: courses, error: courseErr } = await supabase
     .from("courses")
@@ -157,11 +81,11 @@ async function seedDemoData(): Promise<void> {
     { course_id: c3.id, title: "Database Integration", content: "Connect to PostgreSQL and write type-safe queries.", order: 3 },
   ]);
 
-  const { data: posts } = await supabase.from("posts").insert([
+  await supabase.from("posts").insert([
     { user_id: alice.id, content: "Welcome to LearnHub! I just uploaded 3 new courses. Check them out!" },
-    { user_id: users[2].id, content: "Just finished the Introduction to Web Development course. Absolutely loved it!" },
+    { user_id: bob.id, content: "Just finished the Introduction to Web Development course. Absolutely loved it!" },
     { user_id: admin.id, content: "Platform update: We've added progress tracking and new community features. 💡" },
-  ]).select();
+  ]);
 
   logger.info("Demo data seeded successfully");
 }
@@ -172,22 +96,14 @@ export async function initializeDatabase(): Promise<void> {
   const exists = await tablesExist();
 
   if (!exists) {
-    logger.info("Tables not found, attempting auto-migration via RPC...");
-    const migrated = await runSchemaSql();
-
-    if (!migrated) {
-      logger.warn(
-        "Auto-migration failed. Please run supabase-setup.sql in the Supabase SQL Editor:\n" +
-        "https://supabase.com/dashboard/project/hpntmfiurmnkvtysbqio/sql/new\n" +
-        "File: artifacts/api-server/supabase-setup.sql"
-      );
-      return;
-    }
-
-    logger.info("Schema created, seeding demo data...");
-    await seedDemoData();
-    logger.info("Database initialization complete");
-  } else {
-    logger.info("Database tables verified ✓");
+    logger.warn(
+      "Database tables not found. Please run the SQL setup script in the Supabase SQL Editor:\n" +
+        "  URL: https://supabase.com/dashboard/project/hpntmfiurmnkvtysbqio/sql/new\n" +
+        "  File: artifacts/api-server/supabase-setup.sql",
+    );
+    return;
   }
+
+  await seedDemoData();
+  logger.info("Database ready ✓");
 }
