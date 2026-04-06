@@ -1,7 +1,6 @@
 import jwt from "jsonwebtoken";
 import { Request, Response, NextFunction } from "express";
-import { db, usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { supabase } from "./supabase";
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "fallback-secret";
 
@@ -40,9 +39,11 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return;
   }
 
-  const [user] = await db.select({ id: usersTable.id, role: usersTable.role })
-    .from(usersTable)
-    .where(eq(usersTable.id, payload.userId));
+  const { data: user } = await supabase
+    .from("users")
+    .select("id, role")
+    .eq("id", payload.userId)
+    .maybeSingle();
 
   if (!user) {
     res.status(401).json({ error: "User not found" });

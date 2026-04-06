@@ -1,17 +1,19 @@
 import { Router, type IRouter } from "express";
-import { db, lessonsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { CreateLessonBody, UpdateLessonBody } from "@workspace/api-zod";
+import { supabase } from "../lib/supabase";
 
 const router: IRouter = Router();
 
-function formatLesson(lesson: typeof lessonsTable.$inferSelect) {
+function formatLesson(lesson: Record<string, unknown>) {
   return {
-    ...lesson,
-    videoUrl: lesson.videoUrl ?? null,
-    content: lesson.content ?? null,
-    createdAt: lesson.createdAt.toISOString(),
+    id: lesson.id,
+    courseId: lesson.course_id,
+    title: lesson.title,
+    videoUrl: (lesson.video_url as string) ?? null,
+    content: (lesson.content as string) ?? null,
+    order: lesson.order,
+    createdAt: lesson.created_at,
   };
 }
 
@@ -23,11 +25,13 @@ router.get("/courses/:courseId/lessons", requireAuth, async (req, res): Promise<
     return;
   }
 
-  const lessons = await db.select().from(lessonsTable)
-    .where(eq(lessonsTable.courseId, courseId))
-    .orderBy(lessonsTable.order);
+  const { data: lessons } = await supabase
+    .from("lessons")
+    .select("*")
+    .eq("course_id", courseId)
+    .order("order", { ascending: true });
 
-  res.json(lessons.map(formatLesson));
+  res.json((lessons ?? []).map(formatLesson));
 });
 
 router.post("/courses/:courseId/lessons", requireAuth, async (req, res): Promise<void> => {
@@ -49,9 +53,22 @@ router.post("/courses/:courseId/lessons", requireAuth, async (req, res): Promise
     return;
   }
 
-  const [lesson] = await db.insert(lessonsTable)
-    .values({ ...parsed.data, courseId })
-    .returning();
+  const { data: lesson, error } = await supabase
+    .from("lessons")
+    .insert({
+      course_id: courseId,
+      title: parsed.data.title,
+      video_url: parsed.data.videoUrl ?? null,
+      content: parsed.data.content ?? null,
+      order: parsed.data.order ?? 0,
+    })
+    .select()
+    .single();
+
+  if (error || !lesson) {
+    res.status(500).json({ error: "Failed to create lesson" });
+    return;
+  }
 
   res.status(201).json(formatLesson(lesson));
 });
@@ -75,12 +92,20 @@ router.patch("/lessons/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const [lesson] = await db.update(lessonsTable)
-    .set(parsed.data)
-    .where(eq(lessonsTable.id, id))
-    .returning();
+  const updates: Record<string, unknown> = {};
+  if (parsed.data.title !== undefined) updates.title = parsed.data.title;
+  if (parsed.data.videoUrl !== undefined) updates.video_url = parsed.data.videoUrl;
+  if (parsed.data.content !== undefined) updates.content = parsed.data.content;
+  if (parsed.data.order !== undefined) updates.order = parsed.data.order;
 
-  if (!lesson) {
+  const { data: lesson, error } = await supabase
+    .from("lessons")
+    .update(updates)
+    .eq("id", id)
+    .select()
+    .maybeSingle();
+
+  if (error || !lesson) {
     res.status(404).json({ error: "Lesson not found" });
     return;
   }
@@ -101,7 +126,7 @@ router.delete("/lessons/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  await db.delete(lessonsTable).where(eq(lessonsTable.id, id));
+  await supabase.from("lessons").delete().eq("id", id);
   res.sendStatus(204);
 });
 

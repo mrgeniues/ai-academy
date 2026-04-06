@@ -1,34 +1,59 @@
 import { Router, type IRouter } from "express";
-import { db, postsTable, commentsTable, likesTable, usersTable } from "@workspace/db";
-import { eq, count, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { formatUser } from "./auth";
 import { CreatePostBody, CreateCommentBody } from "@workspace/api-zod";
+import { supabase } from "../lib/supabase";
 
 const router: IRouter = Router();
 
-async function enrichPost(post: typeof postsTable.$inferSelect, userId: number) {
-  const [author] = await db.select().from(usersTable).where(eq(usersTable.id, post.userId));
-  const [lc] = await db.select({ cnt: count() }).from(likesTable).where(eq(likesTable.postId, post.id));
-  const [cc] = await db.select({ cnt: count() }).from(commentsTable).where(eq(commentsTable.postId, post.id));
-  const [likedRow] = await db.select().from(likesTable)
-    .where(sql`${likesTable.postId} = ${post.id} AND ${likesTable.userId} = ${userId}`);
+async function enrichPost(post: Record<string, unknown>, userId: number) {
+  const { data: author } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", post.user_id as number)
+    .maybeSingle();
+
+  const { count: likeCount } = await supabase
+    .from("likes")
+    .select("*", { count: "exact", head: true })
+    .eq("post_id", post.id as number);
+
+  const { count: commentCount } = await supabase
+    .from("comments")
+    .select("*", { count: "exact", head: true })
+    .eq("post_id", post.id as number);
+
+  const { data: likedRow } = await supabase
+    .from("likes")
+    .select("id")
+    .eq("post_id", post.id as number)
+    .eq("user_id", userId)
+    .maybeSingle();
 
   return {
     id: post.id,
-    userId: post.userId,
+    userId: post.user_id,
     content: post.content,
-    likeCount: Number(lc?.cnt ?? 0),
-    commentCount: Number(cc?.cnt ?? 0),
+    likeCount: likeCount ?? 0,
+    commentCount: commentCount ?? 0,
     isLiked: !!likedRow,
-    createdAt: post.createdAt.toISOString(),
+    createdAt: post.created_at,
     author: formatUser(author!),
   };
 }
 
 router.get("/posts", requireAuth, async (req, res): Promise<void> => {
-  const posts = await db.select().from(postsTable).orderBy(sql`${postsTable.createdAt} DESC`);
-  const enriched = await Promise.all(posts.map(p => enrichPost(p, req.userId!)));
+  const { data: posts, error } = await supabase
+    .from("posts")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    res.status(500).json({ error: "Failed to fetch posts" });
+    return;
+  }
+
+  const enriched = await Promise.all((posts ?? []).map(p => enrichPost(p, req.userId!)));
   res.json(enriched);
 });
 
@@ -39,9 +64,16 @@ router.post("/posts", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const [post] = await db.insert(postsTable)
-    .values({ userId: req.userId!, content: parsed.data.content })
-    .returning();
+  const { data: post, error } = await supabase
+    .from("posts")
+    .insert({ user_id: req.userId!, content: parsed.data.content })
+    .select()
+    .single();
+
+  if (error || !post) {
+    res.status(500).json({ error: "Failed to create post" });
+    return;
+  }
 
   const enriched = await enrichPost(post, req.userId!);
   res.status(201).json(enriched);
@@ -55,18 +87,23 @@ router.delete("/posts/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const [post] = await db.select().from(postsTable).where(eq(postsTable.id, id));
+  const { data: post } = await supabase
+    .from("posts")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
   if (!post) {
     res.status(404).json({ error: "Post not found" });
     return;
   }
 
-  if (post.userId !== req.userId && req.userRole !== "admin") {
+  if (post.user_id !== req.userId && req.userRole !== "admin") {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
 
-  await db.delete(postsTable).where(eq(postsTable.id, id));
+  await supabase.from("posts").delete().eq("id", id);
   res.sendStatus(204);
 });
 
@@ -78,25 +115,30 @@ router.post("/posts/:id/like", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const [existing] = await db.select().from(likesTable)
-    .where(sql`${likesTable.postId} = ${id} AND ${likesTable.userId} = ${req.userId}`);
+  const { data: existing } = await supabase
+    .from("likes")
+    .select("id")
+    .eq("post_id", id)
+    .eq("user_id", req.userId!)
+    .maybeSingle();
 
   let liked: boolean;
   if (existing) {
-    await db.delete(likesTable)
-      .where(sql`${likesTable.postId} = ${id} AND ${likesTable.userId} = ${req.userId}`);
+    await supabase.from("likes").delete().eq("post_id", id).eq("user_id", req.userId!);
     liked = false;
   } else {
-    await db.insert(likesTable).values({ postId: id, userId: req.userId! });
+    await supabase.from("likes").insert({ post_id: id, user_id: req.userId! });
     liked = true;
   }
 
-  const [lc] = await db.select({ cnt: count() }).from(likesTable).where(eq(likesTable.postId, id));
+  const { count: likeCount } = await supabase
+    .from("likes")
+    .select("*", { count: "exact", head: true })
+    .eq("post_id", id);
 
-  res.json({ liked, likeCount: Number(lc?.cnt ?? 0) });
+  res.json({ liked, likeCount: likeCount ?? 0 });
 });
 
-// Comments
 router.get("/posts/:postId/comments", requireAuth, async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.postId) ? req.params.postId[0] : req.params.postId;
   const postId = parseInt(rawId, 10);
@@ -105,15 +147,25 @@ router.get("/posts/:postId/comments", requireAuth, async (req, res): Promise<voi
     return;
   }
 
-  const comments = await db.select().from(commentsTable)
-    .where(eq(commentsTable.postId, postId))
-    .orderBy(commentsTable.createdAt);
+  const { data: comments } = await supabase
+    .from("comments")
+    .select("*")
+    .eq("post_id", postId)
+    .order("created_at", { ascending: true });
 
-  const enriched = await Promise.all(comments.map(async (comment) => {
-    const [author] = await db.select().from(usersTable).where(eq(usersTable.id, comment.userId));
+  const enriched = await Promise.all((comments ?? []).map(async (comment) => {
+    const { data: author } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", comment.user_id)
+      .maybeSingle();
+
     return {
-      ...comment,
-      createdAt: comment.createdAt.toISOString(),
+      id: comment.id,
+      postId: comment.post_id,
+      userId: comment.user_id,
+      comment: comment.comment,
+      createdAt: comment.created_at,
       author: formatUser(author!),
     };
   }));
@@ -135,15 +187,29 @@ router.post("/posts/:postId/comments", requireAuth, async (req, res): Promise<vo
     return;
   }
 
-  const [comment] = await db.insert(commentsTable)
-    .values({ postId, userId: req.userId!, comment: parsed.data.comment })
-    .returning();
+  const { data: comment, error } = await supabase
+    .from("comments")
+    .insert({ post_id: postId, user_id: req.userId!, comment: parsed.data.comment })
+    .select()
+    .single();
 
-  const [author] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
+  if (error || !comment) {
+    res.status(500).json({ error: "Failed to create comment" });
+    return;
+  }
+
+  const { data: author } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", req.userId!)
+    .maybeSingle();
 
   res.status(201).json({
-    ...comment,
-    createdAt: comment.createdAt.toISOString(),
+    id: comment.id,
+    postId: comment.post_id,
+    userId: comment.user_id,
+    comment: comment.comment,
+    createdAt: comment.created_at,
     author: formatUser(author!),
   });
 });
@@ -156,18 +222,23 @@ router.delete("/comments/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const [comment] = await db.select().from(commentsTable).where(eq(commentsTable.id, id));
+  const { data: comment } = await supabase
+    .from("comments")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
   if (!comment) {
     res.status(404).json({ error: "Comment not found" });
     return;
   }
 
-  if (comment.userId !== req.userId && req.userRole !== "admin") {
+  if (comment.user_id !== req.userId && req.userRole !== "admin") {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
 
-  await db.delete(commentsTable).where(eq(commentsTable.id, id));
+  await supabase.from("comments").delete().eq("id", id);
   res.sendStatus(204);
 });
 

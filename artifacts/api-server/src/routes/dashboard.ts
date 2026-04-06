@@ -1,83 +1,112 @@
 import { Router, type IRouter } from "express";
-import { db, usersTable, coursesTable, enrollmentsTable, postsTable } from "@workspace/db";
-import { eq, count, avg } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { supabase } from "../lib/supabase";
 
 const router: IRouter = Router();
 
 router.get("/dashboard/stats", requireAuth, async (req, res): Promise<void> => {
-  const [userCount] = await db.select({ cnt: count() }).from(usersTable);
-  const [courseCount] = await db.select({ cnt: count() }).from(coursesTable);
-  const [enrollmentCount] = await db.select({ cnt: count() }).from(enrollmentsTable);
-  const [postCount] = await db.select({ cnt: count() }).from(postsTable);
+  const { count: totalUsers } = await supabase
+    .from("users")
+    .select("*", { count: "exact", head: true });
 
-  const myEnrollments = await db.select().from(enrollmentsTable)
-    .where(eq(enrollmentsTable.userId, req.userId!));
+  const { count: totalCourses } = await supabase
+    .from("courses")
+    .select("*", { count: "exact", head: true });
 
-  const myProgress = myEnrollments.length > 0
-    ? Math.round(myEnrollments.reduce((sum, e) => sum + e.progress, 0) / myEnrollments.length)
+  const { count: totalEnrollments } = await supabase
+    .from("enrollments")
+    .select("*", { count: "exact", head: true });
+
+  const { count: totalPosts } = await supabase
+    .from("posts")
+    .select("*", { count: "exact", head: true });
+
+  const { data: myEnrollments } = await supabase
+    .from("enrollments")
+    .select("progress")
+    .eq("user_id", req.userId!);
+
+  const myEnrollmentList = myEnrollments ?? [];
+  const myProgress = myEnrollmentList.length > 0
+    ? Math.round(myEnrollmentList.reduce((sum, e) => sum + e.progress, 0) / myEnrollmentList.length)
     : 0;
 
   res.json({
-    totalUsers: Number(userCount?.cnt ?? 0),
-    totalCourses: Number(courseCount?.cnt ?? 0),
-    totalEnrollments: Number(enrollmentCount?.cnt ?? 0),
-    totalPosts: Number(postCount?.cnt ?? 0),
-    myEnrollments: myEnrollments.length,
+    totalUsers: totalUsers ?? 0,
+    totalCourses: totalCourses ?? 0,
+    totalEnrollments: totalEnrollments ?? 0,
+    totalPosts: totalPosts ?? 0,
+    myEnrollments: myEnrollmentList.length,
     myProgress,
   });
 });
 
 router.get("/dashboard/activity", requireAuth, async (_req, res): Promise<void> => {
-  // Pull recent posts as activity
-  const recentPosts = await db.select({
-    id: postsTable.id,
-    userId: postsTable.userId,
-    createdAt: postsTable.createdAt,
-  }).from(postsTable).orderBy(postsTable.createdAt).limit(10);
+  const { data: recentPosts } = await supabase
+    .from("posts")
+    .select("id, user_id, created_at")
+    .order("created_at", { ascending: true })
+    .limit(10);
 
-  const recentEnrollments = await db.select({
-    id: enrollmentsTable.id,
-    userId: enrollmentsTable.userId,
-    courseId: enrollmentsTable.courseId,
-    createdAt: enrollmentsTable.createdAt,
-  }).from(enrollmentsTable).orderBy(enrollmentsTable.createdAt).limit(10);
+  const { data: recentEnrollments } = await supabase
+    .from("enrollments")
+    .select("id, user_id, course_id, created_at")
+    .order("created_at", { ascending: true })
+    .limit(10);
 
-  const activity = [];
+  const activity: Array<{
+    id: number;
+    type: string;
+    message: string;
+    createdAt: string;
+    userId: number;
+    userName: string;
+    userAvatar: string | null;
+  }> = [];
 
-  for (const post of recentPosts) {
-    const [user] = await db.select({ name: usersTable.name, avatar: usersTable.avatar })
-      .from(usersTable).where(eq(usersTable.id, post.userId));
+  for (const post of recentPosts ?? []) {
+    const { data: user } = await supabase
+      .from("users")
+      .select("name, avatar")
+      .eq("id", post.user_id)
+      .maybeSingle();
+
     activity.push({
       id: post.id,
       type: "post",
       message: `${user?.name ?? "Someone"} shared a new post`,
-      createdAt: post.createdAt.toISOString(),
-      userId: post.userId,
+      createdAt: post.created_at,
+      userId: post.user_id,
       userName: user?.name ?? "Unknown",
       userAvatar: user?.avatar ?? null,
     });
   }
 
-  for (const enrollment of recentEnrollments) {
-    const [user] = await db.select({ name: usersTable.name, avatar: usersTable.avatar })
-      .from(usersTable).where(eq(usersTable.id, enrollment.userId));
-    const [course] = await db.select({ title: coursesTable.title })
-      .from(coursesTable).where(eq(coursesTable.id, enrollment.courseId));
+  for (const enrollment of recentEnrollments ?? []) {
+    const { data: user } = await supabase
+      .from("users")
+      .select("name, avatar")
+      .eq("id", enrollment.user_id)
+      .maybeSingle();
+
+    const { data: course } = await supabase
+      .from("courses")
+      .select("title")
+      .eq("id", enrollment.course_id)
+      .maybeSingle();
+
     activity.push({
       id: enrollment.id + 100000,
       type: "enrollment",
       message: `${user?.name ?? "Someone"} enrolled in ${course?.title ?? "a course"}`,
-      createdAt: enrollment.createdAt.toISOString(),
-      userId: enrollment.userId,
+      createdAt: enrollment.created_at,
+      userId: enrollment.user_id,
       userName: user?.name ?? "Unknown",
       userAvatar: user?.avatar ?? null,
     });
   }
 
-  // Sort by date descending
   activity.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
   res.json(activity.slice(0, 15));
 });
 

@@ -1,31 +1,52 @@
 import { Router, type IRouter } from "express";
-import { db, enrollmentsTable, coursesTable, lessonsTable } from "@workspace/db";
-import { eq, count, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { EnrollInCourseBody, UpdateProgressBody } from "@workspace/api-zod";
+import { supabase } from "../lib/supabase";
 
 const router: IRouter = Router();
 
 router.get("/enrollments", requireAuth, async (req, res): Promise<void> => {
-  const enrollments = await db.select().from(enrollmentsTable)
-    .where(eq(enrollmentsTable.userId, req.userId!));
+  const { data: enrollments, error } = await supabase
+    .from("enrollments")
+    .select("*")
+    .eq("user_id", req.userId!);
 
-  const enriched = await Promise.all(enrollments.map(async (enrollment) => {
-    const [course] = await db.select().from(coursesTable).where(eq(coursesTable.id, enrollment.courseId));
-    const [lc] = await db.select({ cnt: count() }).from(lessonsTable).where(eq(lessonsTable.courseId, enrollment.courseId));
-    const [ec] = await db.select({ cnt: count() }).from(enrollmentsTable).where(eq(enrollmentsTable.courseId, enrollment.courseId));
+  if (error) {
+    res.status(500).json({ error: "Failed to fetch enrollments" });
+    return;
+  }
+
+  const enriched = await Promise.all((enrollments ?? []).map(async (enrollment) => {
+    const { data: course } = await supabase
+      .from("courses")
+      .select("*")
+      .eq("id", enrollment.course_id)
+      .maybeSingle();
+
+    const { count: lessonCount } = await supabase
+      .from("lessons")
+      .select("*", { count: "exact", head: true })
+      .eq("course_id", enrollment.course_id);
+
+    const { count: enrollmentCount } = await supabase
+      .from("enrollments")
+      .select("*", { count: "exact", head: true })
+      .eq("course_id", enrollment.course_id);
 
     return {
-      ...enrollment,
-      createdAt: enrollment.createdAt.toISOString(),
+      id: enrollment.id,
+      userId: enrollment.user_id,
+      courseId: enrollment.course_id,
+      progress: enrollment.progress,
+      createdAt: enrollment.created_at,
       course: {
         ...course!,
         description: course!.description ?? null,
         thumbnail: course!.thumbnail ?? null,
-        lessonCount: lc?.cnt ?? 0,
-        enrollmentCount: ec?.cnt ?? 0,
-        createdAt: course!.createdAt.toISOString(),
-        updatedAt: course!.updatedAt.toISOString(),
+        lessonCount: lessonCount ?? 0,
+        enrollmentCount: enrollmentCount ?? 0,
+        createdAt: course!.created_at,
+        updatedAt: course!.updated_at,
       },
     };
   }));
@@ -42,21 +63,35 @@ router.post("/enrollments", requireAuth, async (req, res): Promise<void> => {
 
   const { courseId } = parsed.data;
 
-  const [existing] = await db.select().from(enrollmentsTable)
-    .where(sql`${enrollmentsTable.userId} = ${req.userId} AND ${enrollmentsTable.courseId} = ${courseId}`);
+  const { data: existing } = await supabase
+    .from("enrollments")
+    .select("id")
+    .eq("user_id", req.userId!)
+    .eq("course_id", courseId)
+    .maybeSingle();
 
   if (existing) {
     res.status(400).json({ error: "Already enrolled" });
     return;
   }
 
-  const [enrollment] = await db.insert(enrollmentsTable)
-    .values({ userId: req.userId!, courseId, progress: 0 })
-    .returning();
+  const { data: enrollment, error } = await supabase
+    .from("enrollments")
+    .insert({ user_id: req.userId!, course_id: courseId, progress: 0 })
+    .select()
+    .single();
+
+  if (error || !enrollment) {
+    res.status(500).json({ error: "Failed to enroll" });
+    return;
+  }
 
   res.status(201).json({
-    ...enrollment,
-    createdAt: enrollment.createdAt.toISOString(),
+    id: enrollment.id,
+    userId: enrollment.user_id,
+    courseId: enrollment.course_id,
+    progress: enrollment.progress,
+    createdAt: enrollment.created_at,
   });
 });
 
@@ -74,19 +109,25 @@ router.patch("/enrollments/:courseId/progress", requireAuth, async (req, res): P
     return;
   }
 
-  const [enrollment] = await db.update(enrollmentsTable)
-    .set({ progress: parsed.data.progress })
-    .where(sql`${enrollmentsTable.userId} = ${req.userId} AND ${enrollmentsTable.courseId} = ${courseId}`)
-    .returning();
+  const { data: enrollment, error } = await supabase
+    .from("enrollments")
+    .update({ progress: parsed.data.progress })
+    .eq("user_id", req.userId!)
+    .eq("course_id", courseId)
+    .select()
+    .maybeSingle();
 
-  if (!enrollment) {
+  if (error || !enrollment) {
     res.status(404).json({ error: "Enrollment not found" });
     return;
   }
 
   res.json({
-    ...enrollment,
-    createdAt: enrollment.createdAt.toISOString(),
+    id: enrollment.id,
+    userId: enrollment.user_id,
+    courseId: enrollment.course_id,
+    progress: enrollment.progress,
+    createdAt: enrollment.created_at,
   });
 });
 
