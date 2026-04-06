@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/lib/auth";
+import { useLocation } from "wouter";
 import { Layout } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -180,6 +181,7 @@ function EmojiButton({ onEmojiSelect, small = false }: { onEmojiSelect: (emoji: 
 function CommentSection({ postId, token }: { postId: number; token: string | null }) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [commentText, setCommentText] = useState("");
   const [commentLink, setCommentLink] = useState("");
   const [showCommentLink, setShowCommentLink] = useState(false);
@@ -244,13 +246,15 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
         <div className="space-y-2.5">
           {comments.map(comment => (
             <div key={comment.id} className="flex gap-2">
-              <Avatar className="w-7 h-7 flex-shrink-0">
-                <AvatarImage src={comment.author.avatar ?? undefined} />
-                <AvatarFallback className="text-xs bg-muted">{comment.author.name.slice(0, 2).toUpperCase()}</AvatarFallback>
-              </Avatar>
+              <button onClick={() => setLocation(`/users/${comment.author.id}`)} className="flex-shrink-0">
+                <Avatar className="w-7 h-7 hover:opacity-80 transition-opacity">
+                  <AvatarImage src={comment.author.avatar ?? undefined} />
+                  <AvatarFallback className="text-xs bg-muted">{comment.author.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+                </Avatar>
+              </button>
               <div className="flex-1 bg-muted rounded-lg px-3 py-2 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-semibold">{comment.author.name}</span>
+                  <button onClick={() => setLocation(`/users/${comment.author.id}`)} className="text-xs font-semibold hover:underline underline-offset-2">{comment.author.name}</button>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span className="text-xs text-muted-foreground">
                       {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
@@ -352,6 +356,7 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
 function VipPostCard({ post, token, onDelete }: { post: Post; token: string | null; onDelete: (id: number) => void }) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [showComments, setShowComments] = useState(false);
   const [isLiked, setIsLiked] = useState(post.isLiked);
   const [likeCount, setLikeCount] = useState(post.likeCount);
@@ -391,7 +396,10 @@ function VipPostCard({ post, token, onDelete }: { post: Post; token: string | nu
       <Card className="border-amber-200/40 dark:border-amber-800/30 bg-gradient-to-br from-amber-50/30 to-card dark:from-amber-950/10">
         <CardContent className="pt-4 pb-3 px-4">
           <div className="flex items-start justify-between mb-3">
-            <div className="flex items-center gap-2.5">
+            <button
+              className="flex items-center gap-2.5 hover:opacity-80 transition-opacity text-left"
+              onClick={() => setLocation(`/users/${post.author.id}`)}
+            >
               <div className="relative">
                 <Avatar className="w-9 h-9">
                   <AvatarImage src={post.author.avatar ?? undefined} />
@@ -403,7 +411,7 @@ function VipPostCard({ post, token, onDelete }: { post: Post; token: string | nu
               </div>
               <div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-semibold leading-none">{post.author.name}</span>
+                  <span className="text-sm font-semibold leading-none hover:underline underline-offset-2">{post.author.name}</span>
                   <Badge className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 border-amber-200 dark:border-amber-800">
                     Admin
                   </Badge>
@@ -412,7 +420,7 @@ function VipPostCard({ post, token, onDelete }: { post: Post; token: string | nu
                   {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
                 </span>
               </div>
-            </div>
+            </button>
             {user?.role === "admin" && (
               <button onClick={handleDelete} disabled={deleting}
                 className="text-muted-foreground hover:text-destructive transition-colors p-1">

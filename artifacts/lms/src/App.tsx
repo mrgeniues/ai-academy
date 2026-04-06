@@ -13,6 +13,7 @@ import CommunityPage from "@/pages/community";
 import VipPostsPage from "@/pages/vip-posts";
 import ProfilePage from "@/pages/profile";
 import AdminPage from "@/pages/admin";
+import UserProfilePage from "@/pages/user-profile";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -89,6 +90,9 @@ function Router() {
       </Route>
       <Route path="/admin">
         <ProtectedRoute component={AdminPage} adminOnly />
+      </Route>
+      <Route path="/users/:id">
+        <ProtectedRoute component={UserProfilePage} />
       </Route>
       <Route component={NotFound} />
     </Switch>

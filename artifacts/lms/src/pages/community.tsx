@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/lib/auth";
+import { useLocation } from "wouter";
 import { Layout } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -205,6 +206,7 @@ function EmojiButton({
 function CommentSection({ postId, token }: { postId: number; token: string | null }) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [commentText, setCommentText] = useState("");
   const [commentLink, setCommentLink] = useState("");
   const [showCommentLink, setShowCommentLink] = useState(false);
@@ -274,13 +276,15 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
         <div className="space-y-2.5">
           {comments.map(comment => (
             <div key={comment.id} className="flex gap-2" data-testid={`comment-${comment.id}`}>
-              <Avatar className="w-7 h-7 flex-shrink-0">
-                <AvatarImage src={comment.author.avatar ?? undefined} />
-                <AvatarFallback className="text-xs bg-muted">{comment.author.name.slice(0, 2).toUpperCase()}</AvatarFallback>
-              </Avatar>
+              <button onClick={() => setLocation(`/users/${comment.author.id}`)} className="flex-shrink-0">
+                <Avatar className="w-7 h-7 hover:opacity-80 transition-opacity">
+                  <AvatarImage src={comment.author.avatar ?? undefined} />
+                  <AvatarFallback className="text-xs bg-muted">{comment.author.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+                </Avatar>
+              </button>
               <div className="flex-1 bg-muted rounded-lg px-3 py-2 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-semibold">{comment.author.name}</span>
+                  <button onClick={() => setLocation(`/users/${comment.author.id}`)} className="text-xs font-semibold hover:underline underline-offset-2">{comment.author.name}</button>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span className="text-xs text-muted-foreground">
                       {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
@@ -400,6 +404,7 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
 function PostCard({ post, token, onDelete }: { post: Post; token: string | null; onDelete: (id: number) => void }) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [showComments, setShowComments] = useState(false);
   const [isLiked, setIsLiked] = useState(post.isLiked);
   const [likeCount, setLikeCount] = useState(post.likeCount);
@@ -436,18 +441,21 @@ function PostCard({ post, token, onDelete }: { post: Post; token: string | null;
     <Card data-testid={`post-${post.id}`}>
       <CardContent className="pt-4 pb-3 px-4">
         <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-2.5">
+          <button
+            className="flex items-center gap-2.5 hover:opacity-80 transition-opacity text-left"
+            onClick={() => setLocation(`/users/${post.author.id}`)}
+          >
             <Avatar className="w-9 h-9">
               <AvatarImage src={post.author.avatar ?? undefined} />
               <AvatarFallback className="text-sm bg-primary/10 text-primary font-semibold">{initials}</AvatarFallback>
             </Avatar>
             <div>
-              <p className="text-sm font-semibold">{post.author.name}</p>
+              <p className="text-sm font-semibold hover:underline underline-offset-2">{post.author.name}</p>
               <p className="text-xs text-muted-foreground">
                 {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
               </p>
             </div>
-          </div>
+          </button>
           {(post.userId === user?.id || user?.role === "admin") && (
             <button
               data-testid={`button-delete-post-${post.id}`}
