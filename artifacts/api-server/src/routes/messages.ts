@@ -4,6 +4,14 @@ import { supabase } from "../lib/supabase";
 
 const router: IRouter = Router();
 
+function mediaPreview(msg: Record<string, unknown>): string {
+  const text = (msg.message as string) ?? "";
+  if (text) return text;
+  if (msg.image_url) return "📷 Image";
+  if (msg.video_url) return "🎥 Video";
+  return "";
+}
+
 // List all conversations for current user (unique partners + last message)
 router.get("/messages/conversations", requireAuth, async (req, res): Promise<void> => {
   const myId = req.userId!;
@@ -16,7 +24,6 @@ router.get("/messages/conversations", requireAuth, async (req, res): Promise<voi
 
   if (error) { res.status(500).json({ error: error.message }); return; }
 
-  // Build map: partnerId → latest message
   const partnerMap = new Map<number, Record<string, unknown>>();
   for (const msg of messages ?? []) {
     const partnerId = (msg.sender_id === myId ? msg.receiver_id : msg.sender_id) as number;
@@ -31,12 +38,15 @@ router.get("/messages/conversations", requireAuth, async (req, res): Promise<voi
     .select("id, name, avatar, role")
     .in("id", partnerIds);
 
-  const result = (users ?? []).map(u => ({
-    user: { id: u.id, name: u.name, avatar: u.avatar, role: u.role },
-    lastMessage: (partnerMap.get(u.id) as Record<string, unknown>)?.message ?? "",
-    lastMessageAt: (partnerMap.get(u.id) as Record<string, unknown>)?.created_at ?? null,
-    isMine: (partnerMap.get(u.id) as Record<string, unknown>)?.sender_id === myId,
-  })).sort((a, b) => {
+  const result = (users ?? []).map(u => {
+    const lastMsg = partnerMap.get(u.id) as Record<string, unknown>;
+    return {
+      user: { id: u.id, name: u.name, avatar: u.avatar, role: u.role },
+      lastMessage: mediaPreview(lastMsg),
+      lastMessageAt: lastMsg?.created_at ?? null,
+      isMine: lastMsg?.sender_id === myId,
+    };
+  }).sort((a, b) => {
     if (!a.lastMessageAt) return 1;
     if (!b.lastMessageAt) return -1;
     return new Date(b.lastMessageAt as string).getTime() - new Date(a.lastMessageAt as string).getTime();
@@ -64,7 +74,7 @@ router.get("/messages/:userId", requireAuth, async (req, res): Promise<void> => 
   res.json(messages ?? []);
 });
 
-// Send a message to another user
+// Send a message (text + optional image/video)
 router.post("/messages/:userId", requireAuth, async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
   const receiverId = parseInt(rawId, 10);
@@ -75,15 +85,29 @@ router.post("/messages/:userId", requireAuth, async (req, res): Promise<void> =>
     return;
   }
 
-  const { message } = req.body as { message?: string };
-  if (!message || !message.trim()) {
-    res.status(400).json({ error: "Message is required" });
+  const { message, image_url, video_url } = req.body as {
+    message?: string;
+    image_url?: string;
+    video_url?: string;
+  };
+
+  const text = message?.trim() ?? "";
+  if (!text && !image_url && !video_url) {
+    res.status(400).json({ error: "Message content is required" });
     return;
   }
 
+  const insertData: Record<string, unknown> = {
+    sender_id: req.userId!,
+    receiver_id: receiverId,
+    message: text,
+  };
+  if (image_url) insertData.image_url = image_url;
+  if (video_url) insertData.video_url = video_url;
+
   const { data, error } = await supabase
     .from("messages")
-    .insert({ sender_id: req.userId!, receiver_id: receiverId, message: message.trim() })
+    .insert(insertData)
     .select()
     .single();
 

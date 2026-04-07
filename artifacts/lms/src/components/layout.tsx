@@ -7,11 +7,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { NotificationBell } from "@/components/notification-bell";
 import {
-  LayoutDashboard, BookOpen, Users, User, LogOut, Sun, Moon, Palette, Shield, Menu, GraduationCap, Crown, MessageSquare
+  LayoutDashboard, BookOpen, Users, User, LogOut, Sun, Moon, Palette, Shield, Menu,
+  GraduationCap, Crown, MessageSquare, PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { initGlobalClickSound } from "@/lib/sound";
+import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -27,6 +29,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { theme, setTheme } = useTheme();
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem("sidebar-collapsed") === "true"; } catch { return false; }
+  });
   const logoutMutation = useLogout();
   const queryClient = useQueryClient();
 
@@ -35,10 +40,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
     return cleanup;
   }, []);
 
+  const toggleCollapsed = () => {
+    setCollapsed(v => {
+      const next = !v;
+      try { localStorage.setItem("sidebar-collapsed", String(next)); } catch {}
+      return next;
+    });
+  };
+
   const handleLogout = async () => {
-    try {
-      await logoutMutation.mutateAsync({});
-    } catch {}
+    try { await logoutMutation.mutateAsync({}); } catch {}
     queryClient.clear();
     logout();
   };
@@ -49,13 +60,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
-      {/* Logo */}
+      {/* Logo + collapse button */}
       <div className="flex items-center gap-3 px-4 py-4 border-b border-sidebar-border">
         <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
           <GraduationCap className="w-5 h-5 text-white" />
         </div>
         <span className="font-bold text-lg text-sidebar-foreground tracking-tight flex-1">LearnHub</span>
         <NotificationBell align="left" />
+        <button
+          onClick={toggleCollapsed}
+          title="Collapse sidebar"
+          className="hidden md:flex p-1 rounded-md text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+        >
+          <PanelLeftClose className="w-4 h-4" />
+        </button>
       </div>
 
       {/* Navigation */}
@@ -99,7 +117,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Footer */}
       <div className="px-3 py-4 border-t border-sidebar-border space-y-2">
-        {/* Theme cycle toggle */}
         <button
           data-testid="theme-toggle"
           onClick={() => {
@@ -112,7 +129,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {theme === "dark" ? "Light mode" : theme === "purple" ? "Light mode" : "Dark mode"}
         </button>
 
-        {/* User info */}
         <div className="flex items-center gap-3 px-3 py-2">
           <Avatar className="w-8 h-8 flex-shrink-0">
             <AvatarImage src={user?.avatar ?? undefined} />
@@ -126,7 +142,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        {/* Logout */}
         <button
           data-testid="button-logout"
           onClick={handleLogout}
@@ -143,8 +158,24 @@ export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col w-64 bg-sidebar border-r border-sidebar-border flex-shrink-0">
-        <SidebarContent />
+      <aside className={cn(
+        "hidden md:flex flex-col bg-sidebar border-r border-sidebar-border flex-shrink-0 transition-all duration-300 overflow-hidden",
+        collapsed ? "w-12" : "w-64"
+      )}>
+        {collapsed ? (
+          /* Mini collapsed sidebar — just the expand button */
+          <div className="flex flex-col items-center pt-4 gap-3 h-full">
+            <button
+              onClick={toggleCollapsed}
+              title="Expand sidebar"
+              className="p-2 rounded-lg text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+            >
+              <PanelLeftOpen className="w-5 h-5" />
+            </button>
+          </div>
+        ) : (
+          <SidebarContent />
+        )}
       </aside>
 
       {/* Mobile sidebar overlay */}

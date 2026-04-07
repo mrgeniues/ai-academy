@@ -1,0 +1,116 @@
+You are a senior Next.js and Supabase developer.
+
+Enhance the EXISTING CHAT SYSTEM and UI with STRICT requirements. Do NOT add any extra features beyond what is specified.
+
+=====================================
+GOAL:
+
+1. Improve chat system (media + emoji + links)
+2. Add sidebar toggle (hide/unhide)
+3. Hide WhatsApp button inside chat page
+4. Add full-width chat view option
+
+=====================================
+
+1. WHATSAPP BUTTON CONTROL:
+
+* When user is on chat/messages page:
+
+  * Hide WhatsApp floating button
+
+* On all other pages:
+
+  * Show WhatsApp button
+
+=====================================
+2. SIDEBAR TOGGLE:
+
+* Add toggle button in top navbar
+
+* On click:
+
+  * Sidebar should hide
+  * Main content should expand full width
+
+* On second click:
+
+  * Sidebar should show again
+
+=====================================
+3. FULL WIDTH CHAT VIEW:
+
+* When sidebar is hidden:
+
+  * Chat page should take full width
+  * Chat UI should expand properly
+
+=====================================
+4. CHAT SYSTEM UPGRADE:
+
+Users must be able to send:
+
+1. Text messages
+2. Images
+3. Videos
+4. Links (clickable)
+5. Emojis (full emoji support)
+
+=====================================
+5. MEDIA HANDLING:
+
+* Use Supabase Storage for:
+
+  * images
+  * videos
+
+* Store file URLs in database
+
+=====================================
+6. DATABASE UPDATE (messages table):
+
+Ensure messages table includes:
+
+* id
+* sender_id
+* receiver_id
+* message (text)
+* image_url (nullable)
+* video_url (nullable)
+* created_at
+
+=====================================
+7. MESSAGE DISPLAY:
+
+* Show:
+
+  * text
+  * image (if exists)
+  * video (if exists)
+  * links must be clickable
+  * emojis rendered properly
+
+=====================================
+8. STRICT RULES:
+
+* Do NOT add voice messages
+* Do NOT add group chat
+* Do NOT add reactions
+* Do NOT modify other features
+* Only implement these changes
+
+=====================================
+TECH:
+
+* Next.js (App Router)
+* Supabase (Database + Storage)
+
+=====================================
+OUTPUT:
+
+* Updated chat UI code
+* Sidebar toggle logic
+* WhatsApp visibility logic
+* Media upload logic
+* Emoji support integration
+
+Ensure everything works without bugs.

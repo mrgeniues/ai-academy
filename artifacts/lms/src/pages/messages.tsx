@@ -1,13 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
+import { useTheme } from "@/lib/theme";
 import { Layout } from "@/components/layout";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, MessageCircle, ArrowLeft } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Send, MessageCircle, ArrowLeft, Smile, Paperclip, X, Image, Video } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
+import EmojiPicker, { type EmojiClickData, Theme } from "emoji-picker-react";
 
 type Conversation = {
   user: { id: number; name: string; avatar: string | null; role: string };
@@ -21,17 +24,96 @@ type Message = {
   sender_id: number;
   receiver_id: number;
   message: string;
+  image_url: string | null;
+  video_url: string | null;
   created_at: string;
 };
 
 type PartnerUser = { id: number; name: string; avatar: string | null };
+type PendingMedia = { type: "image" | "video"; url: string; name: string };
 
 function initials(name: string) {
   return name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) ?? "?";
 }
 
+function renderTextWithLinks(text: string, isMine: boolean) {
+  const urlRegex = /https?:\/\/[^\s]+/g;
+  const result: React.ReactNode[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = urlRegex.exec(text)) !== null) {
+    if (match.index > last) result.push(<span key={last}>{text.slice(last, match.index)}</span>);
+    result.push(
+      <a
+        key={match.index}
+        href={match[0]}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={cn("underline underline-offset-2 break-all hover:opacity-80", isMine ? "text-white" : "text-primary")}
+      >
+        {match[0]}
+      </a>
+    );
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) result.push(<span key={last}>{text.slice(last)}</span>);
+  return result.length ? result : [<span key={0}>{text}</span>];
+}
+
+function MessageBubble({ msg, myId }: { msg: Message; myId: number }) {
+  const isMine = msg.sender_id === myId;
+  const hasMedia = !!(msg.image_url || msg.video_url);
+  const hasText = !!msg.message;
+
+  return (
+    <div className={cn("flex", isMine ? "justify-end" : "justify-start")}>
+      <div className={cn(
+        "max-w-[72%] rounded-2xl text-sm overflow-hidden",
+        isMine ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-muted text-foreground rounded-bl-sm",
+        hasMedia && !hasText ? "" : hasMedia ? "" : "px-3 py-2"
+      )}>
+        {/* Image */}
+        {msg.image_url && (
+          <a href={msg.image_url} target="_blank" rel="noopener noreferrer" className="block">
+            <img
+              src={msg.image_url}
+              alt="Image"
+              className="max-w-full max-h-64 object-cover cursor-zoom-in hover:opacity-95 transition-opacity"
+              style={{ display: "block" }}
+            />
+          </a>
+        )}
+        {/* Video */}
+        {msg.video_url && (
+          <video
+            src={msg.video_url}
+            controls
+            className="max-w-full max-h-64 block"
+            style={{ display: "block" }}
+          />
+        )}
+        {/* Text */}
+        {hasText && (
+          <p className={cn("break-words leading-relaxed whitespace-pre-wrap", hasMedia ? "px-3 pt-2 pb-0" : "")}>
+            {renderTextWithLinks(msg.message, isMine)}
+          </p>
+        )}
+        {/* Timestamp */}
+        <p className={cn(
+          "text-[10px] mt-1 leading-none",
+          hasMedia ? "px-3 pb-2" : "",
+          isMine ? "text-primary-foreground/60 text-right" : "text-muted-foreground"
+        )}>
+          {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function MessagesPage() {
   const { user, token } = useAuth();
+  const { theme } = useTheme();
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/messages/:userId");
   const activeUserId = params?.userId ? parseInt(params.userId, 10) : null;
@@ -41,8 +123,14 @@ export default function MessagesPage() {
   const [activeUser, setActiveUser] = useState<PartnerUser | null>(null);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [pendingMedia, setPendingMedia] = useState<PendingMedia | null>(null);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+
   const bottomRef = useRef<HTMLDivElement>(null);
-  const prevMessageCountRef = useRef(0);
+  const prevCountRef = useRef(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const loadConversations = useCallback(async () => {
     if (!token) return;
@@ -64,15 +152,11 @@ export default function MessagesPage() {
     } catch {}
   }, [token]);
 
-  useEffect(() => {
-    loadConversations();
-  }, [loadConversations]);
+  useEffect(() => { loadConversations(); }, [loadConversations]);
 
   useEffect(() => {
     if (!activeUserId || !token) { setMessages([]); setActiveUser(null); return; }
-
     loadMessages(activeUserId);
-
     const conv = conversations.find(c => c.user.id === activeUserId);
     if (conv) {
       setActiveUser(conv.user);
@@ -84,7 +168,6 @@ export default function MessagesPage() {
     }
   }, [activeUserId, token]);
 
-  // Poll every 3s for new messages & refresh conversation list
   useEffect(() => {
     if (!activeUserId || !token) return;
     const id = setInterval(() => {
@@ -94,33 +177,68 @@ export default function MessagesPage() {
     return () => clearInterval(id);
   }, [activeUserId, token, loadMessages, loadConversations]);
 
-  // Auto-scroll only when message count increases
   useEffect(() => {
-    if (messages.length > prevMessageCountRef.current) {
+    if (messages.length > prevCountRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-    prevMessageCountRef.current = messages.length;
+    prevCountRef.current = messages.length;
   }, [messages]);
 
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingMedia(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (res.ok) {
+        const { url } = await res.json() as { url: string };
+        const type = file.type.startsWith("video/") ? "video" : "image";
+        setPendingMedia({ type, url, name: file.name });
+      }
+    } catch {}
+    finally {
+      setUploadingMedia(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   const handleSend = async () => {
-    if (!input.trim() || !activeUserId || sending) return;
+    const hasText = input.trim() !== "";
+    const hasMedia = pendingMedia !== null;
+    if ((!hasText && !hasMedia) || !activeUserId || sending) return;
+
     setSending(true);
     const text = input.trim();
+    const media = pendingMedia;
     setInput("");
+    setPendingMedia(null);
+
+    const body: Record<string, string> = { message: text };
+    if (media?.type === "image") body.image_url = media.url;
+    if (media?.type === "video") body.video_url = media.url;
+
     try {
       const res = await fetch(`/api/messages/${activeUserId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         await loadMessages(activeUserId);
         await loadConversations();
       } else {
         setInput(text);
+        setPendingMedia(media);
       }
     } catch {
       setInput(text);
+      setPendingMedia(media);
     } finally {
       setSending(false);
     }
@@ -129,6 +247,14 @@ export default function MessagesPage() {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
+
+  const handleEmojiClick = (data: EmojiClickData) => {
+    setInput(prev => prev + data.emoji);
+    setEmojiOpen(false);
+    inputRef.current?.focus();
+  };
+
+  const emojiTheme = theme === "dark" || theme === "purple" ? Theme.DARK : Theme.LIGHT;
 
   return (
     <Layout>
@@ -142,7 +268,6 @@ export default function MessagesPage() {
           <div className="px-4 py-4 border-b border-border">
             <h2 className="font-semibold">Messages</h2>
           </div>
-
           <div className="flex-1 overflow-y-auto">
             {conversations.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-4 py-16 gap-3">
@@ -194,7 +319,7 @@ export default function MessagesPage() {
             </div>
           ) : (
             <>
-              {/* Header */}
+              {/* Chat header */}
               <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card flex-shrink-0">
                 <button
                   className="md:hidden p-1 text-muted-foreground hover:text-foreground"
@@ -227,47 +352,105 @@ export default function MessagesPage() {
                     <p className="text-sm text-muted-foreground">No messages yet. Say hello!</p>
                   </div>
                 ) : (
-                  messages.map(msg => {
-                    const isMine = msg.sender_id === user?.id;
-                    return (
-                      <div key={msg.id} className={cn("flex", isMine ? "justify-end" : "justify-start")}>
-                        <div className={cn(
-                          "max-w-[72%] px-3 py-2 rounded-2xl text-sm",
-                          isMine
-                            ? "bg-primary text-primary-foreground rounded-br-sm"
-                            : "bg-muted text-foreground rounded-bl-sm"
-                        )}>
-                          <p className="break-words leading-relaxed">{msg.message}</p>
-                          <p className={cn(
-                            "text-[10px] mt-1 leading-none",
-                            isMine ? "text-primary-foreground/60 text-right" : "text-muted-foreground"
-                          )}>
-                            {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })
+                  messages.map(msg => (
+                    <MessageBubble key={msg.id} msg={msg} myId={user?.id ?? 0} />
+                  ))
                 )}
                 <div ref={bottomRef} />
               </div>
 
+              {/* Pending media preview */}
+              {pendingMedia && (
+                <div className="px-4 py-2 border-t border-border bg-card flex-shrink-0">
+                  <div className="relative inline-flex items-center gap-2 bg-muted rounded-lg p-2 pr-8 max-w-xs">
+                    {pendingMedia.type === "image" ? (
+                      <Image className="w-4 h-4 text-primary flex-shrink-0" />
+                    ) : (
+                      <Video className="w-4 h-4 text-primary flex-shrink-0" />
+                    )}
+                    <span className="text-xs truncate max-w-[180px]">{pendingMedia.name}</span>
+                    {pendingMedia.type === "image" && (
+                      <img src={pendingMedia.url} alt="" className="w-10 h-10 object-cover rounded" />
+                    )}
+                    <button
+                      onClick={() => setPendingMedia(null)}
+                      className="absolute top-1 right-1 p-0.5 rounded-full bg-background/80 hover:bg-destructive/20 text-muted-foreground hover:text-destructive"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Input bar */}
-              <div className="px-4 py-3 border-t border-border bg-card flex-shrink-0">
+              <div className="px-3 py-3 border-t border-border bg-card flex-shrink-0">
                 <div className="flex items-center gap-2">
+                  {/* Emoji picker */}
+                  <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex-shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                        title="Emoji"
+                      >
+                        <Smile className="w-5 h-5" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      side="top"
+                      align="start"
+                      className="p-0 border-0 shadow-xl w-auto"
+                      sideOffset={8}
+                    >
+                      <EmojiPicker
+                        theme={emojiTheme}
+                        onEmojiClick={handleEmojiClick}
+                        searchPlaceholder="Search emojis…"
+                        lazyLoadEmojis
+                        height={380}
+                        width={320}
+                      />
+                    </PopoverContent>
+                  </Popover>
+
+                  {/* File / media attach */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,video/*"
+                    className="hidden"
+                    onChange={handleFileSelect}
+                  />
+                  <button
+                    type="button"
+                    disabled={uploadingMedia}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex-shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                    title="Attach image or video"
+                  >
+                    {uploadingMedia ? (
+                      <span className="w-5 h-5 block rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                    ) : (
+                      <Paperclip className="w-5 h-5" />
+                    )}
+                  </button>
+
+                  {/* Text input */}
                   <Input
+                    ref={inputRef}
                     placeholder="Type a message…"
                     value={input}
                     onChange={e => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     disabled={sending}
                     className="flex-1"
-                    autoFocus
                   />
+
+                  {/* Send */}
                   <Button
                     size="icon"
                     onClick={handleSend}
-                    disabled={!input.trim() || sending}
+                    disabled={(!input.trim() && !pendingMedia) || sending || uploadingMedia}
                   >
                     <Send className="w-4 h-4" />
                   </Button>
