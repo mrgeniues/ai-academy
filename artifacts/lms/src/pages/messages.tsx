@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Send, MessageCircle, ArrowLeft, Smile, Paperclip, X, Image, Video } from "lucide-react";
+import { Send, MessageCircle, ArrowLeft, Smile, X, Image, Video, Link2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import EmojiPicker, { type EmojiClickData, Theme } from "emoji-picker-react";
@@ -124,12 +124,15 @@ export default function MessagesPage() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkInput, setLinkInput] = useState("");
   const [pendingMedia, setPendingMedia] = useState<PendingMedia | null>(null);
   const [uploadingMedia, setUploadingMedia] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(0);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const loadConversations = useCallback(async () => {
@@ -251,6 +254,15 @@ export default function MessagesPage() {
   const handleEmojiClick = (data: EmojiClickData) => {
     setInput(prev => prev + data.emoji);
     setEmojiOpen(false);
+    inputRef.current?.focus();
+  };
+
+  const handleInsertLink = () => {
+    if (!linkInput.trim()) return;
+    const url = linkInput.trim().startsWith("http") ? linkInput.trim() : `https://${linkInput.trim()}`;
+    setInput(prev => prev ? `${prev} ${url} ` : `${url} `);
+    setLinkInput("");
+    setLinkOpen(false);
     inputRef.current?.focus();
   };
 
@@ -383,59 +395,81 @@ export default function MessagesPage() {
               )}
 
               {/* Input bar */}
-              <div className="px-3 py-3 border-t border-border bg-card flex-shrink-0">
-                <div className="flex items-center gap-2">
-                  {/* Emoji picker */}
+              <div className="border-t border-border bg-card flex-shrink-0">
+                {/* Toolbar row */}
+                <div className="flex items-center gap-1 px-3 pt-2">
+                  {/* Emoji */}
                   <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
                     <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        className="flex-shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                        title="Emoji"
-                      >
-                        <Smile className="w-5 h-5" />
+                      <button type="button" title="Emoji" className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                        <Smile className="w-4 h-4" />
+                        <span className="hidden sm:inline">Emoji</span>
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent
-                      side="top"
-                      align="start"
-                      className="p-0 border-0 shadow-xl w-auto"
-                      sideOffset={8}
-                    >
-                      <EmojiPicker
-                        theme={emojiTheme}
-                        onEmojiClick={handleEmojiClick}
-                        searchPlaceholder="Search emojis…"
-                        lazyLoadEmojis
-                        height={380}
-                        width={320}
-                      />
+                    <PopoverContent side="top" align="start" className="p-0 border-0 shadow-xl w-auto" sideOffset={8}>
+                      <EmojiPicker theme={emojiTheme} onEmojiClick={handleEmojiClick} searchPlaceholder="Search emojis…" lazyLoadEmojis height={380} width={320} />
                     </PopoverContent>
                   </Popover>
 
-                  {/* File / media attach */}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*,video/*"
-                    className="hidden"
-                    onChange={handleFileSelect}
-                  />
+                  {/* Image */}
+                  <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
                   <button
                     type="button"
                     disabled={uploadingMedia}
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex-shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
-                    title="Attach image or video"
+                    onClick={() => imageInputRef.current?.click()}
+                    title="Send image"
+                    className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10 transition-colors disabled:opacity-40"
                   >
                     {uploadingMedia ? (
-                      <span className="w-5 h-5 block rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                      <span className="w-4 h-4 block rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
                     ) : (
-                      <Paperclip className="w-5 h-5" />
+                      <Image className="w-4 h-4" />
                     )}
+                    <span className="hidden sm:inline">Image</span>
                   </button>
 
-                  {/* Text input */}
+                  {/* Video */}
+                  <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleFileSelect} />
+                  <button
+                    type="button"
+                    disabled={uploadingMedia}
+                    onClick={() => videoInputRef.current?.click()}
+                    title="Send video"
+                    className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-purple-500 hover:bg-purple-500/10 transition-colors disabled:opacity-40"
+                  >
+                    <Video className="w-4 h-4" />
+                    <span className="hidden sm:inline">Video</span>
+                  </button>
+
+                  {/* Link */}
+                  <Popover open={linkOpen} onOpenChange={setLinkOpen}>
+                    <PopoverTrigger asChild>
+                      <button type="button" title="Insert link" className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-green-500 hover:bg-green-500/10 transition-colors">
+                        <Link2 className="w-4 h-4" />
+                        <span className="hidden sm:inline">Link</span>
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent side="top" align="start" className="w-72 p-3 shadow-xl" sideOffset={8}>
+                      <p className="text-xs font-medium mb-2 text-foreground">Insert a link</p>
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="https://example.com"
+                          value={linkInput}
+                          onChange={e => setLinkInput(e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter") handleInsertLink(); }}
+                          className="flex-1 text-sm h-8"
+                          autoFocus
+                        />
+                        <Button size="sm" className="h-8 px-3" onClick={handleInsertLink} disabled={!linkInput.trim()}>
+                          Add
+                        </Button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* Text input row */}
+                <div className="flex items-center gap-2 px-3 pb-3 pt-1">
                   <Input
                     ref={inputRef}
                     placeholder="Type a message…"
@@ -445,8 +479,6 @@ export default function MessagesPage() {
                     disabled={sending}
                     className="flex-1"
                   />
-
-                  {/* Send */}
                   <Button
                     size="icon"
                     onClick={handleSend}
