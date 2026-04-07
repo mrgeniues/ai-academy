@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "u8V6Qs_PvSqSGHKYX1zCD"
+uri = "file://learnhub-deploy.tar.gz"
+type = "unspecified"
+title = "LearnHub - Complete Project (learnhub-deploy.tar.gz)"
