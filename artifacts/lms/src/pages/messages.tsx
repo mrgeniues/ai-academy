@@ -8,7 +8,7 @@ import { OnlineDot } from "@/components/online-dot";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Send, MessageCircle, ArrowLeft, Smile, X, Image, Video, Link2 } from "lucide-react";
+import { Send, MessageCircle, ArrowLeft, Smile, X, Image, Video, Link2, Check, CheckCheck } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import EmojiPicker, { type EmojiClickData, Theme } from "emoji-picker-react";
@@ -18,6 +18,7 @@ type Conversation = {
   lastMessage: string;
   lastMessageAt: string | null;
   isMine: boolean;
+  unreadCount?: number;
 };
 
 type Message = {
@@ -27,6 +28,7 @@ type Message = {
   message: string;
   image_url: string | null;
   video_url: string | null;
+  is_read?: boolean;
   created_at: string;
 };
 
@@ -99,14 +101,25 @@ function MessageBubble({ msg, myId }: { msg: Message; myId: number }) {
             {renderTextWithLinks(msg.message, isMine)}
           </p>
         )}
-        {/* Timestamp */}
-        <p className={cn(
-          "text-[10px] mt-1 leading-none",
+        {/* Timestamp + tick */}
+        <div className={cn(
+          "flex items-center gap-1 mt-1",
           hasMedia ? "px-3 pb-2" : "",
-          isMine ? "text-primary-foreground/60 text-right" : "text-muted-foreground"
+          isMine ? "justify-end" : "justify-start"
         )}>
-          {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
-        </p>
+          <p className={cn(
+            "text-[10px] leading-none",
+            isMine ? "text-primary-foreground/60" : "text-muted-foreground"
+          )}>
+            {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
+          </p>
+          {/* Tick marks — only for sender's messages */}
+          {isMine && (
+            msg.is_read === true
+              ? <CheckCheck className="w-3 h-3 text-primary-foreground/80 flex-shrink-0" />
+              : <Check className="w-3 h-3 text-primary-foreground/50 flex-shrink-0" />
+          )}
+        </div>
       </div>
     </div>
   );
@@ -129,12 +142,55 @@ export default function MessagesPage() {
   const [linkInput, setLinkInput] = useState("");
   const [pendingMedia, setPendingMedia] = useState<PendingMedia | null>(null);
   const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [partnerTyping, setPartnerTyping] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(0);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Typing ──────────────────────────────────────────────────────────────────
+
+  const sendTypingEvent = useCallback(async (isTyping: boolean) => {
+    if (!token || !activeUserId) return;
+    try {
+      await fetch(`/api/messages/typing/${activeUserId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ typing: isTyping }),
+      });
+    } catch {}
+  }, [token, activeUserId]);
+
+  // Poll for partner typing status
+  useEffect(() => {
+    if (!activeUserId || !token) { setPartnerTyping(false); return; }
+    const check = async () => {
+      try {
+        const res = await fetch(`/api/messages/typing/${activeUserId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const { typing } = await res.json() as { typing: boolean };
+          setPartnerTyping(typing);
+        }
+      } catch {}
+    };
+    check();
+    const id = setInterval(check, 1500);
+    return () => clearInterval(id);
+  }, [activeUserId, token]);
+
+  // Clear typing on chat change
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    };
+  }, [activeUserId]);
+
+  // ── Data fetching ───────────────────────────────────────────────────────────
 
   const markAsRead = useCallback(async (senderId: number) => {
     if (!token) return;
@@ -201,6 +257,8 @@ export default function MessagesPage() {
     prevCountRef.current = messages.length;
   }, [messages]);
 
+  // ── Handlers ────────────────────────────────────────────────────────────────
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -221,7 +279,8 @@ export default function MessagesPage() {
     } catch {}
     finally {
       setUploadingMedia(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (imageInputRef.current) imageInputRef.current.value = "";
+      if (videoInputRef.current) videoInputRef.current.value = "";
     }
   };
 
@@ -229,6 +288,10 @@ export default function MessagesPage() {
     const hasText = input.trim() !== "";
     const hasMedia = pendingMedia !== null;
     if ((!hasText && !hasMedia) || !activeUserId || sending) return;
+
+    // Clear typing when sending
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    void sendTypingEvent(false);
 
     setSending(true);
     const text = input.trim();
@@ -259,6 +322,14 @@ export default function MessagesPage() {
     } finally {
       setSending(false);
     }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInput(e.target.value);
+    if (!activeUserId) return;
+    void sendTypingEvent(true);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => void sendTypingEvent(false), 2500);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -301,37 +372,49 @@ export default function MessagesPage() {
                 <p className="text-sm text-muted-foreground">No conversations yet.<br />Message someone from their profile.</p>
               </div>
             ) : (
-              conversations.map(conv => (
-                <button
-                  key={conv.user.id}
-                  onClick={() => setLocation(`/messages/${conv.user.id}`)}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors text-left",
-                    activeUserId === conv.user.id && "bg-primary/10 border-r-2 border-primary"
-                  )}
-                >
-                  <div className="relative flex-shrink-0">
-                    <Avatar className="w-10 h-10">
-                      <AvatarImage src={conv.user.avatar ?? undefined} />
-                      <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">
-                        {initials(conv.user.name)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <OnlineDot isOnline={!!conv.user.isOnline} size="md" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{conv.user.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {conv.isMine ? "You: " : ""}{conv.lastMessage}
-                    </p>
-                  </div>
-                  {conv.lastMessageAt && (
-                    <span className="text-[10px] text-muted-foreground flex-shrink-0 leading-none">
-                      {formatDistanceToNow(new Date(conv.lastMessageAt), { addSuffix: false })}
-                    </span>
-                  )}
-                </button>
-              ))
+              conversations.map(conv => {
+                const hasUnread = (conv.unreadCount ?? 0) > 0;
+                return (
+                  <button
+                    key={conv.user.id}
+                    onClick={() => setLocation(`/messages/${conv.user.id}`)}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors text-left",
+                      activeUserId === conv.user.id && "bg-primary/10 border-r-2 border-primary"
+                    )}
+                  >
+                    <div className="relative flex-shrink-0">
+                      <Avatar className="w-10 h-10">
+                        <AvatarImage src={conv.user.avatar ?? undefined} />
+                        <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">
+                          {initials(conv.user.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <OnlineDot isOnline={!!conv.user.isOnline} size="md" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={cn("text-sm truncate", hasUnread ? "font-semibold text-foreground" : "font-medium")}>
+                        {conv.user.name}
+                      </p>
+                      <p className={cn("text-xs truncate", hasUnread ? "text-foreground/80" : "text-muted-foreground")}>
+                        {conv.isMine ? "You: " : ""}{conv.lastMessage}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                      {conv.lastMessageAt && (
+                        <span className="text-[10px] text-muted-foreground leading-none">
+                          {formatDistanceToNow(new Date(conv.lastMessageAt), { addSuffix: false })}
+                        </span>
+                      )}
+                      {hasUnread && (
+                        <span className="min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                          {(conv.unreadCount ?? 0) > 99 ? "99+" : conv.unreadCount}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })
             )}
           </div>
         </div>
@@ -367,12 +450,19 @@ export default function MessagesPage() {
                       </Avatar>
                       <OnlineDot isOnline={!!activeUser.isOnline} size="sm" />
                     </div>
-                    <button
-                      className="text-sm font-semibold hover:underline"
-                      onClick={() => setLocation(`/users/${activeUser.id}`)}
-                    >
-                      {activeUser.name}
-                    </button>
+                    <div className="flex flex-col min-w-0">
+                      <button
+                        className="text-sm font-semibold hover:underline text-left"
+                        onClick={() => setLocation(`/users/${activeUser.id}`)}
+                      >
+                        {activeUser.name}
+                      </button>
+                      {partnerTyping && (
+                        <span className="text-xs text-primary animate-pulse leading-none">
+                          Typing…
+                        </span>
+                      )}
+                    </div>
                   </>
                 )}
               </div>
@@ -494,7 +584,7 @@ export default function MessagesPage() {
                     ref={inputRef}
                     placeholder="Type a message…"
                     value={input}
-                    onChange={e => setInput(e.target.value)}
+                    onChange={handleInputChange}
                     onKeyDown={handleKeyDown}
                     disabled={sending}
                     className="flex-1"

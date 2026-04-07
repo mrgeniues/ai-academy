@@ -4,6 +4,9 @@ import { supabase } from "../lib/supabase";
 
 const router: IRouter = Router();
 
+// In-memory typing state: key = `${typingUserId}_to_${receiverId}`, value = expiry timestamp
+const typingState = new Map<string, number>();
+
 function mediaPreview(msg: Record<string, unknown>): string {
   const text = (msg.message as string) ?? "";
   if (text) return text;
@@ -11,6 +14,46 @@ function mediaPreview(msg: Record<string, unknown>): string {
   if (msg.video_url) return "🎥 Video";
   return "";
 }
+
+// ── Typing indicator ────────────────────────────────────────────────────────
+
+// Set typing status (typing=true) or clear it (typing=false)
+router.post("/messages/typing/:userId", requireAuth, async (req, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
+  const receiverId = parseInt(rawId, 10);
+  if (isNaN(receiverId)) { res.status(400).json({ error: "Invalid user id" }); return; }
+
+  const senderId = req.userId!;
+  const { typing } = req.body as { typing?: boolean };
+  const key = `${senderId}_to_${receiverId}`;
+
+  if (typing === false) {
+    typingState.delete(key);
+  } else {
+    typingState.set(key, Date.now() + 5000); // 5s TTL
+  }
+  res.json({ ok: true });
+});
+
+// Check if a specific user is currently typing to me
+router.get("/messages/typing/:userId", requireAuth, async (req, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
+  const senderId = parseInt(rawId, 10); // the other user who might be typing
+  if (isNaN(senderId)) { res.status(400).json({ error: "Invalid user id" }); return; }
+
+  const myId = req.userId!;
+  const key = `${senderId}_to_${myId}`;
+  const expires = typingState.get(key);
+
+  if (expires && expires > Date.now()) {
+    res.json({ typing: true });
+  } else {
+    if (expires) typingState.delete(key); // Clean up expired entries
+    res.json({ typing: false });
+  }
+});
+
+// ── Unread count (total) ────────────────────────────────────────────────────
 
 // Count total unread messages for current user
 router.get("/messages/unread-count", requireAuth, async (req, res): Promise<void> => {
@@ -23,13 +66,14 @@ router.get("/messages/unread-count", requireAuth, async (req, res): Promise<void
     .eq("is_read", false);
 
   if (error) {
-    // Column may not exist yet — return 0 gracefully
     res.json({ count: 0 });
     return;
   }
 
   res.json({ count: count ?? 0 });
 });
+
+// ── Mark as read ─────────────────────────────────────────────────────────────
 
 // Mark all messages from a specific sender as read
 router.patch("/messages/read/:senderId", requireAuth, async (req, res): Promise<void> => {
@@ -47,15 +91,16 @@ router.patch("/messages/read/:senderId", requireAuth, async (req, res): Promise<
     .eq("is_read", false);
 
   if (error) {
-    // Column may not exist yet — ignore silently
-    res.json({ ok: true });
+    res.json({ ok: true }); // Column may not exist yet
     return;
   }
 
   res.json({ ok: true });
 });
 
-// List all conversations for current user (unique partners + last message)
+// ── Conversations ─────────────────────────────────────────────────────────────
+
+// List all conversations for current user (unique partners + last message + per-chat unread count)
 router.get("/messages/conversations", requireAuth, async (req, res): Promise<void> => {
   const myId = req.userId!;
 
@@ -68,9 +113,16 @@ router.get("/messages/conversations", requireAuth, async (req, res): Promise<voi
   if (error) { res.status(500).json({ error: error.message }); return; }
 
   const partnerMap = new Map<number, Record<string, unknown>>();
+  const unreadMap = new Map<number, number>(); // partnerId → unread count from them
+
   for (const msg of messages ?? []) {
     const partnerId = (msg.sender_id === myId ? msg.receiver_id : msg.sender_id) as number;
     if (!partnerMap.has(partnerId)) partnerMap.set(partnerId, msg);
+
+    // Count unread: messages sent TO me FROM this partner
+    if (msg.receiver_id === myId && msg.sender_id !== myId && msg.is_read === false) {
+      unreadMap.set(partnerId, (unreadMap.get(partnerId) ?? 0) + 1);
+    }
   }
 
   if (partnerMap.size === 0) { res.json([]); return; }
@@ -97,6 +149,7 @@ router.get("/messages/conversations", requireAuth, async (req, res): Promise<voi
       lastMessage: mediaPreview(lastMsg),
       lastMessageAt: lastMsg?.created_at ?? null,
       isMine: lastMsg?.sender_id === myId,
+      unreadCount: unreadMap.get(u.id) ?? 0,
     };
   }).sort((a, b) => {
     if (!a.lastMessageAt) return 1;
@@ -106,6 +159,8 @@ router.get("/messages/conversations", requireAuth, async (req, res): Promise<voi
 
   res.json(result);
 });
+
+// ── Messages ──────────────────────────────────────────────────────────────────
 
 // Get all messages between current user and another user
 router.get("/messages/:userId", requireAuth, async (req, res): Promise<void> => {

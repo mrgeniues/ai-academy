@@ -1,0 +1,131 @@
+You are a senior Next.js and Supabase developer.
+
+Implement CHAT ENHANCEMENTS with STRICT requirements.
+
+IMPORTANT:
+
+* Do NOT add any extra features
+* Do NOT modify layout or design
+* ONLY implement:
+
+  1. Per-chat unread message count
+  2. Double tick (✓✓ seen)
+  3. Typing indicator
+
+=====================================
+DATABASE REQUIREMENT:
+
+Ensure messages table includes:
+
+* id
+* sender_id
+* receiver_id
+* message
+* is_read (boolean default false)
+* created_at
+
+=====================================
+
+1. PER-CHAT UNREAD COUNT
+
+GOAL:
+Show unread message count for each chat user.
+
+LOGIC:
+
+* Count messages where:
+  receiver_id = current user
+  AND sender_id = that chat user
+  AND is_read = false
+
+* When chat opens:
+
+  * Update all messages from that sender:
+    is_read = true
+
+UI:
+
+* Show unread count badge next to each user
+* If count = 0 → do NOT show badge
+
+=====================================
+2. DOUBLE TICK (✓✓ SEEN)
+
+GOAL:
+Show message status (sent vs seen)
+
+LOGIC:
+
+* When message is sent:
+  is_read = false → show single tick (✓)
+
+* When receiver opens chat:
+  update is_read = true → show double tick (✓✓)
+
+UI:
+
+* Show ticks only for sender's messages
+
+* Conditions:
+
+  * is_read = false → ✓
+  * is_read = true → ✓✓
+
+=====================================
+3. TYPING INDICATOR
+
+GOAL:
+Show "typing..." when another user is typing
+
+DATABASE (or realtime state):
+
+Use temporary realtime state (no permanent storage required)
+
+LOGIC:
+
+* When user starts typing:
+  send realtime event:
+  { sender_id, receiver_id, typing: true }
+
+* When user stops typing:
+  send:
+  typing: false
+
+REALTIME:
+
+* Use Supabase Realtime channel
+
+UI:
+
+* Show "Typing..." text in chat header or bottom
+
+* Only show when:
+  other user is typing
+
+=====================================
+REALTIME REQUIREMENTS:
+
+* Use Supabase Realtime for:
+
+  * unread updates
+  * seen status
+  * typing indicator
+
+=====================================
+STRICT RULES:
+
+* Do NOT add voice messages
+* Do NOT add reactions
+* Do NOT add group chat
+* Do NOT change layout
+* Only implement above 3 features
+
+=====================================
+OUTPUT:
+
+* Query for unread count per user
+* Logic to mark messages as read
+* Tick display logic
+* Typing indicator realtime logic
+
+Ensure everything works correctly without bugs.
