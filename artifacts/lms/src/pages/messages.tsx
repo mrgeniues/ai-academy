@@ -136,6 +136,17 @@ export default function MessagesPage() {
   const videoInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const markAsRead = useCallback(async (senderId: number) => {
+    if (!token) return;
+    try {
+      await fetch(`/api/messages/read/${senderId}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      window.dispatchEvent(new Event("unread-count-refresh"));
+    } catch {}
+  }, [token]);
+
   const loadConversations = useCallback(async () => {
     if (!token) return;
     try {
@@ -161,6 +172,7 @@ export default function MessagesPage() {
   useEffect(() => {
     if (!activeUserId || !token) { setMessages([]); setActiveUser(null); return; }
     loadMessages(activeUserId);
+    markAsRead(activeUserId);
     const conv = conversations.find(c => c.user.id === activeUserId);
     if (conv) {
       setActiveUser(conv.user);
@@ -177,9 +189,10 @@ export default function MessagesPage() {
     const id = setInterval(() => {
       loadMessages(activeUserId);
       loadConversations();
+      markAsRead(activeUserId);
     }, 3000);
     return () => clearInterval(id);
-  }, [activeUserId, token, loadMessages, loadConversations]);
+  }, [activeUserId, token, loadMessages, loadConversations, markAsRead]);
 
   useEffect(() => {
     if (messages.length > prevCountRef.current) {

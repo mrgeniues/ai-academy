@@ -14,6 +14,7 @@ import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { initGlobalClickSound } from "@/lib/sound";
 import { cn } from "@/lib/utils";
+import { useUnreadCount } from "@/hooks/use-unread-count";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -25,7 +26,7 @@ const navItems = [
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const { user, logout } = useAuth();
+  const { user, logout, token } = useAuth();
   const { theme, setTheme } = useTheme();
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -34,6 +35,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   });
   const logoutMutation = useLogout();
   const queryClient = useQueryClient();
+  const unreadCount = useUnreadCount(token);
 
   useEffect(() => {
     const cleanup = initGlobalClickSound();
@@ -80,6 +82,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <nav className="flex-1 px-3 py-4 space-y-1">
         {navItems.map(({ href, label, icon: Icon }) => {
           const isActive = location === href || location.startsWith(href + "/");
+          const showBadge = label === "Messages" && unreadCount > 0;
           return (
             <Link
               key={href}
@@ -93,7 +96,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
               }`}
             >
               <Icon className="w-4 h-4 flex-shrink-0" />
-              {label}
+              <span className="flex-1">{label}</span>
+              {showBadge && (
+                <span className={cn(
+                  "ml-auto min-w-[1.25rem] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center leading-none",
+                  isActive ? "bg-white/25 text-white" : "bg-primary text-white"
+                )}>
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
             </Link>
           );
         })}

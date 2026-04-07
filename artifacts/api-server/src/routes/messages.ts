@@ -12,6 +12,49 @@ function mediaPreview(msg: Record<string, unknown>): string {
   return "";
 }
 
+// Count total unread messages for current user
+router.get("/messages/unread-count", requireAuth, async (req, res): Promise<void> => {
+  const myId = req.userId!;
+
+  const { count, error } = await supabase
+    .from("messages")
+    .select("*", { count: "exact", head: true })
+    .eq("receiver_id", myId)
+    .eq("is_read", false);
+
+  if (error) {
+    // Column may not exist yet — return 0 gracefully
+    res.json({ count: 0 });
+    return;
+  }
+
+  res.json({ count: count ?? 0 });
+});
+
+// Mark all messages from a specific sender as read
+router.patch("/messages/read/:senderId", requireAuth, async (req, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.senderId) ? req.params.senderId[0] : req.params.senderId;
+  const senderId = parseInt(rawId, 10);
+  if (isNaN(senderId)) { res.status(400).json({ error: "Invalid sender id" }); return; }
+
+  const myId = req.userId!;
+
+  const { error } = await supabase
+    .from("messages")
+    .update({ is_read: true })
+    .eq("receiver_id", myId)
+    .eq("sender_id", senderId)
+    .eq("is_read", false);
+
+  if (error) {
+    // Column may not exist yet — ignore silently
+    res.json({ ok: true });
+    return;
+  }
+
+  res.json({ ok: true });
+});
+
 // List all conversations for current user (unique partners + last message)
 router.get("/messages/conversations", requireAuth, async (req, res): Promise<void> => {
   const myId = req.userId!;
@@ -110,6 +153,7 @@ router.post("/messages/:userId", requireAuth, async (req, res): Promise<void> =>
     sender_id: req.userId!,
     receiver_id: receiverId,
     message: text,
+    is_read: false,
   };
   if (image_url) insertData.image_url = image_url;
   if (video_url) insertData.video_url = video_url;
@@ -121,6 +165,31 @@ router.post("/messages/:userId", requireAuth, async (req, res): Promise<void> =>
     .single();
 
   if (error) {
+    // If is_read column doesn't exist, retry without it
+    if (error.code === "PGRST204" || error.message?.includes("is_read")) {
+      const fallbackData: Record<string, unknown> = {
+        sender_id: req.userId!,
+        receiver_id: receiverId,
+        message: text,
+      };
+      if (image_url) fallbackData.image_url = image_url;
+      if (video_url) fallbackData.video_url = video_url;
+
+      const { data: fallback, error: fallbackError } = await supabase
+        .from("messages")
+        .insert(fallbackData)
+        .select()
+        .single();
+
+      if (fallbackError) {
+        console.error("[POST /messages] fallback error:", fallbackError.message);
+        res.status(500).json({ error: fallbackError.message });
+        return;
+      }
+      res.status(201).json(fallback);
+      return;
+    }
+
     console.error("[POST /messages] error:", error.message, error.code);
     res.status(500).json({ error: error.message });
     return;
