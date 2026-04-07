@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Bell, BookOpen, MessageSquare, FileText, Crown, Check, CheckCheck } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/lib/auth";
 
 const API = "/api";
@@ -51,9 +51,10 @@ export function NotificationBell({ align = "right" }: { align?: "left" | "right"
   const [tab, setTab] = useState<Tab>("all");
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
-  const [dropdownLeft, setDropdownLeft] = useState<number | undefined>(undefined);
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
 
-  const wrapperRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
@@ -75,36 +76,26 @@ export function NotificationBell({ align = "right" }: { align?: "left" | "right"
   }, [token]);
 
   useEffect(() => {
+    if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (!buttonRef.current?.contains(target) && !dropdownRef.current?.contains(target)) {
         setOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  }, [open]);
 
   const handleToggle = () => {
-    if (!open && wrapperRef.current) {
-      const rect = wrapperRef.current.getBoundingClientRect();
+    if (!open && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
       const dropdownW = 320;
       const margin = 8;
       const viewW = window.innerWidth;
-      if (align === "left") {
-        const wouldEnd = rect.left + dropdownW;
-        if (wouldEnd > viewW - margin) {
-          setDropdownLeft(-(wouldEnd - (viewW - margin)));
-        } else {
-          setDropdownLeft(0);
-        }
-      } else {
-        const wouldStart = rect.right - dropdownW;
-        if (wouldStart < margin) {
-          setDropdownLeft(-(rect.left - margin));
-        } else {
-          setDropdownLeft(undefined);
-        }
-      }
+      let left = align === "right" ? rect.right - dropdownW : rect.left;
+      left = Math.max(margin, Math.min(left, viewW - dropdownW - margin));
+      setCoords({ top: rect.bottom + 6, left });
     }
     setOpen(o => !o);
   };
@@ -126,11 +117,8 @@ export function NotificationBell({ align = "right" }: { align?: "left" | "right"
   const handleNotificationClick = (n: Notification) => {
     markRead(n.id);
     setOpen(false);
-    if (n.postId) {
-      window.location.href = "/community";
-    } else if (n.courseId) {
-      window.location.href = `/courses/${n.courseId}`;
-    }
+    if (n.postId) window.location.href = "/community";
+    else if (n.courseId) window.location.href = `/courses/${n.courseId}`;
   };
 
   const filtered = notifications.filter(n => {
@@ -139,18 +127,94 @@ export function NotificationBell({ align = "right" }: { align?: "left" | "right"
     return true;
   });
 
-  const dropdownStyle: React.CSSProperties = {
-    width: 320,
-    ...(align === "left"
-      ? { left: dropdownLeft ?? 0 }
-      : dropdownLeft !== undefined
-        ? { left: dropdownLeft }
-        : { right: 0 }),
-  };
+  const dropdown = open ? (
+    <div
+      ref={dropdownRef}
+      style={{ position: "fixed", top: coords.top, left: coords.left, width: 320, zIndex: 9999 }}
+      className="bg-card border border-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <span className="font-semibold text-sm text-foreground">Notifications</span>
+        {unreadCount > 0 && (
+          <button
+            onClick={e => { e.stopPropagation(); markAllRead(); }}
+            className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+          >
+            <CheckCheck className="w-3.5 h-3.5" />
+            Mark all read
+          </button>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex border-b border-border">
+        {(["all", "unread", "vip"] as Tab[]).map(t => (
+          <button
+            key={t}
+            onClick={e => { e.stopPropagation(); setTab(t); }}
+            className={`flex-1 py-2 text-xs font-medium capitalize transition-colors ${
+              tab === t
+                ? "text-primary border-b-2 border-primary"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t === "vip" ? "⭐ VIP" : t}
+            {t === "unread" && unreadCount > 0 && (
+              <span className="ml-1 bg-primary/20 text-primary rounded-full px-1.5 py-0.5 text-[10px]">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* List */}
+      <div className="max-h-80 overflow-y-auto">
+        {loading && notifications.length === 0 ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            {tab === "unread" ? "All caught up!" : tab === "vip" ? "No VIP notifications" : "No notifications yet"}
+          </div>
+        ) : (
+          filtered.map(n => (
+            <div
+              key={n.id}
+              onClick={() => handleNotificationClick(n)}
+              className={`flex gap-3 px-4 py-3 cursor-pointer hover:bg-accent transition-colors border-b border-border/50 last:border-0 ${
+                !n.isRead ? "bg-primary/5" : ""
+              }`}
+            >
+              <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${n.isVip ? "bg-amber-500/20" : "bg-muted"}`}>
+                {typeIcon(n.type)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <p className={`text-xs font-semibold truncate ${n.isVip ? "text-amber-500" : "text-foreground"}`}>
+                    {n.title}{n.isVip && <span className="ml-1">⭐</span>}
+                  </p>
+                  <span className="text-[10px] text-muted-foreground flex-shrink-0">{timeAgo(n.createdAt)}</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
+              </div>
+              {!n.isRead
+                ? <div className="flex-shrink-0 w-2 h-2 rounded-full bg-primary mt-1.5" />
+                : <Check className="flex-shrink-0 w-3.5 h-3.5 text-muted-foreground/50 mt-1" />
+              }
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  ) : null;
 
   return (
-    <div className="relative" ref={wrapperRef}>
+    <>
       <button
+        ref={buttonRef}
         data-testid="notification-bell"
         onClick={handleToggle}
         className="relative p-2 rounded-lg hover:bg-sidebar-accent transition-colors"
@@ -163,99 +227,7 @@ export function NotificationBell({ align = "right" }: { align?: "left" | "right"
           </span>
         )}
       </button>
-
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            style={dropdownStyle}
-            className="absolute top-full mt-2 bg-card border border-border rounded-xl shadow-2xl z-[200] overflow-hidden"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-              <span className="font-semibold text-sm text-foreground">Notifications</span>
-              {unreadCount > 0 && (
-                <button
-                  onClick={e => { e.stopPropagation(); markAllRead(); }}
-                  className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
-                >
-                  <CheckCheck className="w-3.5 h-3.5" />
-                  Mark all read
-                </button>
-              )}
-            </div>
-
-            {/* Tabs */}
-            <div className="flex border-b border-border">
-              {(["all", "unread", "vip"] as Tab[]).map(t => (
-                <button
-                  key={t}
-                  onClick={e => { e.stopPropagation(); setTab(t); }}
-                  className={`flex-1 py-2 text-xs font-medium capitalize transition-colors ${
-                    tab === t
-                      ? "text-primary border-b-2 border-primary"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {t === "vip" ? "⭐ VIP" : t}
-                  {t === "unread" && unreadCount > 0 && (
-                    <span className="ml-1 bg-primary/20 text-primary rounded-full px-1.5 py-0.5 text-[10px]">
-                      {unreadCount}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-
-            {/* List */}
-            <div className="max-h-80 overflow-y-auto">
-              {loading && notifications.length === 0 ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : filtered.length === 0 ? (
-                <div className="py-8 text-center text-sm text-muted-foreground">
-                  {tab === "unread" ? "All caught up!" : tab === "vip" ? "No VIP notifications" : "No notifications yet"}
-                </div>
-              ) : (
-                filtered.map(n => (
-                  <div
-                    key={n.id}
-                    onClick={() => handleNotificationClick(n)}
-                    className={`flex gap-3 px-4 py-3 cursor-pointer hover:bg-accent transition-colors border-b border-border/50 last:border-0 ${
-                      !n.isRead ? "bg-primary/5" : ""
-                    }`}
-                  >
-                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                      n.isVip ? "bg-amber-500/20" : "bg-muted"
-                    }`}>
-                      {typeIcon(n.type)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className={`text-xs font-semibold truncate ${n.isVip ? "text-amber-500" : "text-foreground"}`}>
-                          {n.title}
-                          {n.isVip && <span className="ml-1">⭐</span>}
-                        </p>
-                        <span className="text-[10px] text-muted-foreground flex-shrink-0">{timeAgo(n.createdAt)}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
-                    </div>
-                    {!n.isRead ? (
-                      <div className="flex-shrink-0 w-2 h-2 rounded-full bg-primary mt-1.5" />
-                    ) : (
-                      <Check className="flex-shrink-0 w-3.5 h-3.5 text-muted-foreground/50 mt-1" />
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+      {createPortal(dropdown, document.body)}
+    </>
   );
 }
