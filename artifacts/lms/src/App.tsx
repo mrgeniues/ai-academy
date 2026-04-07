@@ -14,6 +14,7 @@ import VipPostsPage from "@/pages/vip-posts";
 import ProfilePage from "@/pages/profile";
 import AdminPage from "@/pages/admin";
 import UserProfilePage from "@/pages/user-profile";
+import MessagesPage from "@/pages/messages";
 import NotFound from "@/pages/not-found";
 import { WhatsAppButton } from "@/components/whatsapp-button";
 
@@ -97,6 +98,12 @@ function Router() {
       </Route>
       <Route path="/profile/:id">
         <ProtectedRoute component={UserProfilePage} />
+      </Route>
+      <Route path="/messages/:userId">
+        <ProtectedRoute component={MessagesPage} />
+      </Route>
+      <Route path="/messages">
+        <ProtectedRoute component={MessagesPage} />
       </Route>
       <Route component={NotFound} />
     </Switch>

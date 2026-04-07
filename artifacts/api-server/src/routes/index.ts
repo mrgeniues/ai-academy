@@ -9,6 +9,7 @@ import postsRouter from "./posts";
 import dashboardRouter from "./dashboard";
 import notificationsRouter from "./notifications";
 import uploadRouter from "./upload";
+import messagesRouter from "./messages";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(postsRouter);
 router.use(dashboardRouter);
 router.use(notificationsRouter);
 router.use(uploadRouter);
+router.use(messagesRouter);
 
 export default router;

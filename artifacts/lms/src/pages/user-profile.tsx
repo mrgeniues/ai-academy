@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SiFacebook, SiInstagram, SiTiktok, SiX, SiWhatsapp } from "react-icons/si";
-import { Linkedin, ArrowLeft, Calendar, UserCircle2, UserPlus, UserMinus } from "lucide-react";
+import { Linkedin, ArrowLeft, Calendar, UserCircle2, UserPlus, UserMinus, MessageSquare } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { FollowListModal } from "@/components/follow-list-modal";
@@ -196,9 +196,9 @@ export default function UserProfilePage() {
                       Joined {formatDistanceToNow(new Date(profile.createdAt), { addSuffix: true })}
                     </div>
 
-                    {/* Follow / Unfollow button */}
+                    {/* Follow / Unfollow + Message buttons */}
                     {!isOwnProfile && (
-                      <div className="pt-1">
+                      <div className="pt-1 flex items-center gap-2 flex-wrap">
                         <Button
                           size="sm"
                           variant={isFollowing ? "outline" : "default"}
@@ -211,6 +211,14 @@ export default function UserProfilePage() {
                           ) : (
                             <><UserPlus className="w-3.5 h-3.5" /> Follow</>
                           )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5"
+                          onClick={() => setLocation(`/messages/${profile.id}`)}
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" /> Message
                         </Button>
                       </div>
                     )}
