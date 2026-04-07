@@ -1,0 +1,150 @@
+You are a senior QA engineer and Next.js + Supabase expert.
+
+Your task is to TEST, DEBUG, FIX, and VALIDATE the entire SaaS platform.
+
+IMPORTANT RULES (STRICT):
+
+* Do NOT remove any existing feature
+* Do NOT add any new feature
+* Do NOT change UI design or layout
+* Do NOT modify structure unless required to fix a bug
+* ONLY fix bugs and ensure all existing features work correctly
+
+=====================================
+GOAL:
+
+1. Test all existing features
+2. Identify bugs and errors
+3. Fix all issues
+4. Ensure everything works correctly
+5. Provide final report
+
+=====================================
+FEATURES TO TEST:
+
+1. AUTH SYSTEM:
+
+* Signup
+* Login
+* Logout
+* Session persistence
+* Redirect to dashboard
+
+2. PROFILE SYSTEM:
+
+* Avatar upload
+* Theme selection
+* Profile update
+* Public profile view
+
+3. COURSE SYSTEM:
+
+* Admin course creation
+* Lessons creation
+* Course visibility (public/private)
+* Progress tracking
+
+4. COURSE REVIEW SYSTEM:
+
+* Add review
+* Update review
+* Prevent duplicate reviews
+* Average rating calculation
+
+5. COMMUNITY SYSTEM:
+
+* Post creation (text, image, video, emoji)
+* Comment creation (same features)
+* Proper display
+
+6. NOTIFICATION SYSTEM:
+
+* Trigger on post/comment/admin actions
+* Bell count
+* Read/unread logic
+* VIP tab
+
+7. FOLLOW SYSTEM:
+
+* Follow/unfollow
+* Prevent duplicate follows
+* Followers/following list
+
+8. SEARCH SYSTEM:
+
+* Search courses, posts, users
+* Click navigation works
+
+9. CHAT SYSTEM:
+
+* Send/receive messages
+* Image/video support
+* Emoji support
+* Links clickable
+* Sidebar toggle
+* Full-width chat
+* WhatsApp hidden in chat page
+
+10. CHAT ADVANCED FEATURES:
+
+* Per-chat unread message count
+* Total unread count in sidebar
+* Double tick (✓ / ✓✓ seen)
+* Typing indicator works correctly
+
+11. ONLINE STATUS SYSTEM:
+
+* Green dot shows correctly
+* Real-time updates
+
+12. WHATSAPP BUTTON:
+
+* Visible on all pages except chat
+* Click works correctly
+
+13. DASHBOARD FEATURES:
+
+* Dynamic greeting (time-based)
+* Realtime clock
+
+=====================================
+DEBUG TASKS:
+
+* Fix Supabase insert/select/update/delete errors
+* Fix RLS policy issues
+* Fix missing user_id issues
+* Fix is_read logic issues
+* Fix realtime subscription errors
+* Fix null/undefined crashes
+* Fix UI freeze or rendering issues
+* Fix navigation bugs
+
+=====================================
+VALIDATION RULES:
+
+* No "Failed to..." errors
+* No console errors
+* No broken features
+* All database operations succeed
+* All UI interactions work smoothly
+
+=====================================
+ERROR HANDLING:
+
+* Add proper error handling where missing
+* Ensure no silent failures
+
+=====================================
+OUTPUT FORMAT:
+
+1. Bugs found (list)
+2. Fixes applied
+3. Updated code (only changed parts)
+4. Final status:
+
+"All features are working correctly without errors"
+
+=====================================
+FINAL RULE:
+
+Do NOT stop until ALL features are fully working, stable, and bug-free.

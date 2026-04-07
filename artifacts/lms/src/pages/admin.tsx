@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useListUsers, useUpdateUserRole, useListCourses, useDeleteCourse, useListPosts, useDeletePost, useGetDashboardStats, getListUsersQueryKey, getListCoursesQueryKey, getListPostsQueryKey, getGetDashboardStatsQueryKey } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { Layout } from "@/components/layout";
@@ -34,11 +34,7 @@ export default function AdminPage() {
   const { toast } = useToast();
   const [blockingId, setBlockingId] = useState<number | null>(null);
 
-  if (user && user.role !== "admin") {
-    setLocation("/dashboard");
-    return null;
-  }
-
+  // All hooks must be called unconditionally (Rules of Hooks)
   const { data: users, isLoading: usersLoading } = useListUsers({
     query: { queryKey: getListUsersQueryKey() }
   });
@@ -55,6 +51,15 @@ export default function AdminPage() {
   const updateRoleMutation = useUpdateUserRole();
   const deleteCourseMutation = useDeleteCourse();
   const deletePostMutation = useDeletePost();
+
+  // Redirect non-admin users after hooks have been called
+  useEffect(() => {
+    if (user && user.role !== "admin") {
+      setLocation("/dashboard");
+    }
+  }, [user, setLocation]);
+
+  if (!user || user.role !== "admin") return null;
 
   const handleRoleChange = async (userId: number, role: string) => {
     try {

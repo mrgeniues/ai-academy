@@ -77,7 +77,7 @@ function ContentWithLinks({ text }: { text: string }) {
   return (
     <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">
       {parts.map((part, i) =>
-        URL_REGEX.test(part) ? (
+        i % 2 === 1 ? (
           <a
             key={i}
             href={part}

@@ -16,12 +16,14 @@ router.get("/enrollments", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const enriched = await Promise.all((enrollments ?? []).map(async (enrollment) => {
+  const enriched = (await Promise.all((enrollments ?? []).map(async (enrollment) => {
     const { data: course } = await supabase
       .from("courses")
       .select("*")
       .eq("id", enrollment.course_id)
       .maybeSingle();
+
+    if (!course) return null;
 
     const { count: lessonCount } = await supabase
       .from("lessons")
@@ -40,16 +42,16 @@ router.get("/enrollments", requireAuth, async (req, res): Promise<void> => {
       progress: enrollment.progress,
       createdAt: enrollment.created_at,
       course: {
-        ...course!,
-        description: course!.description ?? null,
-        thumbnail: course!.thumbnail ?? null,
+        ...course,
+        description: course.description ?? null,
+        thumbnail: course.thumbnail ?? null,
         lessonCount: lessonCount ?? 0,
         enrollmentCount: enrollmentCount ?? 0,
-        createdAt: course!.created_at,
-        updatedAt: course!.updated_at,
+        createdAt: course.created_at,
+        updatedAt: course.updated_at,
       },
     };
-  }));
+  }))).filter(Boolean);
 
   res.json(enriched);
 });
