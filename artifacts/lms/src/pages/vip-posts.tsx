@@ -280,6 +280,8 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
         body: JSON.stringify({ comment: fullComment, imageUrl, fileUrl, fileType }),
       });
       if (!res.ok) throw new Error();
+      const newComment: Comment = await res.json();
+      setComments(prev => [...prev, newComment]);
       setCommentText(""); setCommentLink(""); setShowCommentLink(false);
       setImageFile(null); setDocFile(null);
       fetchComments();
@@ -327,6 +329,8 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
         body: JSON.stringify({ comment: replyText.trim() || "📎", imageUrl, fileUrl, fileType, parentId }),
       });
       if (!res.ok) throw new Error();
+      const newReply: Comment = await res.json();
+      setComments(prev => [...prev, newReply]);
       setReplyText(""); setReplyImageFile(null); setReplyDocFile(null); setReplyingTo(null);
       fetchComments();
     } catch {
