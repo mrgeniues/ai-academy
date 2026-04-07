@@ -11,7 +11,7 @@ function mediaPreview(msg: Record<string, unknown>): string {
   const text = (msg.message as string) ?? "";
   if (text) return text;
   if (msg.image_url) return "📷 Image";
-  if (msg.video_url) return "🎥 Video";
+  if (msg.file_url) return "📄 Document";
   return "";
 }
 
@@ -192,14 +192,15 @@ router.post("/messages/:userId", requireAuth, async (req, res): Promise<void> =>
     return;
   }
 
-  const { message, image_url, video_url } = req.body as {
+  const { message, image_url, file_url, file_type } = req.body as {
     message?: string;
     image_url?: string;
-    video_url?: string;
+    file_url?: string;
+    file_type?: string;
   };
 
   const text = message?.trim() ?? "";
-  if (!text && !image_url && !video_url) {
+  if (!text && !image_url && !file_url) {
     res.status(400).json({ error: "Message content is required" });
     return;
   }
@@ -211,7 +212,8 @@ router.post("/messages/:userId", requireAuth, async (req, res): Promise<void> =>
     is_read: false,
   };
   if (image_url) insertData.image_url = image_url;
-  if (video_url) insertData.video_url = video_url;
+  if (file_url) insertData.file_url = file_url;
+  if (file_type) insertData.file_type = file_type;
 
   const { data, error } = await supabase
     .from("messages")
@@ -228,7 +230,8 @@ router.post("/messages/:userId", requireAuth, async (req, res): Promise<void> =>
         message: text,
       };
       if (image_url) fallbackData.image_url = image_url;
-      if (video_url) fallbackData.video_url = video_url;
+      if (file_url) fallbackData.file_url = file_url;
+      if (file_type) fallbackData.file_type = file_type;
 
       const { data: fallback, error: fallbackError } = await supabase
         .from("messages")

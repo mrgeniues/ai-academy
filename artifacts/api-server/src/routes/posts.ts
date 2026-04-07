@@ -10,14 +10,16 @@ const router: IRouter = Router();
 const CreatePostSchema = z.object({
   content: z.string().min(1),
   imageUrl: z.string().url().optional().nullable(),
-  videoUrl: z.string().url().optional().nullable(),
+  fileUrl: z.string().url().optional().nullable(),
+  fileType: z.string().optional().nullable(),
   isVip: z.boolean().optional(),
 });
 
 const CreateCommentSchema = z.object({
   comment: z.string().min(1),
   imageUrl: z.string().url().optional().nullable(),
-  videoUrl: z.string().url().optional().nullable(),
+  fileUrl: z.string().url().optional().nullable(),
+  fileType: z.string().optional().nullable(),
 });
 
 router.get("/posts", requireAuth, async (req, res): Promise<void> => {
@@ -29,12 +31,10 @@ router.get("/posts", requireAuth, async (req, res): Promise<void> => {
     .select("*, author:users(*)")
     .order("created_at", { ascending: false });
 
-  // Try filtering by is_vip; fall back to returning all posts if the column doesn't exist yet
   let filteredQuery = isVipFilter ? query.eq("is_vip", true) : query.eq("is_vip", false);
   let { data: posts, error } = await filteredQuery;
 
   if (error && (error.message?.includes("is_vip") || error.code === "42703" || error.code === "PGRST204")) {
-    // Column doesn't exist yet — return empty list for vip, all posts for community
     if (isVipFilter) {
       res.json([]);
       return;
@@ -81,7 +81,8 @@ router.get("/posts", requireAuth, async (req, res): Promise<void> => {
     userId: post.user_id,
     content: post.content,
     imageUrl: post.image_url ?? null,
-    videoUrl: post.video_url ?? null,
+    fileUrl: (post as Record<string, unknown>).file_url ?? null,
+    fileType: (post as Record<string, unknown>).file_type ?? null,
     isVip: post.is_vip ?? false,
     likeCount: likeCountMap.get(post.id) ?? 0,
     commentCount: commentCountMap.get(post.id) ?? 0,
@@ -100,22 +101,21 @@ router.post("/posts", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { content, imageUrl, videoUrl, isVip } = parsed.data;
+  const { content, imageUrl, fileUrl, fileType, isVip } = parsed.data;
 
   if (isVip && req.userRole !== "admin") {
     res.status(403).json({ error: "Only admins can create VIP posts" });
     return;
   }
 
-  // Build insert payload dynamically — only include media columns if they have values,
-  // so this works even if the image_url/video_url columns haven't been added yet.
   const insertPayload: Record<string, unknown> = {
     user_id: req.userId!,
     content,
     is_vip: isVip ?? false,
   };
   if (imageUrl) insertPayload.image_url = imageUrl;
-  if (videoUrl) insertPayload.video_url = videoUrl;
+  if (fileUrl) insertPayload.file_url = fileUrl;
+  if (fileType) insertPayload.file_type = fileType;
 
   let { data: post, error } = await supabase
     .from("posts")
@@ -123,7 +123,6 @@ router.post("/posts", requireAuth, async (req, res): Promise<void> => {
     .select("*, author:users(*)")
     .single();
 
-  // Fallback: if is_vip column doesn't exist yet, retry without it
   if (error && (error.message?.includes("is_vip") || error.code === "42703" || error.code === "PGRST204")) {
     const { is_vip: _dropped, ...payloadWithoutVip } = insertPayload as Record<string, unknown> & { is_vip?: unknown };
     const retry = await supabase
@@ -159,7 +158,8 @@ router.post("/posts", requireAuth, async (req, res): Promise<void> => {
     userId: post.user_id,
     content: post.content,
     imageUrl: post.image_url ?? null,
-    videoUrl: post.video_url ?? null,
+    fileUrl: (post as Record<string, unknown>).file_url ?? null,
+    fileType: (post as Record<string, unknown>).file_type ?? null,
     isVip: post.is_vip ?? false,
     likeCount: 0,
     commentCount: 0,
@@ -249,7 +249,8 @@ router.get("/posts/:postId/comments", requireAuth, async (req, res): Promise<voi
     userId: comment.user_id,
     comment: comment.comment,
     imageUrl: comment.image_url ?? null,
-    videoUrl: comment.video_url ?? null,
+    fileUrl: (comment as Record<string, unknown>).file_url ?? null,
+    fileType: (comment as Record<string, unknown>).file_type ?? null,
     createdAt: comment.created_at,
     author: formatUser(comment.author),
   })));
@@ -269,16 +270,16 @@ router.post("/posts/:postId/comments", requireAuth, async (req, res): Promise<vo
     return;
   }
 
-  const { comment, imageUrl, videoUrl } = parsed.data;
+  const { comment, imageUrl, fileUrl, fileType } = parsed.data;
 
-  // Build insert payload dynamically — only include media columns if they have values.
   const insertPayload: Record<string, unknown> = {
     post_id: postId,
     user_id: req.userId!,
     comment,
   };
   if (imageUrl) insertPayload.image_url = imageUrl;
-  if (videoUrl) insertPayload.video_url = videoUrl;
+  if (fileUrl) insertPayload.file_url = fileUrl;
+  if (fileType) insertPayload.file_type = fileType;
 
   const { data: newComment, error } = await supabase
     .from("comments")
@@ -307,7 +308,8 @@ router.post("/posts/:postId/comments", requireAuth, async (req, res): Promise<vo
     userId: newComment.user_id,
     comment: newComment.comment,
     imageUrl: newComment.image_url ?? null,
-    videoUrl: newComment.video_url ?? null,
+    fileUrl: (newComment as Record<string, unknown>).file_url ?? null,
+    fileType: (newComment as Record<string, unknown>).file_type ?? null,
     createdAt: newComment.created_at,
     author: formatUser(newComment.author),
   });

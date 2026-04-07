@@ -12,7 +12,8 @@ import { OnlineDot } from "@/components/online-dot";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Heart, MessageCircle, Trash2, Send, ChevronDown, ChevronUp,
-  Smile, ImageIcon, Video, X, Loader2, Link2, ExternalLink
+  Smile, ImageIcon, Paperclip, X, Loader2, Link2, ExternalLink,
+  FileText, Download
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -38,7 +39,8 @@ interface Post {
   userId: number;
   content: string;
   imageUrl: string | null;
-  videoUrl: string | null;
+  fileUrl: string | null;
+  fileType: string | null;
   likeCount: number;
   commentCount: number;
   isLiked: boolean;
@@ -52,12 +54,13 @@ interface Comment {
   userId: number;
   comment: string;
   imageUrl: string | null;
-  videoUrl: string | null;
+  fileUrl: string | null;
+  fileType: string | null;
   createdAt: string;
   author: Author;
 }
 
-async function uploadFile(file: File, token: string | null): Promise<string> {
+async function uploadFile(file: File, token: string | null): Promise<{ url: string; fileType: string }> {
   const fd = new FormData();
   fd.append("file", file);
   const res = await fetch(`${API}/upload`, {
@@ -67,7 +70,7 @@ async function uploadFile(file: File, token: string | null): Promise<string> {
   });
   if (!res.ok) throw new Error("Upload failed");
   const data = await res.json();
-  return data.url as string;
+  return { url: data.url as string, fileType: data.fileType as string };
 }
 
 const URL_REGEX = /(https?:\/\/[^\s]+)/g;
@@ -112,18 +115,37 @@ function LinkPreviewChip({ url, onRemove }: { url: string; onRemove?: () => void
   );
 }
 
+function docLabel(mime: string | null, file?: File | null): string {
+  if (file) return file.name;
+  if (!mime) return "Document";
+  if (mime.includes("pdf")) return "PDF Document";
+  if (mime.includes("msword") || mime.includes("wordprocessingml")) return "Word Document";
+  if (mime.startsWith("text/")) return "Text File";
+  if (mime.includes("zip")) return "ZIP Archive";
+  return "Document";
+}
+
+function docBadge(mime: string | null): string {
+  if (!mime) return "FILE";
+  if (mime.includes("pdf")) return "PDF";
+  if (mime.includes("msword") || mime.includes("wordprocessingml")) return "DOC";
+  if (mime.startsWith("text/")) return "TXT";
+  if (mime.includes("zip")) return "ZIP";
+  return "FILE";
+}
+
 function MediaPreview({
-  imageUrl, videoUrl, imageFile, videoFile, onRemoveImage, onRemoveVideo
+  imageUrl, fileUrl, fileType, imageFile, docFile, onRemoveImage, onRemoveDoc
 }: {
   imageUrl?: string | null;
-  videoUrl?: string | null;
+  fileUrl?: string | null;
+  fileType?: string | null;
   imageFile?: File | null;
-  videoFile?: File | null;
+  docFile?: File | null;
   onRemoveImage?: () => void;
-  onRemoveVideo?: () => void;
+  onRemoveDoc?: () => void;
 }) {
   const imageSrc = imageFile ? URL.createObjectURL(imageFile) : imageUrl;
-  const videoSrc = videoFile ? URL.createObjectURL(videoFile) : videoUrl;
 
   return (
     <>
@@ -140,13 +162,31 @@ function MediaPreview({
           )}
         </div>
       )}
-      {videoSrc && (
-        <div className="relative mt-2 rounded-xl overflow-hidden">
-          <video src={videoSrc} controls className="w-full rounded-xl max-h-64" />
-          {onRemoveVideo && (
+      {(fileUrl || docFile) && (
+        <div className="relative mt-2 flex items-center gap-3 p-3 bg-muted rounded-xl border border-border">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <FileText className="w-5 h-5 text-primary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium truncate">{docLabel(fileType ?? null, docFile ?? null)}</p>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{docBadge(fileType ?? null)}</p>
+          </div>
+          {fileUrl && !docFile && (
+            <a
+              href={fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              download
+              className="flex-shrink-0 p-1.5 rounded-lg hover:bg-primary/10 text-primary transition-colors"
+              title="Download"
+            >
+              <Download className="w-4 h-4" />
+            </a>
+          )}
+          {onRemoveDoc && (
             <button
-              onClick={onRemoveVideo}
-              className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
+              onClick={onRemoveDoc}
+              className="flex-shrink-0 text-muted-foreground hover:text-destructive transition-colors p-1"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -184,7 +224,7 @@ function EmojiButton({
         className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded"
         title="Add emoji"
       >
-        <Smile className={small ? "w-4 h-4" : "w-4 h-4"} />
+        <Smile className="w-4 h-4" />
       </button>
       {open && (
         <div className="absolute bottom-full mb-1 z-50" style={{ right: small ? 0 : "auto" }}>
@@ -213,12 +253,12 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
   const [commentLink, setCommentLink] = useState("");
   const [showCommentLink, setShowCommentLink] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [docFile, setDocFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const videoInputRef = useRef<HTMLInputElement>(null);
+  const docInputRef = useRef<HTMLInputElement>(null);
 
   const fetchComments = async () => {
     try {
@@ -234,25 +274,33 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
   const handleSubmit = async () => {
     const linkPart = commentLink.trim();
     const fullComment = [commentText.trim(), linkPart].filter(Boolean).join("\n") || "📎";
-    if (!commentText.trim() && !linkPart && !imageFile && !videoFile) return;
+    if (!commentText.trim() && !linkPart && !imageFile && !docFile) return;
     setUploading(true);
     try {
       let imageUrl: string | null = null;
-      let videoUrl: string | null = null;
-      if (imageFile) imageUrl = await uploadFile(imageFile, token);
-      if (videoFile) videoUrl = await uploadFile(videoFile, token);
+      let fileUrl: string | null = null;
+      let fileType: string | null = null;
+      if (imageFile) {
+        const result = await uploadFile(imageFile, token);
+        imageUrl = result.url;
+      }
+      if (docFile) {
+        const result = await uploadFile(docFile, token);
+        fileUrl = result.url;
+        fileType = result.fileType;
+      }
 
       const res = await fetch(`${API}/posts/${postId}/comments`, {
         method: "POST",
         headers: { ...authHeaders(token), "Content-Type": "application/json" },
-        body: JSON.stringify({ comment: fullComment, imageUrl, videoUrl }),
+        body: JSON.stringify({ comment: fullComment, imageUrl, fileUrl, fileType }),
       });
       if (!res.ok) throw new Error();
       setCommentText("");
       setCommentLink("");
       setShowCommentLink(false);
       setImageFile(null);
-      setVideoFile(null);
+      setDocFile(null);
       fetchComments();
     } catch {
       toast({ title: "Failed to post comment", variant: "destructive" });
@@ -268,7 +316,7 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
     } catch {}
   };
 
-  const canSubmit = (commentText.trim() || commentLink.trim() || imageFile || videoFile) && !uploading;
+  const canSubmit = (commentText.trim() || commentLink.trim() || imageFile || docFile) && !uploading;
 
   return (
     <div className="mt-3 pt-3 border-t border-border space-y-3">
@@ -306,7 +354,7 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
                 {comment.comment && comment.comment !== "📎" && (
                   <ContentWithLinks text={comment.comment} />
                 )}
-                <MediaPreview imageUrl={comment.imageUrl} videoUrl={comment.videoUrl} />
+                <MediaPreview imageUrl={comment.imageUrl} fileUrl={comment.fileUrl} fileType={comment.fileType} />
               </div>
             </div>
           ))}
@@ -350,11 +398,11 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
             </button>
             <button
               type="button"
-              onClick={() => videoInputRef.current?.click()}
+              onClick={() => docInputRef.current?.click()}
               className="text-muted-foreground hover:text-foreground transition-colors p-1"
-              title="Add video"
+              title="Attach document"
             >
-              <Video className="w-4 h-4" />
+              <Paperclip className="w-4 h-4" />
             </button>
             <button
               data-testid={`button-submit-comment-${postId}`}
@@ -385,12 +433,12 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
             </div>
           )}
 
-          {(imageFile || videoFile) && (
+          {(imageFile || docFile) && (
             <MediaPreview
               imageFile={imageFile}
-              videoFile={videoFile}
+              docFile={docFile}
               onRemoveImage={() => setImageFile(null)}
-              onRemoveVideo={() => setVideoFile(null)}
+              onRemoveDoc={() => setDocFile(null)}
             />
           )}
         </div>
@@ -398,8 +446,8 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
 
       <input ref={imageInputRef} type="file" accept="image/*" className="hidden"
         onChange={e => { setImageFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
-      <input ref={videoInputRef} type="file" accept="video/*" className="hidden"
-        onChange={e => { setVideoFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+      <input ref={docInputRef} type="file" accept=".pdf,.doc,.docx,.txt,.zip,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/zip" className="hidden"
+        onChange={e => { setDocFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
     </div>
   );
 }
@@ -478,7 +526,7 @@ function PostCard({ post, token, onDelete }: { post: Post; token: string | null;
           <ContentWithLinks text={post.content} />
         )}
 
-        <MediaPreview imageUrl={post.imageUrl} videoUrl={post.videoUrl} />
+        <MediaPreview imageUrl={post.imageUrl} fileUrl={post.fileUrl} fileType={post.fileType} />
 
         <div className="flex items-center gap-4 mt-3">
           <button
@@ -518,12 +566,12 @@ export default function CommunityPage() {
   const [linkUrl, setLinkUrl] = useState("");
   const [showLinkInput, setShowLinkInput] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [docFile, setDocFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const videoInputRef = useRef<HTMLInputElement>(null);
+  const docInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const initials = user?.name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) ?? "?";
@@ -542,25 +590,33 @@ export default function CommunityPage() {
   const handleCreatePost = async () => {
     const trimmedLink = linkUrl.trim();
     const fullContent = [newPost.trim(), trimmedLink].filter(Boolean).join("\n") || "📎";
-    if (!newPost.trim() && !trimmedLink && !imageFile && !videoFile) return;
+    if (!newPost.trim() && !trimmedLink && !imageFile && !docFile) return;
     setUploading(true);
     try {
       let imageUrl: string | null = null;
-      let videoUrl: string | null = null;
-      if (imageFile) imageUrl = await uploadFile(imageFile, token);
-      if (videoFile) videoUrl = await uploadFile(videoFile, token);
+      let fileUrl: string | null = null;
+      let fileType: string | null = null;
+      if (imageFile) {
+        const result = await uploadFile(imageFile, token);
+        imageUrl = result.url;
+      }
+      if (docFile) {
+        const result = await uploadFile(docFile, token);
+        fileUrl = result.url;
+        fileType = result.fileType;
+      }
 
       const res = await fetch(`${API}/posts`, {
         method: "POST",
         headers: { ...authHeaders(token), "Content-Type": "application/json" },
-        body: JSON.stringify({ content: fullContent, imageUrl, videoUrl }),
+        body: JSON.stringify({ content: fullContent, imageUrl, fileUrl, fileType }),
       });
       if (!res.ok) throw new Error();
       setNewPost("");
       setLinkUrl("");
       setShowLinkInput(false);
       setImageFile(null);
-      setVideoFile(null);
+      setDocFile(null);
       fetchPosts();
     } catch {
       toast({ title: "Failed to create post", variant: "destructive" });
@@ -578,7 +634,7 @@ export default function CommunityPage() {
     setTimeout(() => { ta.selectionStart = ta.selectionEnd = start + emoji.length; ta.focus(); }, 0);
   };
 
-  const canSubmit = (newPost.trim() || linkUrl.trim() || imageFile || videoFile) && !uploading;
+  const canSubmit = (newPost.trim() || linkUrl.trim() || imageFile || docFile) && !uploading;
 
   return (
     <Layout>
@@ -630,12 +686,12 @@ export default function CommunityPage() {
                   <LinkPreviewChip url={linkUrl} onRemove={() => setLinkUrl("")} />
                 )}
 
-                {(imageFile || videoFile) && (
+                {(imageFile || docFile) && (
                   <MediaPreview
                     imageFile={imageFile}
-                    videoFile={videoFile}
+                    docFile={docFile}
                     onRemoveImage={() => setImageFile(null)}
-                    onRemoveVideo={() => setVideoFile(null)}
+                    onRemoveDoc={() => setDocFile(null)}
                   />
                 )}
 
@@ -660,11 +716,11 @@ export default function CommunityPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => videoInputRef.current?.click()}
+                      onClick={() => docInputRef.current?.click()}
                       className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded hover:bg-muted"
-                      title="Add video"
+                      title="Attach document"
                     >
-                      <Video className="w-4 h-4" />
+                      <Paperclip className="w-4 h-4" />
                     </button>
                     {linkUrl && (
                       <LinkPreviewChip url={linkUrl} onRemove={() => { setLinkUrl(""); setShowLinkInput(false); }} />
@@ -674,9 +730,9 @@ export default function CommunityPage() {
                         📷 {imageFile.name}
                       </span>
                     )}
-                    {videoFile && !linkUrl && (
+                    {docFile && !linkUrl && (
                       <span className="text-xs text-muted-foreground ml-1 truncate max-w-[120px]">
-                        🎬 {videoFile.name}
+                        📄 {docFile.name}
                       </span>
                     )}
                   </div>
@@ -730,8 +786,8 @@ export default function CommunityPage() {
 
       <input ref={imageInputRef} type="file" accept="image/*" className="hidden"
         onChange={e => { setImageFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
-      <input ref={videoInputRef} type="file" accept="video/*" className="hidden"
-        onChange={e => { setVideoFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+      <input ref={docInputRef} type="file" accept=".pdf,.doc,.docx,.txt,.zip,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/zip" className="hidden"
+        onChange={e => { setDocFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
     </Layout>
   );
 }

@@ -8,7 +8,7 @@ import { OnlineDot } from "@/components/online-dot";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Send, MessageCircle, ArrowLeft, Smile, X, Image, Video, Link2, Check, CheckCheck } from "lucide-react";
+import { Send, MessageCircle, ArrowLeft, Smile, X, Image, Paperclip, Link2, Check, CheckCheck, FileText, Download } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import EmojiPicker, { type EmojiClickData, Theme } from "emoji-picker-react";
@@ -27,13 +27,14 @@ type Message = {
   receiver_id: number;
   message: string;
   image_url: string | null;
-  video_url: string | null;
+  file_url: string | null;
+  file_type: string | null;
   is_read?: boolean;
   created_at: string;
 };
 
 type PartnerUser = { id: number; name: string; avatar: string | null; isOnline?: boolean };
-type PendingMedia = { type: "image" | "video"; url: string; name: string };
+type PendingMedia = { type: "image" | "document"; url: string; name: string; fileType?: string };
 
 function initials(name: string) {
   return name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) ?? "?";
@@ -63,9 +64,27 @@ function renderTextWithLinks(text: string, isMine: boolean) {
   return result.length ? result : [<span key={0}>{text}</span>];
 }
 
+function docLabel(mime: string | null): string {
+  if (!mime) return "Document";
+  if (mime.includes("pdf")) return "PDF Document";
+  if (mime.includes("msword") || mime.includes("wordprocessingml")) return "Word Document";
+  if (mime.startsWith("text/")) return "Text File";
+  if (mime.includes("zip")) return "ZIP Archive";
+  return "Document";
+}
+
+function docBadge(mime: string | null): string {
+  if (!mime) return "FILE";
+  if (mime.includes("pdf")) return "PDF";
+  if (mime.includes("msword") || mime.includes("wordprocessingml")) return "DOC";
+  if (mime.startsWith("text/")) return "TXT";
+  if (mime.includes("zip")) return "ZIP";
+  return "FILE";
+}
+
 function MessageBubble({ msg, myId }: { msg: Message; myId: number }) {
   const isMine = msg.sender_id === myId;
-  const hasMedia = !!(msg.image_url || msg.video_url);
+  const hasMedia = !!(msg.image_url || msg.file_url);
   const hasText = !!msg.message;
 
   return (
@@ -86,14 +105,37 @@ function MessageBubble({ msg, myId }: { msg: Message; myId: number }) {
             />
           </a>
         )}
-        {/* Video */}
-        {msg.video_url && (
-          <video
-            src={msg.video_url}
-            controls
-            className="max-w-full max-h-64 block"
-            style={{ display: "block" }}
-          />
+        {/* Document */}
+        {msg.file_url && (
+          <div className={cn(
+            "flex items-center gap-3 p-3",
+            hasText ? "" : ""
+          )}>
+            <div className={cn(
+              "w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0",
+              isMine ? "bg-primary-foreground/20" : "bg-primary/10"
+            )}>
+              <FileText className={cn("w-4 h-4", isMine ? "text-primary-foreground" : "text-primary")} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className={cn("text-xs font-medium truncate", isMine ? "text-primary-foreground" : "text-foreground")}>
+                {docLabel(msg.file_type)}
+              </p>
+              <p className={cn("text-[10px] font-semibold uppercase tracking-wide", isMine ? "text-primary-foreground/60" : "text-muted-foreground")}>
+                {docBadge(msg.file_type)}
+              </p>
+            </div>
+            <a
+              href={msg.file_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              download
+              className={cn("flex-shrink-0 p-1.5 rounded-lg transition-colors", isMine ? "hover:bg-primary-foreground/10 text-primary-foreground" : "hover:bg-primary/10 text-primary")}
+              title="Download"
+            >
+              <Download className="w-4 h-4" />
+            </a>
+          </div>
         )}
         {/* Text */}
         {hasText && (
@@ -147,7 +189,7 @@ export default function MessagesPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(0);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const videoInputRef = useRef<HTMLInputElement>(null);
+  const docInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -272,15 +314,15 @@ export default function MessagesPage() {
         body: formData,
       });
       if (res.ok) {
-        const { url } = await res.json() as { url: string };
-        const type = file.type.startsWith("video/") ? "video" : "image";
-        setPendingMedia({ type, url, name: file.name });
+        const data = await res.json() as { url: string; fileType: string };
+        const type: "image" | "document" = file.type.startsWith("image/") ? "image" : "document";
+        setPendingMedia({ type, url: data.url, name: file.name, fileType: data.fileType });
       }
     } catch {}
     finally {
       setUploadingMedia(false);
       if (imageInputRef.current) imageInputRef.current.value = "";
-      if (videoInputRef.current) videoInputRef.current.value = "";
+      if (docInputRef.current) docInputRef.current.value = "";
     }
   };
 
@@ -301,7 +343,10 @@ export default function MessagesPage() {
 
     const body: Record<string, string> = { message: text };
     if (media?.type === "image") body.image_url = media.url;
-    if (media?.type === "video") body.video_url = media.url;
+    if (media?.type === "document") {
+      body.file_url = media.url;
+      if (media.fileType) body.file_type = media.fileType;
+    }
 
     try {
       const res = await fetch(`/api/messages/${activeUserId}`, {
@@ -486,13 +531,16 @@ export default function MessagesPage() {
                 <div className="px-4 py-2 border-t border-border bg-card flex-shrink-0">
                   <div className="relative inline-flex items-center gap-2 bg-muted rounded-lg p-2 pr-8 max-w-xs">
                     {pendingMedia.type === "image" ? (
-                      <Image className="w-4 h-4 text-primary flex-shrink-0" />
+                      <>
+                        <Image className="w-4 h-4 text-primary flex-shrink-0" />
+                        <span className="text-xs truncate max-w-[140px]">{pendingMedia.name}</span>
+                        <img src={pendingMedia.url} alt="" className="w-10 h-10 object-cover rounded" />
+                      </>
                     ) : (
-                      <Video className="w-4 h-4 text-primary flex-shrink-0" />
-                    )}
-                    <span className="text-xs truncate max-w-[180px]">{pendingMedia.name}</span>
-                    {pendingMedia.type === "image" && (
-                      <img src={pendingMedia.url} alt="" className="w-10 h-10 object-cover rounded" />
+                      <>
+                        <FileText className="w-4 h-4 text-primary flex-shrink-0" />
+                        <span className="text-xs truncate max-w-[180px]">{pendingMedia.name}</span>
+                      </>
                     )}
                     <button
                       onClick={() => setPendingMedia(null)}
@@ -538,17 +586,17 @@ export default function MessagesPage() {
                     <span className="hidden sm:inline">Image</span>
                   </button>
 
-                  {/* Video */}
-                  <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleFileSelect} />
+                  {/* Document */}
+                  <input ref={docInputRef} type="file" accept=".pdf,.doc,.docx,.txt,.zip,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/zip" className="hidden" onChange={handleFileSelect} />
                   <button
                     type="button"
                     disabled={uploadingMedia}
-                    onClick={() => videoInputRef.current?.click()}
-                    title="Send video"
+                    onClick={() => docInputRef.current?.click()}
+                    title="Attach document"
                     className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-purple-500 hover:bg-purple-500/10 transition-colors disabled:opacity-40"
                   >
-                    <Video className="w-4 h-4" />
-                    <span className="hidden sm:inline">Video</span>
+                    <Paperclip className="w-4 h-4" />
+                    <span className="hidden sm:inline">Document</span>
                   </button>
 
                   {/* Link */}

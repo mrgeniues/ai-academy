@@ -5,15 +5,30 @@ import { supabase } from "../lib/supabase";
 
 const router: IRouter = Router();
 
+const ALLOWED_IMAGE_TYPES = [
+  "image/jpeg", "image/png", "image/gif", "image/webp",
+];
+
+const ALLOWED_DOC_TYPES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/plain",
+  "application/zip",
+  "application/x-zip-compressed",
+  "application/x-zip",
+];
+
+const ALLOWED_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_DOC_TYPES];
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp", "video/mp4", "video/webm", "video/ogg"];
-    if (allowed.includes(file.mimetype)) {
+    if (ALLOWED_TYPES.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error("Unsupported file type"));
+      cb(new Error("Unsupported file type. Allowed: images, PDF, DOC, DOCX, TXT, ZIP"));
     }
   },
 });
@@ -52,7 +67,7 @@ router.post("/upload", requireAuth, upload.single("file"), async (req, res): Pro
   }
 
   const { data } = supabase.storage.from("media").getPublicUrl(filePath);
-  res.json({ url: data.publicUrl });
+  res.json({ url: data.publicUrl, fileType: req.file.mimetype });
 });
 
 export default router;

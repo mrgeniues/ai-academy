@@ -1,0 +1,116 @@
+You are a senior Next.js and Supabase developer.
+
+Modify the existing system with STRICT requirements.
+
+IMPORTANT:
+
+* Do NOT add any extra features
+* Do NOT change UI layout/design unnecessarily
+* Do NOT modify course system
+* ONLY update post, comment, and chat systems as specified
+
+=====================================
+GOAL:
+
+1. Remove video upload feature
+2. Add document upload feature instead
+
+=====================================
+SCOPE (ONLY APPLY HERE):
+
+* Community Posts
+* Comments
+* Chat Messages
+
+=====================================
+DO NOT TOUCH:
+
+* Course system (videos must remain there)
+* Any other feature
+
+=====================================
+REMOVE VIDEO SUPPORT:
+
+From:
+
+* Post creation
+* Comment creation
+* Chat messages
+
+Remove:
+
+* Video upload input
+* Video preview UI
+* Video database fields usage (do not delete column, just stop using)
+
+=====================================
+ADD DOCUMENT SUPPORT:
+
+Users must be able to upload:
+
+* PDF
+* DOC / DOCX
+* TXT
+* ZIP (optional if already supported)
+
+=====================================
+DATABASE UPDATE:
+
+In messages, posts, comments tables:
+
+Ensure field exists:
+
+* file_url (TEXT, nullable)
+* file_type (TEXT, nullable)
+
+=====================================
+FILE STORAGE:
+
+* Use Supabase Storage
+* Store uploaded file URL in file_url
+
+=====================================
+LOGIC:
+
+When user uploads document:
+
+* Upload to Supabase Storage
+* Save:
+
+  * file_url
+  * file_type
+
+=====================================
+DISPLAY:
+
+In posts/comments/chat:
+
+* If file exists:
+
+  * Show file name
+  * Show file type (PDF, DOC, etc.)
+  * Show download button
+
+=====================================
+UI:
+
+* Replace video icon/button with document upload icon
+* Keep UI clean and minimal
+
+=====================================
+STRICT RULES:
+
+* Do NOT allow video upload anywhere except courses
+* Do NOT modify course video functionality
+* Do NOT add preview player
+* Only allow download/view option
+
+=====================================
+OUTPUT:
+
+* Updated upload logic
+* Supabase storage integration
+* UI for file display
+* Remove video-related code
+
+Ensure everything works correctly without bugs.
