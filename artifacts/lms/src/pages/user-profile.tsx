@@ -11,6 +11,7 @@ import { SiFacebook, SiInstagram, SiTiktok, SiX, SiWhatsapp } from "react-icons/
 import { Linkedin, ArrowLeft, Calendar, UserCircle2, UserPlus, UserMinus } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { FollowListModal } from "@/components/follow-list-modal";
 
 const socialPlatforms = [
   { key: "facebook", label: "Facebook", icon: SiFacebook, color: "#1877F2" },
@@ -48,6 +49,7 @@ export default function UserProfilePage() {
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
   const [followLoading, setFollowLoading] = useState(false);
+  const [followListOpen, setFollowListOpen] = useState<"followers" | "following" | null>(null);
 
   useEffect(() => {
     const id = params.id;
@@ -169,10 +171,20 @@ export default function UserProfilePage() {
                       )}
                     </div>
 
-                    {/* Followers / Following counts */}
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <span><strong className="text-foreground">{followersCount}</strong> Followers</span>
-                      <span><strong className="text-foreground">{followingCount}</strong> Following</span>
+                    {/* Followers / Following counts — clickable */}
+                    <div className="flex items-center gap-4 text-sm">
+                      <button
+                        onClick={() => setFollowListOpen("followers")}
+                        className="hover:underline text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <strong className="text-foreground">{followersCount}</strong> Followers
+                      </button>
+                      <button
+                        onClick={() => setFollowListOpen("following")}
+                        className="hover:underline text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <strong className="text-foreground">{followingCount}</strong> Following
+                      </button>
                     </div>
 
                     {profile.bio && (
@@ -245,6 +257,16 @@ export default function UserProfilePage() {
           </>
         ) : null}
       </div>
+
+      {profile && followListOpen && (
+        <FollowListModal
+          open={!!followListOpen}
+          onClose={() => setFollowListOpen(null)}
+          userId={profile.id}
+          type={followListOpen}
+          token={token}
+        />
+      )}
     </Layout>
   );
 }

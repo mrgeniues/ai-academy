@@ -98,6 +98,46 @@ router.delete("/users/:id/follow", requireAuth, async (req, res): Promise<void> 
   res.json({ isFollowing: false });
 });
 
+// List users who follow :id
+router.get("/users/:id/followers", requireAuth, async (req, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(rawId, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid user id" }); return; }
+
+  const { data: follows, error } = await supabase
+    .from("followers")
+    .select("follower_id")
+    .eq("following_id", id);
+
+  if (error) { res.status(500).json({ error: error.message }); return; }
+
+  const ids = (follows ?? []).map(f => f.follower_id);
+  if (ids.length === 0) { res.json([]); return; }
+
+  const { data: users } = await supabase.from("users").select("*").in("id", ids);
+  res.json((users ?? []).map(formatUser));
+});
+
+// List users that :id follows
+router.get("/users/:id/following", requireAuth, async (req, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(rawId, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid user id" }); return; }
+
+  const { data: follows, error } = await supabase
+    .from("followers")
+    .select("following_id")
+    .eq("follower_id", id);
+
+  if (error) { res.status(500).json({ error: error.message }); return; }
+
+  const ids = (follows ?? []).map(f => f.following_id);
+  if (ids.length === 0) { res.json([]); return; }
+
+  const { data: users } = await supabase.from("users").select("*").in("id", ids);
+  res.json((users ?? []).map(formatUser));
+});
+
 router.patch("/users/:id", requireAuth, async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);

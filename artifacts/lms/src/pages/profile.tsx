@@ -22,6 +22,7 @@ import { Linkedin, BookOpen, Camera, Loader2, Sun, Moon, Palette, ZoomIn, ZoomOu
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
+import { FollowListModal } from "@/components/follow-list-modal";
 
 const schema = z.object({
   name: z.string().min(2, "Name required"),
@@ -105,6 +106,21 @@ export default function ProfilePage() {
   const { data: enrollments } = useListMyEnrollments({
     query: { queryKey: getListMyEnrollmentsQueryKey() }
   });
+
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [followListOpen, setFollowListOpen] = useState<"followers" | "following" | null>(null);
+
+  useEffect(() => {
+    if (!user?.id || !token) return;
+    fetch(`/api/users/${user.id}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then((d: { followersCount?: number; followingCount?: number }) => {
+        setFollowersCount(d.followersCount ?? 0);
+        setFollowingCount(d.followingCount ?? 0);
+      })
+      .catch(() => {});
+  }, [user?.id, token]);
 
   const initials = user?.name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) ?? "?";
   const displayAvatar = avatarPreview ?? user?.avatar ?? undefined;
@@ -284,6 +300,23 @@ export default function ProfilePage() {
                   <p className="font-semibold text-lg" data-testid="text-profile-name">{user?.name}</p>
                   <Badge variant="secondary" className="mt-1">{user?.role}</Badge>
                 </div>
+
+                {/* Follower / Following counts */}
+                <div className="flex items-center gap-4 text-sm">
+                  <button
+                    onClick={() => setFollowListOpen("followers")}
+                    className="hover:underline text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <strong className="text-foreground">{followersCount}</strong> Followers
+                  </button>
+                  <button
+                    onClick={() => setFollowListOpen("following")}
+                    className="hover:underline text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <strong className="text-foreground">{followingCount}</strong> Following
+                  </button>
+                </div>
+
                 {user?.bio && <p className="text-sm text-muted-foreground" data-testid="text-profile-bio">{user.bio}</p>}
 
                 {/* Social icons */}
@@ -507,6 +540,16 @@ export default function ProfilePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {user && followListOpen && (
+        <FollowListModal
+          open={!!followListOpen}
+          onClose={() => setFollowListOpen(null)}
+          userId={user.id}
+          type={followListOpen}
+          token={token}
+        />
+      )}
     </Layout>
   );
 }
