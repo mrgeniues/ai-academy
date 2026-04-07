@@ -95,6 +95,9 @@ function Router() {
       <Route path="/users/:id">
         <ProtectedRoute component={UserProfilePage} />
       </Route>
+      <Route path="/profile/:id">
+        <ProtectedRoute component={UserProfilePage} />
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );
