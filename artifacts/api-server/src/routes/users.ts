@@ -39,7 +39,63 @@ router.get("/users/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(formatUser(user));
+  let isFollowing = false;
+  let followersCount = 0;
+  let followingCount = 0;
+
+  const [followerRes, followersCountRes, followingCountRes] = await Promise.all([
+    req.userId && req.userId !== id
+      ? supabase.from("followers").select("id").eq("follower_id", req.userId).eq("following_id", id).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    supabase.from("followers").select("*", { count: "exact", head: true }).eq("following_id", id),
+    supabase.from("followers").select("*", { count: "exact", head: true }).eq("follower_id", id),
+  ]);
+
+  if (!followerRes.error) isFollowing = !!followerRes.data;
+  if (!followersCountRes.error) followersCount = followersCountRes.count ?? 0;
+  if (!followingCountRes.error) followingCount = followingCountRes.count ?? 0;
+
+  res.json({ ...formatUser(user), isFollowing, followersCount, followingCount });
+});
+
+router.post("/users/:id/follow", requireAuth, async (req, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const followingId = parseInt(rawId, 10);
+  if (isNaN(followingId)) { res.status(400).json({ error: "Invalid user id" }); return; }
+
+  if (req.userId === followingId) {
+    res.status(400).json({ error: "You cannot follow yourself" });
+    return;
+  }
+
+  const { error } = await supabase
+    .from("followers")
+    .insert({ follower_id: req.userId!, following_id: followingId });
+
+  if (error) {
+    if (error.code === "23505") { res.json({ isFollowing: true }); return; }
+    console.error("[POST /follow] error:", error.message, error.code);
+    res.status(500).json({ error: error.message });
+    return;
+  }
+
+  res.json({ isFollowing: true });
+});
+
+router.delete("/users/:id/follow", requireAuth, async (req, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const followingId = parseInt(rawId, 10);
+  if (isNaN(followingId)) { res.status(400).json({ error: "Invalid user id" }); return; }
+
+  const { error } = await supabase
+    .from("followers")
+    .delete()
+    .eq("follower_id", req.userId!)
+    .eq("following_id", followingId);
+
+  if (error) console.error("[DELETE /follow] error:", error.message);
+
+  res.json({ isFollowing: false });
 });
 
 router.patch("/users/:id", requireAuth, async (req, res): Promise<void> => {

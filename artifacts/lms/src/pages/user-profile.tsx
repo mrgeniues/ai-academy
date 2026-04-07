@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SiFacebook, SiInstagram, SiTiktok, SiX, SiWhatsapp } from "react-icons/si";
-import { Linkedin, ArrowLeft, Calendar, UserCircle2 } from "lucide-react";
+import { Linkedin, ArrowLeft, Calendar, UserCircle2, UserPlus, UserMinus } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 
 const socialPlatforms = [
   { key: "facebook", label: "Facebook", icon: SiFacebook, color: "#1877F2" },
@@ -30,15 +31,23 @@ type PublicUser = {
   createdAt: string;
   lastLogin: string | null;
   socialLinks: Record<string, string | null> | null;
+  isFollowing: boolean;
+  followersCount: number;
+  followingCount: number;
 };
 
 export default function UserProfilePage() {
   const params = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const { token, user: currentUser } = useAuth();
+  const { toast } = useToast();
   const [profile, setProfile] = useState<PublicUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [followLoading, setFollowLoading] = useState(false);
 
   useEffect(() => {
     const id = params.id;
@@ -53,7 +62,11 @@ export default function UserProfilePage() {
         });
         if (res.status === 404) { setNotFound(true); return; }
         if (!res.ok) throw new Error();
-        setProfile(await res.json());
+        const data: PublicUser = await res.json();
+        setProfile(data);
+        setIsFollowing(data.isFollowing ?? false);
+        setFollowersCount(data.followersCount ?? 0);
+        setFollowingCount(data.followingCount ?? 0);
       } catch {
         setNotFound(true);
       } finally {
@@ -63,6 +76,36 @@ export default function UserProfilePage() {
 
     load();
   }, [params.id, token]);
+
+  const handleFollow = async () => {
+    if (!profile || !token) return;
+    setFollowLoading(true);
+    const method = isFollowing ? "DELETE" : "POST";
+    try {
+      const res = await fetch(`/api/users/${profile.id}/follow`, {
+        method,
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Failed");
+      }
+      if (isFollowing) {
+        setIsFollowing(false);
+        setFollowersCount(c => Math.max(0, c - 1));
+        toast({ title: `Unfollowed ${profile.name}` });
+      } else {
+        setIsFollowing(true);
+        setFollowersCount(c => c + 1);
+        toast({ title: `Now following ${profile.name}` });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Something went wrong";
+      toast({ title: msg, variant: "destructive" });
+    } finally {
+      setFollowLoading(false);
+    }
+  };
 
   const isOwnProfile = currentUser?.id === profile?.id;
   const initials = profile?.name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) ?? "?";
@@ -126,6 +169,12 @@ export default function UserProfilePage() {
                       )}
                     </div>
 
+                    {/* Followers / Following counts */}
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <span><strong className="text-foreground">{followersCount}</strong> Followers</span>
+                      <span><strong className="text-foreground">{followingCount}</strong> Following</span>
+                    </div>
+
                     {profile.bio && (
                       <p className="text-sm text-muted-foreground leading-relaxed">{profile.bio}</p>
                     )}
@@ -134,6 +183,25 @@ export default function UserProfilePage() {
                       <Calendar className="w-3.5 h-3.5" />
                       Joined {formatDistanceToNow(new Date(profile.createdAt), { addSuffix: true })}
                     </div>
+
+                    {/* Follow / Unfollow button */}
+                    {!isOwnProfile && (
+                      <div className="pt-1">
+                        <Button
+                          size="sm"
+                          variant={isFollowing ? "outline" : "default"}
+                          onClick={handleFollow}
+                          disabled={followLoading}
+                          className="gap-1.5"
+                        >
+                          {isFollowing ? (
+                            <><UserMinus className="w-3.5 h-3.5" /> Unfollow</>
+                          ) : (
+                            <><UserPlus className="w-3.5 h-3.5" /> Follow</>
+                          )}
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
