@@ -15,6 +15,7 @@ import ProfilePage from "@/pages/profile";
 import AdminPage from "@/pages/admin";
 import UserProfilePage from "@/pages/user-profile";
 import NotFound from "@/pages/not-found";
+import { WhatsAppButton } from "@/components/whatsapp-button";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -109,6 +110,7 @@ function App() {
               <Router />
             </WouterRouter>
             <Toaster />
+            <WhatsAppButton />
           </TooltipProvider>
         </AuthProvider>
       </ThemeProvider>
