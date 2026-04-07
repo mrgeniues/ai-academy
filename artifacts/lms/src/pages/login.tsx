@@ -166,12 +166,6 @@ export default function LoginPage() {
             </form>
           </Form>
 
-          <div className="mt-6 p-4 rounded-lg bg-muted text-sm text-muted-foreground">
-            <p className="font-medium text-foreground mb-1">Demo credentials</p>
-            <p>Admin: admin@lms.com</p>
-            <p>Password: password123</p>
-          </div>
-
           <p className="mt-6 text-center text-sm text-muted-foreground">
             Don't have an account?{" "}
             <Link href="/signup" className="text-primary font-medium hover:underline" data-testid="link-signup">
