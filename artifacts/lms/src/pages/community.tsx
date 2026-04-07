@@ -56,6 +56,9 @@ interface Comment {
   imageUrl: string | null;
   fileUrl: string | null;
   fileType: string | null;
+  parentId: number | null;
+  likesCount: number;
+  isLiked: boolean;
   createdAt: string;
   author: Author;
 }
@@ -249,6 +252,7 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
   const { user } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+
   const [commentText, setCommentText] = useState("");
   const [commentLink, setCommentLink] = useState("");
   const [showCommentLink, setShowCommentLink] = useState(false);
@@ -260,13 +264,28 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
   const imageInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
 
+  const [replyingTo, setReplyingTo] = useState<number | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [replyImageFile, setReplyImageFile] = useState<File | null>(null);
+  const [replyDocFile, setReplyDocFile] = useState<File | null>(null);
+  const [submittingReply, setSubmittingReply] = useState(false);
+  const replyImageInputRef = useRef<HTMLInputElement>(null);
+  const replyDocInputRef = useRef<HTMLInputElement>(null);
+
+  const topLevelComments = comments.filter(c => c.parentId === null);
+  const repliesMap = new Map<number, Comment[]>();
+  comments.forEach(c => {
+    if (c.parentId !== null) {
+      if (!repliesMap.has(c.parentId)) repliesMap.set(c.parentId, []);
+      repliesMap.get(c.parentId)!.push(c);
+    }
+  });
+
   const fetchComments = async () => {
     try {
       const res = await fetch(`${API}/posts/${postId}/comments`, { headers: authHeaders(token) });
       if (res.ok) setComments(await res.json());
-    } catch { /* silent */ } finally {
-      setLoading(false);
-    }
+    } catch { /* silent */ } finally { setLoading(false); }
   };
 
   useEffect(() => { fetchComments(); }, [postId]);
@@ -280,33 +299,20 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
       let imageUrl: string | null = null;
       let fileUrl: string | null = null;
       let fileType: string | null = null;
-      if (imageFile) {
-        const result = await uploadFile(imageFile, token);
-        imageUrl = result.url;
-      }
-      if (docFile) {
-        const result = await uploadFile(docFile, token);
-        fileUrl = result.url;
-        fileType = result.fileType;
-      }
-
+      if (imageFile) { const r = await uploadFile(imageFile, token); imageUrl = r.url; }
+      if (docFile) { const r = await uploadFile(docFile, token); fileUrl = r.url; fileType = r.fileType; }
       const res = await fetch(`${API}/posts/${postId}/comments`, {
         method: "POST",
         headers: { ...authHeaders(token), "Content-Type": "application/json" },
         body: JSON.stringify({ comment: fullComment, imageUrl, fileUrl, fileType }),
       });
       if (!res.ok) throw new Error();
-      setCommentText("");
-      setCommentLink("");
-      setShowCommentLink(false);
-      setImageFile(null);
-      setDocFile(null);
+      setCommentText(""); setCommentLink(""); setShowCommentLink(false);
+      setImageFile(null); setDocFile(null);
       fetchComments();
     } catch {
       toast({ title: "Failed to post comment", variant: "destructive" });
-    } finally {
-      setUploading(false);
-    }
+    } finally { setUploading(false); }
   };
 
   const handleDelete = async (id: number) => {
@@ -316,52 +322,162 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
     } catch {}
   };
 
-  const canSubmit = (commentText.trim() || commentLink.trim() || imageFile || docFile) && !uploading;
+  const handleLikeComment = async (commentId: number, currentlyLiked: boolean) => {
+    setComments(prev => prev.map(c =>
+      c.id === commentId
+        ? { ...c, isLiked: !currentlyLiked, likesCount: currentlyLiked ? c.likesCount - 1 : c.likesCount + 1 }
+        : c
+    ));
+    try {
+      await fetch(`${API}/comments/${commentId}/like`, { method: "POST", headers: authHeaders(token) });
+    } catch {
+      setComments(prev => prev.map(c =>
+        c.id === commentId
+          ? { ...c, isLiked: currentlyLiked, likesCount: currentlyLiked ? c.likesCount + 1 : c.likesCount - 1 }
+          : c
+      ));
+    }
+  };
+
+  const handleSubmitReply = async (parentId: number) => {
+    if (!replyText.trim() && !replyImageFile && !replyDocFile) return;
+    setSubmittingReply(true);
+    try {
+      let imageUrl: string | null = null;
+      let fileUrl: string | null = null;
+      let fileType: string | null = null;
+      if (replyImageFile) { const r = await uploadFile(replyImageFile, token); imageUrl = r.url; }
+      if (replyDocFile) { const r = await uploadFile(replyDocFile, token); fileUrl = r.url; fileType = r.fileType; }
+      const res = await fetch(`${API}/posts/${postId}/comments`, {
+        method: "POST",
+        headers: { ...authHeaders(token), "Content-Type": "application/json" },
+        body: JSON.stringify({ comment: replyText.trim() || "📎", imageUrl, fileUrl, fileType, parentId }),
+      });
+      if (!res.ok) throw new Error();
+      setReplyText(""); setReplyImageFile(null); setReplyDocFile(null); setReplyingTo(null);
+      fetchComments();
+    } catch {
+      toast({ title: "Failed to post reply", variant: "destructive" });
+    } finally { setSubmittingReply(false); }
+  };
+
+  const cancelReply = () => { setReplyingTo(null); setReplyText(""); setReplyImageFile(null); setReplyDocFile(null); };
+
+  const canSubmitMain = (commentText.trim() || commentLink.trim() || imageFile || docFile) && !uploading;
+  const canSubmitReply = (replyText.trim() || replyImageFile || replyDocFile) && !submittingReply;
+
+  const renderCommentBody = (comment: Comment, isReply: boolean) => (
+    <div className="flex gap-2">
+      <button onClick={() => setLocation(`/users/${comment.author.id}`)} className="flex-shrink-0 mt-0.5">
+        <Avatar className="w-7 h-7 hover:opacity-80 transition-opacity">
+          <AvatarImage src={comment.author.avatar ?? undefined} />
+          <AvatarFallback className="text-xs bg-muted">{comment.author.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+        </Avatar>
+      </button>
+      <div className={`flex-1 rounded-lg px-3 py-2 min-w-0 ${isReply ? "bg-muted/50 border border-border/50" : "bg-muted"}`}>
+        <div className="flex items-center justify-between gap-2">
+          <button onClick={() => setLocation(`/users/${comment.author.id}`)} className="text-xs font-semibold hover:underline underline-offset-2">
+            {comment.author.name}
+          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}</span>
+            {(comment.userId === user?.id || user?.role === "admin") && (
+              <button onClick={() => handleDelete(comment.id)} className="text-muted-foreground hover:text-destructive transition-colors">
+                <Trash2 className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        </div>
+        {comment.comment && comment.comment !== "📎" && <ContentWithLinks text={comment.comment} />}
+        <MediaPreview imageUrl={comment.imageUrl} fileUrl={comment.fileUrl} fileType={comment.fileType} />
+        <div className="flex items-center gap-3 mt-1.5">
+          <button
+            onClick={() => handleLikeComment(comment.id, comment.isLiked)}
+            className={`flex items-center gap-1 text-xs transition-colors ${comment.isLiked ? "text-red-500" : "text-muted-foreground hover:text-red-500"}`}
+          >
+            <Heart className={`w-3 h-3 ${comment.isLiked ? "fill-current" : ""}`} />
+            {comment.likesCount > 0 && <span>{comment.likesCount}</span>}
+          </button>
+          {!isReply && (
+            <button
+              onClick={() => setReplyingTo(replyingTo === comment.id ? null : comment.id)}
+              className="text-xs text-muted-foreground hover:text-primary transition-colors"
+            >
+              Reply
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="mt-3 pt-3 border-t border-border space-y-3">
       {loading ? (
         <Skeleton className="h-16 w-full" />
-      ) : comments.length > 0 ? (
-        <div className="space-y-2.5">
-          {comments.map(comment => (
-            <div key={comment.id} className="flex gap-2" data-testid={`comment-${comment.id}`}>
-              <button onClick={() => setLocation(`/users/${comment.author.id}`)} className="flex-shrink-0 relative">
-                <Avatar className="w-7 h-7 hover:opacity-80 transition-opacity">
-                  <AvatarImage src={comment.author.avatar ?? undefined} />
-                  <AvatarFallback className="text-xs bg-muted">{comment.author.name.slice(0, 2).toUpperCase()}</AvatarFallback>
-                </Avatar>
-                <OnlineDot isOnline={!!comment.author.is_online} size="xs" />
-              </button>
-              <div className="flex-1 bg-muted rounded-lg px-3 py-2 min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <button onClick={() => setLocation(`/users/${comment.author.id}`)} className="text-xs font-semibold hover:underline underline-offset-2">{comment.author.name}</button>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-xs text-muted-foreground">
-                      {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
-                    </span>
-                    {(comment.userId === user?.id || user?.role === "admin") && (
-                      <button
-                        onClick={() => handleDelete(comment.id)}
-                        className="text-muted-foreground hover:text-destructive transition-colors"
-                        data-testid={`button-delete-comment-${comment.id}`}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    )}
+      ) : topLevelComments.length > 0 ? (
+        <div className="space-y-3">
+          {topLevelComments.map(comment => (
+            <div key={comment.id} data-testid={`comment-${comment.id}`}>
+              {renderCommentBody(comment, false)}
+
+              {(repliesMap.get(comment.id) ?? []).length > 0 && (
+                <div className="ml-9 mt-2 space-y-2 border-l-2 border-border/60 pl-3">
+                  {(repliesMap.get(comment.id) ?? []).map(reply => (
+                    <div key={reply.id}>{renderCommentBody(reply, true)}</div>
+                  ))}
+                </div>
+              )}
+
+              {replyingTo === comment.id && (
+                <div className="ml-9 mt-2">
+                  <div className="flex gap-2">
+                    <Avatar className="w-6 h-6 flex-shrink-0 mt-1">
+                      <AvatarFallback className="text-[10px] bg-primary/10 text-primary">
+                        {user?.name?.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center gap-1 bg-muted rounded-full px-3 py-1.5">
+                        <input
+                          type="text"
+                          value={replyText}
+                          onChange={e => setReplyText(e.target.value)}
+                          onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSubmitReply(comment.id)}
+                          placeholder={`Reply to ${comment.author.name}…`}
+                          className="flex-1 text-xs bg-transparent border-0 outline-none min-w-0"
+                          autoFocus
+                        />
+                        <button type="button" onClick={() => replyImageInputRef.current?.click()}
+                          className="text-muted-foreground hover:text-foreground transition-colors p-0.5" title="Add image">
+                          <ImageIcon className="w-3.5 h-3.5" />
+                        </button>
+                        <button type="button" onClick={() => replyDocInputRef.current?.click()}
+                          className="text-muted-foreground hover:text-foreground transition-colors p-0.5" title="Attach document">
+                          <Paperclip className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => handleSubmitReply(comment.id)} disabled={!canSubmitReply}
+                          className="text-primary disabled:opacity-40 transition-colors p-0.5">
+                          {submittingReply ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                        </button>
+                        <button onClick={cancelReply} className="text-muted-foreground hover:text-destructive transition-colors p-0.5">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      {(replyImageFile || replyDocFile) && (
+                        <MediaPreview imageFile={replyImageFile} docFile={replyDocFile}
+                          onRemoveImage={() => setReplyImageFile(null)} onRemoveDoc={() => setReplyDocFile(null)} />
+                      )}
+                    </div>
                   </div>
                 </div>
-                {comment.comment && comment.comment !== "📎" && (
-                  <ContentWithLinks text={comment.comment} />
-                )}
-                <MediaPreview imageUrl={comment.imageUrl} fileUrl={comment.fileUrl} fileType={comment.fileType} />
-              </div>
+              )}
             </div>
           ))}
         </div>
       ) : null}
 
-      {/* Comment input */}
+      {/* Main comment input */}
       <div className="flex gap-2">
         <Avatar className="w-7 h-7 flex-shrink-0 mt-1">
           <AvatarFallback className="text-xs bg-primary/10 text-primary">
@@ -380,36 +496,22 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
               className="flex-1 text-sm bg-transparent border-0 outline-none min-w-0"
             />
             <EmojiButton small onEmojiSelect={emoji => setCommentText(t => t + emoji)} />
-            <button
-              type="button"
-              onClick={() => setShowCommentLink(s => !s)}
+            <button type="button" onClick={() => setShowCommentLink(s => !s)}
               className={`transition-colors p-1 ${showCommentLink ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
-              title="Add link"
-            >
+              title="Add link">
               <Link2 className="w-4 h-4" />
             </button>
-            <button
-              type="button"
-              onClick={() => imageInputRef.current?.click()}
-              className="text-muted-foreground hover:text-foreground transition-colors p-1"
-              title="Add image"
-            >
+            <button type="button" onClick={() => imageInputRef.current?.click()}
+              className="text-muted-foreground hover:text-foreground transition-colors p-1" title="Add image">
               <ImageIcon className="w-4 h-4" />
             </button>
-            <button
-              type="button"
-              onClick={() => docInputRef.current?.click()}
-              className="text-muted-foreground hover:text-foreground transition-colors p-1"
-              title="Attach document"
-            >
+            <button type="button" onClick={() => docInputRef.current?.click()}
+              className="text-muted-foreground hover:text-foreground transition-colors p-1" title="Attach document">
               <Paperclip className="w-4 h-4" />
             </button>
-            <button
-              data-testid={`button-submit-comment-${postId}`}
-              onClick={handleSubmit}
-              disabled={!canSubmit}
-              className="text-primary disabled:opacity-40 transition-colors p-1"
-            >
+            <button data-testid={`button-submit-comment-${postId}`} onClick={handleSubmit}
+              disabled={!canSubmitMain}
+              className="text-primary disabled:opacity-40 transition-colors p-1">
               {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </button>
           </div>
@@ -417,29 +519,16 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
           {showCommentLink && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg border border-primary/20">
               <Link2 className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-              <input
-                type="url"
-                value={commentLink}
-                onChange={e => setCommentLink(e.target.value)}
-                placeholder="https://..."
-                className="flex-1 text-xs bg-transparent border-0 outline-none min-w-0"
-                onKeyDown={e => e.key === "Enter" && handleSubmit()}
-              />
-              {commentLink && (
-                <button onClick={() => setCommentLink("")} className="text-muted-foreground hover:text-destructive">
-                  <X className="w-3 h-3" />
-                </button>
-              )}
+              <input type="url" value={commentLink} onChange={e => setCommentLink(e.target.value)}
+                placeholder="https://..." className="flex-1 text-xs bg-transparent border-0 outline-none min-w-0"
+                onKeyDown={e => e.key === "Enter" && handleSubmit()} />
+              {commentLink && <button onClick={() => setCommentLink("")} className="text-muted-foreground hover:text-destructive"><X className="w-3 h-3" /></button>}
             </div>
           )}
 
           {(imageFile || docFile) && (
-            <MediaPreview
-              imageFile={imageFile}
-              docFile={docFile}
-              onRemoveImage={() => setImageFile(null)}
-              onRemoveDoc={() => setDocFile(null)}
-            />
+            <MediaPreview imageFile={imageFile} docFile={docFile}
+              onRemoveImage={() => setImageFile(null)} onRemoveDoc={() => setDocFile(null)} />
           )}
         </div>
       </div>
@@ -448,6 +537,10 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
         onChange={e => { setImageFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
       <input ref={docInputRef} type="file" accept=".pdf,.doc,.docx,.txt,.zip,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/zip" className="hidden"
         onChange={e => { setDocFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+      <input ref={replyImageInputRef} type="file" accept="image/*" className="hidden"
+        onChange={e => { setReplyImageFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+      <input ref={replyDocInputRef} type="file" accept=".pdf,.doc,.docx,.txt,.zip,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/zip" className="hidden"
+        onChange={e => { setReplyDocFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
     </div>
   );
 }

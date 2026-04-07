@@ -20,6 +20,7 @@ const CreateCommentSchema = z.object({
   imageUrl: z.string().url().optional().nullable(),
   fileUrl: z.string().url().optional().nullable(),
   fileType: z.string().optional().nullable(),
+  parentId: z.number().int().positive().optional().nullable(),
 });
 
 router.get("/posts", requireAuth, async (req, res): Promise<void> => {
@@ -243,6 +244,23 @@ router.get("/posts/:postId/comments", requireAuth, async (req, res): Promise<voi
     .eq("post_id", postId)
     .order("created_at", { ascending: true });
 
+  const commentIds = (comments ?? []).map(c => c.id);
+  const likesCountMap = new Map<number, number>();
+  const isLikedSet = new Set<number>();
+
+  if (commentIds.length > 0) {
+    try {
+      const { data: commentLikes } = await supabase
+        .from("comment_likes")
+        .select("comment_id, user_id")
+        .in("comment_id", commentIds);
+      for (const like of commentLikes ?? []) {
+        likesCountMap.set(like.comment_id, (likesCountMap.get(like.comment_id) ?? 0) + 1);
+        if (like.user_id === req.userId) isLikedSet.add(like.comment_id);
+      }
+    } catch { /* comment_likes table may not exist yet */ }
+  }
+
   res.json((comments ?? []).map(comment => ({
     id: comment.id,
     postId: comment.post_id,
@@ -251,6 +269,9 @@ router.get("/posts/:postId/comments", requireAuth, async (req, res): Promise<voi
     imageUrl: comment.image_url ?? null,
     fileUrl: (comment as Record<string, unknown>).file_url ?? null,
     fileType: (comment as Record<string, unknown>).file_type ?? null,
+    parentId: (comment as Record<string, unknown>).parent_id ?? null,
+    likesCount: likesCountMap.get(comment.id) ?? 0,
+    isLiked: isLikedSet.has(comment.id),
     createdAt: comment.created_at,
     author: formatUser(comment.author),
   })));
@@ -270,7 +291,7 @@ router.post("/posts/:postId/comments", requireAuth, async (req, res): Promise<vo
     return;
   }
 
-  const { comment, imageUrl, fileUrl, fileType } = parsed.data;
+  const { comment, imageUrl, fileUrl, fileType, parentId } = parsed.data;
 
   const insertPayload: Record<string, unknown> = {
     post_id: postId,
@@ -280,6 +301,7 @@ router.post("/posts/:postId/comments", requireAuth, async (req, res): Promise<vo
   if (imageUrl) insertPayload.image_url = imageUrl;
   if (fileUrl) insertPayload.file_url = fileUrl;
   if (fileType) insertPayload.file_type = fileType;
+  if (parentId) insertPayload.parent_id = parentId;
 
   const { data: newComment, error } = await supabase
     .from("comments")
@@ -310,9 +332,49 @@ router.post("/posts/:postId/comments", requireAuth, async (req, res): Promise<vo
     imageUrl: newComment.image_url ?? null,
     fileUrl: (newComment as Record<string, unknown>).file_url ?? null,
     fileType: (newComment as Record<string, unknown>).file_type ?? null,
+    parentId: (newComment as Record<string, unknown>).parent_id ?? null,
+    likesCount: 0,
+    isLiked: false,
     createdAt: newComment.created_at,
     author: formatUser(newComment.author),
   });
+});
+
+router.post("/comments/:id/like", requireAuth, async (req, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(rawId, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid comment id" });
+    return;
+  }
+
+  try {
+    const { data: existing } = await supabase
+      .from("comment_likes")
+      .select("id")
+      .eq("comment_id", id)
+      .eq("user_id", req.userId!)
+      .maybeSingle();
+
+    let liked: boolean;
+    if (existing) {
+      await supabase.from("comment_likes").delete().eq("comment_id", id).eq("user_id", req.userId!);
+      liked = false;
+    } else {
+      await supabase.from("comment_likes").insert({ comment_id: id, user_id: req.userId! });
+      liked = true;
+    }
+
+    const { count } = await supabase
+      .from("comment_likes")
+      .select("*", { count: "exact", head: true })
+      .eq("comment_id", id);
+
+    res.json({ liked, likesCount: count ?? 0 });
+  } catch (err) {
+    console.error("[POST /comments/:id/like] error:", err);
+    res.status(500).json({ error: "Failed to toggle like" });
+  }
 });
 
 router.delete("/comments/:id", requireAuth, async (req, res): Promise<void> => {

@@ -1,0 +1,133 @@
+You are a senior Next.js and Supabase developer.
+
+Enhance the EXISTING COMMENTS SYSTEM with STRICT requirements.
+
+IMPORTANT:
+
+* Do NOT add any extra features
+* Do NOT modify layout unnecessarily
+* ONLY upgrade comment functionality as specified
+
+=====================================
+GOAL:
+
+Allow users to interact within comments like a mini chat system.
+
+=====================================
+FEATURES TO ADD (ONLY THESE):
+
+1. Like on comments
+2. Reply to comments (nested replies)
+3. Send images in comments
+4. Send documents in comments
+
+=====================================
+DATABASE UPDATE:
+
+Ensure comments table includes:
+
+* id
+* post_id
+* user_id
+* comment (text)
+* parent_id (nullable, for replies)
+* likes_count (integer default 0)
+* file_url (nullable)
+* file_type (nullable)
+* created_at
+
+=====================================
+
+1. LIKE SYSTEM (COMMENTS):
+
+* Users can like a comment
+* Each user can like only once per comment
+
+LOGIC:
+
+* Store likes in separate table OR track safely
+* Increment likes_count
+
+UI:
+
+* Show like button on each comment
+* Show total likes count
+
+=====================================
+2. REPLY SYSTEM (NESTED COMMENTS):
+
+* Users can reply to any comment
+
+LOGIC:
+
+* Use parent_id:
+
+  * NULL = main comment
+  * comment_id = reply
+
+UI:
+
+* Show replies under parent comment (indented)
+* Add "Reply" button
+
+=====================================
+3. IMAGE SUPPORT:
+
+* Users can upload image in comment
+
+LOGIC:
+
+* Upload to Supabase Storage
+* Save URL in file_url
+
+UI:
+
+* Show image preview in comment
+
+=====================================
+4. DOCUMENT SUPPORT:
+
+* Users can upload:
+
+  * PDF, DOC, TXT
+
+LOGIC:
+
+* Store in Supabase Storage
+* Save URL + file_type
+
+UI:
+
+* Show file name + download button
+
+=====================================
+DISPLAY RULES:
+
+Each comment should show:
+
+* User name
+* Comment text
+* Image (if exists)
+* Document (if exists)
+* Like button + count
+* Reply button
+
+=====================================
+STRICT RULES:
+
+* Do NOT add video support
+* Do NOT add reactions beyond like
+* Do NOT modify posts system
+* Do NOT modify chat system
+* Only upgrade comments
+
+=====================================
+OUTPUT:
+
+* SQL for updated comments table
+* Logic for like system
+* Logic for replies
+* File upload handling
+* UI rendering logic
+
+Ensure everything works correctly without bugs.
