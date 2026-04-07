@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { OnlineDot } from "@/components/online-dot";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SiFacebook, SiInstagram, SiTiktok, SiX, SiWhatsapp } from "react-icons/si";
 import { Linkedin, ArrowLeft, Calendar, UserCircle2, UserPlus, UserMinus, MessageSquare } from "lucide-react";
@@ -35,6 +36,7 @@ type PublicUser = {
   isFollowing: boolean;
   followersCount: number;
   followingCount: number;
+  isOnline?: boolean;
 };
 
 export default function UserProfilePage() {
@@ -155,12 +157,15 @@ export default function UserProfilePage() {
               <CardContent className="pt-6 pb-5">
                 {/* Header row */}
                 <div className="flex items-start gap-5">
-                  <Avatar className="w-20 h-20 flex-shrink-0 ring-2 ring-primary/20">
-                    <AvatarImage src={profile.avatar ?? undefined} />
-                    <AvatarFallback className="text-2xl bg-primary/10 text-primary font-bold">
-                      {initials}
-                    </AvatarFallback>
-                  </Avatar>
+                  <div className="relative flex-shrink-0">
+                    <Avatar className="w-20 h-20 ring-2 ring-primary/20">
+                      <AvatarImage src={profile.avatar ?? undefined} />
+                      <AvatarFallback className="text-2xl bg-primary/10 text-primary font-bold">
+                        {initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <OnlineDot isOnline={!!profile.isOnline} size="lg" className="bottom-1 right-1" />
+                  </div>
 
                   <div className="flex-1 min-w-0 space-y-2">
                     <div className="flex items-center flex-wrap gap-2">

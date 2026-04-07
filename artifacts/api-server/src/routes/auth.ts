@@ -1,10 +1,19 @@
 import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
-import { signToken, requireAuth } from "../lib/auth";
+import { signToken, requireAuth, verifyToken } from "../lib/auth";
 import { SignupBody, LoginBody } from "@workspace/api-zod";
 import { supabase } from "../lib/supabase";
 
 const router: IRouter = Router();
+
+async function trySetOnlineStatus(userId: number, isOnline: boolean): Promise<void> {
+  try {
+    await supabase
+      .from("users")
+      .update({ is_online: isOnline, last_seen: new Date().toISOString() })
+      .eq("id", userId);
+  } catch { /* column may not exist yet */ }
+}
 
 type DbUser = {
   id: number;
@@ -19,6 +28,8 @@ type DbUser = {
   last_login: string | null;
   last_logout: string | null;
   is_blocked: boolean | null;
+  is_online: boolean | null;
+  last_seen: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -36,6 +47,8 @@ export function formatUser(user: DbUser) {
     lastLogin: user.last_login ?? null,
     lastLogout: user.last_logout ?? null,
     isBlocked: user.is_blocked ?? false,
+    isOnline: user.is_online ?? false,
+    lastSeen: user.last_seen ?? null,
     createdAt: user.created_at,
   };
 }
@@ -77,6 +90,7 @@ router.post("/auth/signup", async (req, res): Promise<void> => {
     .from("users")
     .update({ last_login: new Date().toISOString() })
     .eq("id", user.id);
+  void trySetOnlineStatus(user.id, true);
 
   const token = signToken(user.id);
   res.status(201).json({ user: formatUser(user as DbUser), token });
@@ -117,6 +131,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     .from("users")
     .update({ last_login: new Date().toISOString() })
     .eq("id", (user as DbUser).id);
+  void trySetOnlineStatus((user as DbUser).id, true);
 
   const token = signToken((user as DbUser).id);
   res.json({ user: formatUser(user as DbUser), token });
@@ -127,8 +142,23 @@ router.post("/auth/logout", requireAuth, async (req, res): Promise<void> => {
     .from("users")
     .update({ last_logout: new Date().toISOString() })
     .eq("id", req.userId!);
+  void trySetOnlineStatus(req.userId!, false);
 
   res.json({ message: "Logged out successfully" });
+});
+
+router.post("/auth/heartbeat", requireAuth, async (req, res): Promise<void> => {
+  void trySetOnlineStatus(req.userId!, true);
+  res.json({ ok: true });
+});
+
+router.post("/auth/offline", async (req, res): Promise<void> => {
+  const body = req.body as { token?: string };
+  if (body?.token) {
+    const payload = verifyToken(body.token);
+    if (payload?.userId) void trySetOnlineStatus(payload.userId, false);
+  }
+  res.json({ ok: true });
 });
 
 router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {

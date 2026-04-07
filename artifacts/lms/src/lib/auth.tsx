@@ -4,6 +4,7 @@ import type { User } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { setAuthTokenGetter } from "@workspace/api-client-react";
 import { useTheme, type Theme } from "@/lib/theme";
+import { useHeartbeat } from "@/hooks/use-heartbeat";
 
 interface AuthContextType {
   user: User | null | undefined;
@@ -29,6 +30,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
 
   const isLoading = isUserLoading && !!token;
+
+  useHeartbeat(token);
 
   useEffect(() => {
     if (user?.theme && user.theme !== lastAppliedTheme.current) {

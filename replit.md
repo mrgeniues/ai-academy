@@ -42,6 +42,14 @@ Supabase is used as the database backend. Tables are accessed via the Supabase J
 
 The API server startup logs the SQL Editor URL derived from `SUPABASE_URL` automatically if tables are missing.
 
+### Pending migration — Online Status columns:
+Run this SQL in the Supabase Dashboard SQL Editor to enable the online presence feature:
+```sql
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_online boolean DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen timestamptz DEFAULT now();
+```
+Until these columns are added, all users will show as offline (graceful degradation).
+
 ### Demo users (password: `password123`):
 - `admin@lms.com` — admin role
 - `alice@example.com` — creator role

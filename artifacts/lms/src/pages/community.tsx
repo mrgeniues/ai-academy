@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { OnlineDot } from "@/components/online-dot";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Heart, MessageCircle, Trash2, Send, ChevronDown, ChevronUp,
@@ -29,6 +30,7 @@ interface Author {
   name: string;
   avatar: string | null;
   role: string;
+  is_online?: boolean;
 }
 
 interface Post {
@@ -276,11 +278,12 @@ function CommentSection({ postId, token }: { postId: number; token: string | nul
         <div className="space-y-2.5">
           {comments.map(comment => (
             <div key={comment.id} className="flex gap-2" data-testid={`comment-${comment.id}`}>
-              <button onClick={() => setLocation(`/users/${comment.author.id}`)} className="flex-shrink-0">
+              <button onClick={() => setLocation(`/users/${comment.author.id}`)} className="flex-shrink-0 relative">
                 <Avatar className="w-7 h-7 hover:opacity-80 transition-opacity">
                   <AvatarImage src={comment.author.avatar ?? undefined} />
                   <AvatarFallback className="text-xs bg-muted">{comment.author.name.slice(0, 2).toUpperCase()}</AvatarFallback>
                 </Avatar>
+                <OnlineDot isOnline={!!comment.author.is_online} size="xs" />
               </button>
               <div className="flex-1 bg-muted rounded-lg px-3 py-2 min-w-0">
                 <div className="flex items-center justify-between gap-2">
@@ -445,10 +448,13 @@ function PostCard({ post, token, onDelete }: { post: Post; token: string | null;
             className="flex items-center gap-2.5 hover:opacity-80 transition-opacity text-left"
             onClick={() => setLocation(`/users/${post.author.id}`)}
           >
-            <Avatar className="w-9 h-9">
-              <AvatarImage src={post.author.avatar ?? undefined} />
-              <AvatarFallback className="text-sm bg-primary/10 text-primary font-semibold">{initials}</AvatarFallback>
-            </Avatar>
+            <div className="relative">
+              <Avatar className="w-9 h-9">
+                <AvatarImage src={post.author.avatar ?? undefined} />
+                <AvatarFallback className="text-sm bg-primary/10 text-primary font-semibold">{initials}</AvatarFallback>
+              </Avatar>
+              <OnlineDot isOnline={!!post.author.is_online} size="sm" />
+            </div>
             <div>
               <p className="text-sm font-semibold hover:underline underline-offset-2">{post.author.name}</p>
               <p className="text-xs text-muted-foreground">

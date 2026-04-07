@@ -33,15 +33,24 @@ router.get("/messages/conversations", requireAuth, async (req, res): Promise<voi
   if (partnerMap.size === 0) { res.json([]); return; }
 
   const partnerIds = Array.from(partnerMap.keys());
-  const { data: users } = await supabase
+  let { data: users, error: usersError } = await supabase
     .from("users")
-    .select("id, name, avatar, role")
+    .select("id, name, avatar, role, is_online")
     .in("id", partnerIds);
+
+  if (usersError) {
+    const fallback = await supabase
+      .from("users")
+      .select("id, name, avatar, role")
+      .in("id", partnerIds);
+    users = fallback.data;
+    usersError = null;
+  }
 
   const result = (users ?? []).map(u => {
     const lastMsg = partnerMap.get(u.id) as Record<string, unknown>;
     return {
-      user: { id: u.id, name: u.name, avatar: u.avatar, role: u.role },
+      user: { id: u.id, name: u.name, avatar: u.avatar, role: u.role, isOnline: (u as Record<string, unknown>).is_online ?? false },
       lastMessage: mediaPreview(lastMsg),
       lastMessageAt: lastMsg?.created_at ?? null,
       isMine: lastMsg?.sender_id === myId,

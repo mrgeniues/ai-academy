@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { Layout } from "@/components/layout";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { OnlineDot } from "@/components/online-dot";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -13,7 +14,7 @@ import { cn } from "@/lib/utils";
 import EmojiPicker, { type EmojiClickData, Theme } from "emoji-picker-react";
 
 type Conversation = {
-  user: { id: number; name: string; avatar: string | null; role: string };
+  user: { id: number; name: string; avatar: string | null; role: string; isOnline?: boolean };
   lastMessage: string;
   lastMessageAt: string | null;
   isMine: boolean;
@@ -29,7 +30,7 @@ type Message = {
   created_at: string;
 };
 
-type PartnerUser = { id: number; name: string; avatar: string | null };
+type PartnerUser = { id: number; name: string; avatar: string | null; isOnline?: boolean };
 type PendingMedia = { type: "image" | "video"; url: string; name: string };
 
 function initials(name: string) {
@@ -296,12 +297,15 @@ export default function MessagesPage() {
                     activeUserId === conv.user.id && "bg-primary/10 border-r-2 border-primary"
                   )}
                 >
-                  <Avatar className="w-10 h-10 flex-shrink-0">
-                    <AvatarImage src={conv.user.avatar ?? undefined} />
-                    <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">
-                      {initials(conv.user.name)}
-                    </AvatarFallback>
-                  </Avatar>
+                  <div className="relative flex-shrink-0">
+                    <Avatar className="w-10 h-10">
+                      <AvatarImage src={conv.user.avatar ?? undefined} />
+                      <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">
+                        {initials(conv.user.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <OnlineDot isOnline={!!conv.user.isOnline} size="md" />
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{conv.user.name}</p>
                     <p className="text-xs text-muted-foreground truncate">
@@ -341,12 +345,15 @@ export default function MessagesPage() {
                 </button>
                 {activeUser && (
                   <>
-                    <Avatar className="w-8 h-8">
-                      <AvatarImage src={activeUser.avatar ?? undefined} />
-                      <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
-                        {initials(activeUser.name)}
-                      </AvatarFallback>
-                    </Avatar>
+                    <div className="relative">
+                      <Avatar className="w-8 h-8">
+                        <AvatarImage src={activeUser.avatar ?? undefined} />
+                        <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                          {initials(activeUser.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <OnlineDot isOnline={!!activeUser.isOnline} size="sm" />
+                    </div>
                     <button
                       className="text-sm font-semibold hover:underline"
                       onClick={() => setLocation(`/users/${activeUser.id}`)}
