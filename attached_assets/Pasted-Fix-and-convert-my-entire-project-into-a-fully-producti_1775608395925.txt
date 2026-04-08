@@ -1,0 +1,86 @@
+Fix and convert my entire project into a fully production-ready Node.js (Express) application that can be deployed on Hostinger Node.js Web App without any errors.
+
+Do everything automatically and ensure the final result works perfectly.
+
+Requirements:
+
+1. Node.js Compatibility:
+
+   * Ensure compatibility with Node.js v20
+   * Remove or fix any "engines" field issues in package.json
+   * Update all dependencies to stable versions
+
+2. Dependency Fix:
+
+   * Resolve all npm install errors
+   * Fix eslint/typescript conflicts
+   * Ensure npm install runs cleanly without warnings or failures
+
+3. Server Setup:
+
+   * Create or fix server.js as the main entry point
+   * Use Express.js
+   * Add:
+     const PORT = process.env.PORT || 3000;
+   * Ensure app.listen(PORT) is working
+
+4. Package.json Setup:
+
+   * Ensure:
+     "main": "server.js"
+   * Add scripts:
+     "scripts": {
+     "start": "node server.js"
+     }
+
+5. Frontend Build & Serve:
+
+   * If frontend exists, build it into a dist/ folder
+   * Serve static files using:
+     app.use(express.static("dist"));
+   * Add fallback route:
+     app.get("*", (req, res) => {
+     res.sendFile(path.resolve("dist/index.html"));
+     });
+
+6. Fix Routing Issues:
+
+   * Ensure frontend routes work properly (no blank screen or router errors)
+   * Default route "/" must load correctly
+
+7. Folder Structure (VERY IMPORTANT):
+   Ensure final structure is:
+
+   * package.json
+   * server.js
+   * dist/
+     No nested folders
+
+8. Environment Variables:
+
+   * Use process.env variables properly
+   * Create a .env.example file
+   * Remove hardcoded secrets
+
+9. Cleanup:
+
+   * Remove node_modules
+   * Remove unnecessary files
+   * Optimize project size
+
+10. Final Output:
+
+* Create a clean deployment folder
+* Generate a ZIP file named:
+  hostinger-node-ready.zip
+
+11. Testing:
+
+* Ensure project runs successfully with:
+  npm install
+  npm start
+* No runtime errors
+* App loads in browser
+
+Goal:
+A fully working Node.js (Express) production build that can be directly uploaded to Hostinger Node.js Web App hosting and runs without any configuration issues.
