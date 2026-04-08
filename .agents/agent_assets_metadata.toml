@@ -18,3 +18,9 @@ id = "Hoxyfokw1j2rpYMboxI54"
 uri = "file://hostinger-node-ready.zip"
 type = "unspecified"
 title = "hostinger-node-ready.zip — All Tests Passed ✓ (1.0 MB)"
+
+[[outputs]]
+id = "W8mSlofxUWekjqrpJgjHK"
+uri = "file://hostinger-final-fixed.zip"
+type = "unspecified"
+title = "hostinger-final-fixed.zip — 8/8 Tests Passed ✓ (1.0 MB)"
