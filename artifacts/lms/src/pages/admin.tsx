@@ -73,6 +73,12 @@ export default function AdminPage() {
   const [maintSaving, setMaintSaving] = useState(false);
   const [maintLoaded, setMaintLoaded] = useState(false);
 
+  // Email settings state
+  const [emailFrom, setEmailFrom] = useState("");
+  const [emailFromEffective, setEmailFromEffective] = useState("");
+  const [emailFromSaving, setEmailFromSaving] = useState(false);
+  const [emailFromLoaded, setEmailFromLoaded] = useState(false);
+
   // All hooks must be called unconditionally (Rules of Hooks)
   const { data: users, isLoading: usersLoading } = useListUsers({
     query: { queryKey: getListUsersQueryKey() }
@@ -235,6 +241,46 @@ export default function AdminPage() {
     }
   };
 
+  const loadEmailSettings = useCallback(async () => {
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch("/api/settings/email", {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!resp.ok) return;
+      const data = await resp.json() as {
+        emailFrom: string | null; effectiveEmailFrom: string; envDefault: string;
+      };
+      setEmailFrom(data.emailFrom ?? "");
+      setEmailFromEffective(data.effectiveEmailFrom);
+      setEmailFromLoaded(true);
+    } catch { /* silently ignore */ }
+  }, [token]);
+
+  const handleSaveEmailFrom = async () => {
+    setEmailFromSaving(true);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch("/api/settings/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ emailFrom: emailFrom.trim() || null }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Failed to save");
+      }
+      const data = await resp.json() as { emailFrom: string | null };
+      setEmailFrom(data.emailFrom ?? "");
+      await loadEmailSettings();
+      toast({ title: "Email sender address saved" });
+    } catch (err) {
+      toast({ title: (err as Error).message, variant: "destructive" });
+    } finally {
+      setEmailFromSaving(false);
+    }
+  };
+
   const loadMaintenanceSettings = useCallback(async () => {
     try {
       const resp = await fetch("/api/maintenance");
@@ -357,7 +403,10 @@ export default function AdminPage() {
             <TabsTrigger
               value="maintenance"
               data-testid="tab-maintenance"
-              onClick={() => { if (!maintLoaded) void loadMaintenanceSettings(); }}
+              onClick={() => {
+                if (!maintLoaded) void loadMaintenanceSettings();
+                if (!emailFromLoaded) void loadEmailSettings();
+              }}
             >
               <Wrench className="w-3.5 h-3.5 mr-1" />
               Maint.
@@ -727,7 +776,71 @@ export default function AdminPage() {
           </TabsContent>
 
           {/* ── Maintenance tab ───────────────────────────────────────── */}
-          <TabsContent value="maintenance" className="mt-4">
+          <TabsContent value="maintenance" className="mt-4 space-y-4">
+            {/* Email settings card */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                  Email Sender Address
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {!emailFromLoaded ? (
+                  <div className="space-y-3">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-4 w-64" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="email-from" className="text-sm">From Address</Label>
+                      <Input
+                        id="email-from"
+                        type="text"
+                        placeholder={emailFromEffective}
+                        value={emailFrom}
+                        onChange={e => setEmailFrom(e.target.value)}
+                        data-testid="input-email-from"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Set the sender address for notification emails (e.g.{" "}
+                        <code className="bg-muted px-1 rounded text-xs">no-reply@yourschool.com</code> or{" "}
+                        <code className="bg-muted px-1 rounded text-xs">School LMS &lt;no-reply@yourschool.com&gt;</code>).
+                        Leave blank to use the default or the <code className="bg-muted px-1 rounded text-xs">EMAIL_FROM</code> environment variable.
+                      </p>
+                      {emailFromEffective && (
+                        <p className="text-xs text-muted-foreground">
+                          Currently sending from: <span className="font-medium text-foreground">{emailFromEffective}</span>
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleSaveEmailFrom}
+                        disabled={emailFromSaving}
+                        data-testid="button-save-email-from"
+                        className="w-full sm:w-auto"
+                      >
+                        {emailFromSaving ? "Saving…" : "Save Address"}
+                      </Button>
+                      {emailFrom && (
+                        <Button
+                          variant="outline"
+                          onClick={() => { setEmailFrom(""); void handleSaveEmailFrom(); }}
+                          disabled={emailFromSaving}
+                          data-testid="button-clear-email-from"
+                          className="w-full sm:w-auto"
+                        >
+                          Reset to Default
+                        </Button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">

@@ -1,7 +1,7 @@
 import { Resend } from "resend";
+import { getEmailFromSetting } from "../routes/settings";
 
 const apiKey = process.env.RESEND_API_KEY;
-const fromEmail = process.env.EMAIL_FROM ?? "LMS Platform <notifications@resend.dev>";
 
 let resendClient: Resend | null = null;
 let missingKeyWarned = false;
@@ -20,9 +20,21 @@ function getClient(): Resend | null {
   return resendClient;
 }
 
+function resolveFromEmail(): string {
+  try {
+    const stored = getEmailFromSetting();
+    if (stored) return stored;
+  } catch {
+    // fall through to env / default
+  }
+  return process.env.EMAIL_FROM ?? "LMS Platform <notifications@resend.dev>";
+}
+
 export async function sendUserApprovedEmail(to: string, name: string): Promise<void> {
   const client = getClient();
   if (!client) return;
+
+  const fromEmail = resolveFromEmail();
 
   try {
     const { error } = await client.emails.send({
@@ -54,6 +66,8 @@ export async function sendEnrollmentApprovedEmail(
 ): Promise<void> {
   const client = getClient();
   if (!client) return;
+
+  const fromEmail = resolveFromEmail();
 
   try {
     const { error } = await client.emails.send({

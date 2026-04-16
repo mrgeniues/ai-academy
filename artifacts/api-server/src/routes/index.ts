@@ -12,6 +12,7 @@ import uploadRouter from "./upload";
 import messagesRouter from "./messages";
 import maintenanceRouter from "./maintenance";
 import toolsRouter from "./tools";
+import settingsRouter from "./settings";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(uploadRouter);
 router.use(messagesRouter);
 router.use(maintenanceRouter);
 router.use(toolsRouter);
+router.use(settingsRouter);
 
 export default router;

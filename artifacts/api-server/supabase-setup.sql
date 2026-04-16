@@ -208,3 +208,15 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS is_approved BOOLEAN NOT NULL DEFAULT 
 UPDATE users SET is_approved = TRUE WHERE role = 'admin';
 
 ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS is_approved BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- ============================================================
+-- Site settings table (key-value store for admin configuration)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS site_settings (
+  id SERIAL PRIMARY KEY,
+  key TEXT NOT NULL UNIQUE,
+  value TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE site_settings DISABLE ROW LEVEL SECURITY;
