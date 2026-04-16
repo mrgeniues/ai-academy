@@ -241,6 +241,36 @@ router.patch("/users/:id/block", requireAdmin, async (req, res): Promise<void> =
   res.json(formatUser(user));
 });
 
+router.patch("/users/:id/approve", requireAdmin, async (req, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(rawId, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid user id" });
+    return;
+  }
+
+  const { data: user, error } = await supabase
+    .from("users")
+    .update({ is_approved: true })
+    .eq("id", id)
+    .select()
+    .maybeSingle();
+
+  if (error?.message?.includes("is_approved")) {
+    res.status(422).json({
+      error: "Database column missing. Run this SQL in Supabase:\nALTER TABLE users ADD COLUMN IF NOT EXISTS is_approved BOOLEAN NOT NULL DEFAULT FALSE;"
+    });
+    return;
+  }
+
+  if (error || !user) {
+    res.status(500).json({ error: error?.message ?? "Failed to approve user" });
+    return;
+  }
+
+  res.json(formatUser(user));
+});
+
 router.patch("/users/:id/role", requireAdmin, async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);

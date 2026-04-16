@@ -28,6 +28,7 @@ type DbUser = {
   last_login: string | null;
   last_logout: string | null;
   is_blocked: boolean | null;
+  is_approved: boolean | null;
   is_online: boolean | null;
   last_seen: string | null;
   created_at: string;
@@ -47,6 +48,7 @@ export function formatUser(user: DbUser) {
     lastLogin: user.last_login ?? null,
     lastLogout: user.last_logout ?? null,
     isBlocked: user.is_blocked ?? false,
+    isApproved: user.is_approved ?? false,
     isOnline: user.is_online ?? false,
     lastSeen: user.last_seen ?? null,
     createdAt: user.created_at,
@@ -77,7 +79,7 @@ router.post("/auth/signup", async (req, res): Promise<void> => {
 
   const { data: user, error } = await supabase
     .from("users")
-    .insert({ email, password_hash: passwordHash, name, role: "member" })
+    .insert({ email, password_hash: passwordHash, name, role: "member", is_approved: false })
     .select()
     .single();
 

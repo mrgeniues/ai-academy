@@ -16,6 +16,7 @@ import AdminPage from "@/pages/admin";
 import UserProfilePage from "@/pages/user-profile";
 import MessagesPage from "@/pages/messages";
 import ResetPasswordPage from "@/pages/reset-password";
+import WaitingApprovalPage from "@/pages/waiting-approval";
 import NotFound from "@/pages/not-found";
 import { WhatsAppButton } from "@/components/whatsapp-button";
 
@@ -46,6 +47,11 @@ function ProtectedRoute({ component: Component, adminOnly = false }: {
     return <Redirect to="/login" />;
   }
 
+  const isApproved = (user as Record<string, unknown>).isApproved === true;
+  if (!isApproved) {
+    return <Redirect to="/waiting-approval" />;
+  }
+
   if (adminOnly && user.role !== "admin") {
     return <Redirect to="/dashboard" />;
   }
@@ -74,6 +80,7 @@ function Router() {
         <PublicRoute component={SignupPage} />
       </Route>
       <Route path="/reset-password" component={ResetPasswordPage} />
+      <Route path="/waiting-approval" component={WaitingApprovalPage} />
       <Route path="/dashboard">
         <ProtectedRoute component={DashboardPage} />
       </Route>

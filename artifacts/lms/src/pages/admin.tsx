@@ -23,6 +23,7 @@ type UserRow = {
   avatar?: string | null;
   bio?: string | null;
   isBlocked?: boolean;
+  isApproved?: boolean;
   lastLogin?: string | null;
   createdAt?: string;
 };
@@ -33,6 +34,7 @@ export default function AdminPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [blockingId, setBlockingId] = useState<number | null>(null);
+  const [approvingId, setApprovingId] = useState<number | null>(null);
 
   // All hooks must be called unconditionally (Rules of Hooks)
   const { data: users, isLoading: usersLoading } = useListUsers({
@@ -114,6 +116,29 @@ export default function AdminPage() {
     }
   };
 
+  const handleApprove = async (u: UserRow) => {
+    setApprovingId(u.id);
+    try {
+      const token = localStorage.getItem("lms_token");
+      const resp = await fetch(`/api/users/${u.id}/approve`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Failed to approve user");
+      }
+      queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+      toast({ title: `${u.name} has been approved` });
+    } catch (err) {
+      toast({ title: (err as Error).message, variant: "destructive" });
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
+  const pendingUsers = (users as UserRow[] | undefined)?.filter(u => !u.isApproved) ?? [];
+
   return (
     <Layout>
       <div className="p-6 max-w-6xl mx-auto space-y-6">
@@ -148,12 +173,74 @@ export default function AdminPage() {
         </div>
 
         {/* Management tabs */}
-        <Tabs defaultValue="users">
-          <TabsList className="grid grid-cols-3 w-full max-w-sm">
+        <Tabs defaultValue="pending">
+          <TabsList className="grid grid-cols-4 w-full max-w-lg">
+            <TabsTrigger value="pending" data-testid="tab-pending">
+              Need Approval
+              {pendingUsers.length > 0 && (
+                <Badge variant="destructive" className="ml-1.5 text-xs px-1.5 py-0 h-4">{pendingUsers.length}</Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
             <TabsTrigger value="courses" data-testid="tab-courses">Courses</TabsTrigger>
             <TabsTrigger value="posts" data-testid="tab-posts">Posts</TabsTrigger>
           </TabsList>
+
+          {/* ── Need Approval tab ─────────────────────────────────────── */}
+          <TabsContent value="pending" className="mt-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  Pending Approval
+                  <Badge variant="secondary" className="text-xs font-normal">{pendingUsers.length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {usersLoading ? (
+                  <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div>
+                ) : pendingUsers.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <CheckCircle className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                    <p className="text-sm">No users waiting for approval</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {pendingUsers.map(u => (
+                      <div key={u.id} className="flex items-center gap-3 py-4">
+                        <Avatar className="w-10 h-10 flex-shrink-0">
+                          <AvatarImage src={u.avatar ?? undefined} />
+                          <AvatarFallback className="text-xs bg-muted font-semibold">
+                            {u.name.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate">{u.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                          {u.createdAt && (
+                            <p className="text-xs text-muted-foreground">
+                              Signed up {formatDistanceToNow(new Date(u.createdAt), { addSuffix: true })}
+                            </p>
+                          )}
+                        </div>
+                        <Button
+                          size="sm"
+                          className="h-8 gap-1 text-xs flex-shrink-0"
+                          onClick={() => handleApprove(u)}
+                          disabled={approvingId === u.id}
+                        >
+                          {approvingId === u.id ? (
+                            <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <><CheckCircle className="w-3 h-3" /> Approve</>
+                          )}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           {/* ── Users tab ─────────────────────────────────────────────── */}
           <TabsContent value="users" className="mt-4">
