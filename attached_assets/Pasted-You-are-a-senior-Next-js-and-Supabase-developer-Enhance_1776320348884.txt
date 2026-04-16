@@ -1,0 +1,134 @@
+You are a senior Next.js and Supabase developer.
+
+Enhance the DASHBOARD functionality with STRICT requirements.
+
+IMPORTANT:
+
+* Do NOT add any extra features
+* Do NOT change UI/design unnecessarily
+* ONLY implement the requested behavior
+
+=====================================
+GOAL:
+
+Make dashboard cards clickable and show role-based data (admin vs user).
+
+=====================================
+
+1. TOTAL MEMBERS CLICK
+
+WHEN user clicks "Total Members":
+
+* Redirect to:
+  /members page OR users list section
+
+=====================================
+USER VIEW:
+
+* Show:
+
+  * Only names of users
+
+=====================================
+ADMIN VIEW:
+
+* Show:
+
+  * Name
+  * Email
+  * Enrollment date
+
+=====================================
+2. TOTAL COURSES CLICK
+
+* On click:
+  Redirect to:
+  /courses page
+
+=====================================
+3. ENROLLMENTS CLICK
+
+USER VIEW:
+
+* Show:
+
+  * Courses user enrolled in
+  * Progress per course (% completed)
+
+ADMIN VIEW:
+
+* Show:
+
+  * List of users
+  * Each user's courses
+  * Completion % per course
+
+=====================================
+4. COMMUNITY POSTS CLICK
+
+* Redirect to:
+  /community page
+
+=====================================
+5. MY COURSES CLICK
+
+USER VIEW:
+
+* Show:
+
+  * All enrolled courses
+
+ADMIN VIEW:
+
+* Show:
+
+  * Admin’s own enrolled courses (if any)
+
+=====================================
+6. AVG PROGRESS CLICK
+
+USER VIEW:
+
+* Show:
+
+  * User’s average progress across enrolled courses
+
+ADMIN VIEW:
+
+* Show:
+
+  * Admin's own average
+  * AND separate section:
+
+    * All users average progress
+
+=====================================
+ROUTING:
+
+* Use Next.js router push for navigation
+
+=====================================
+DATA FETCHING:
+
+* Use Supabase queries
+* Filter data based on:
+
+  * auth user id
+  * role (admin / user)
+
+=====================================
+STRICT RULES:
+
+* Do NOT modify layout
+* Do NOT add charts or graphs
+* Only text-based data display
+* Only implement click behavior + data filtering
+
+=====================================
+OUTPUT:
+
+* Routing logic
+* Supabase queries
+* Role-based rendering logic
+
+Ensure everything works correctly without bugs.
