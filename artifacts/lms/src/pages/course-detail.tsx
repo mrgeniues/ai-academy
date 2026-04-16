@@ -10,8 +10,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { RichTextEditor } from "@/components/rich-text-editor";
+import { RichTextDisplay } from "@/components/rich-text-display";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { BookOpen, Users, PlayCircle, CheckCircle, Circle, FileText, Plus, ArrowLeft, Trash2, Lock, MessageCircle, Globe, ExternalLink, Clock } from "lucide-react";
@@ -303,7 +304,14 @@ export default function CourseDetailPage() {
                     </div>
                     <div>
                       <Label>Description</Label>
-                      <Textarea className="mt-1" placeholder="What will students learn in this lesson?" value={lessonDesc} onChange={e => setLessonDesc(e.target.value)} rows={2} />
+                      <div className="mt-1">
+                        <RichTextEditor
+                          value={lessonDesc}
+                          onChange={setLessonDesc}
+                          placeholder="What will students learn in this lesson?"
+                          minHeight="100px"
+                        />
+                      </div>
                     </div>
                     <div>
                       <Label>Video URL</Label>
@@ -376,7 +384,9 @@ export default function CourseDetailPage() {
                       {activeLesson.title}
                     </CardTitle>
                     {activeLesson.description && (
-                      <p className="text-sm text-muted-foreground mt-1">{activeLesson.description}</p>
+                      <div className="text-sm text-muted-foreground mt-1">
+                        <RichTextDisplay html={activeLesson.description} />
+                      </div>
                     )}
                   </CardHeader>
                   <CardContent className="pt-4 space-y-4">
@@ -403,8 +413,8 @@ export default function CourseDetailPage() {
                       </div>
                     )}
                     {activeLesson.content && (
-                      <div className="prose prose-sm max-w-none text-foreground dark:prose-invert">
-                        <p>{activeLesson.content}</p>
+                      <div className="text-sm text-foreground">
+                        <RichTextDisplay html={activeLesson.content} />
                       </div>
                     )}
 
