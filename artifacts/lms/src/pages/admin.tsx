@@ -54,6 +54,7 @@ export default function AdminPage() {
   const [pendingEnrollments, setPendingEnrollments] = useState<PendingEnrollment[]>([]);
   const [pendingEnrollmentsLoading, setPendingEnrollmentsLoading] = useState(true);
   const [approvingEnrollmentId, setApprovingEnrollmentId] = useState<number | null>(null);
+  const [rejectingEnrollmentId, setRejectingEnrollmentId] = useState<number | null>(null);
 
   // Tool requests state
   type PendingToolRequest = {
@@ -384,6 +385,27 @@ export default function AdminPage() {
     }
   };
 
+  const handleRejectEnrollment = async (enrollment: PendingEnrollment) => {
+    setRejectingEnrollmentId(enrollment.id);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch(`/api/enrollments/${enrollment.id}/reject`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Failed to reject enrollment");
+      }
+      await fetchPendingEnrollments();
+      toast({ title: `Enrollment request from ${enrollment.user.name} rejected` });
+    } catch (err) {
+      toast({ title: (err as Error).message, variant: "destructive" });
+    } finally {
+      setRejectingEnrollmentId(null);
+    }
+  };
+
   return (
     <Layout>
       <div className="p-6 max-w-6xl mx-auto space-y-6">
@@ -648,7 +670,7 @@ export default function AdminPage() {
                 ) : (
                   <div className="divide-y divide-border">
                     {pendingEnrollments.map(enrollment => (
-                      <div key={enrollment.id} className="flex items-center gap-3 py-4">
+                      <div key={enrollment.id} className="flex items-center gap-3 py-4" data-testid={`enrollment-row-${enrollment.id}`}>
                         <Avatar className="w-10 h-10 flex-shrink-0">
                           <AvatarImage src={enrollment.user.avatar ?? undefined} />
                           <AvatarFallback className="text-xs bg-muted font-semibold">
@@ -664,18 +686,35 @@ export default function AdminPage() {
                             </p>
                           )}
                         </div>
-                        <Button
-                          size="sm"
-                          className="h-8 gap-1 text-xs flex-shrink-0"
-                          onClick={() => handleApproveEnrollment(enrollment)}
-                          disabled={approvingEnrollmentId === enrollment.id}
-                        >
-                          {approvingEnrollmentId === enrollment.id ? (
-                            <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                          ) : (
-                            <><CheckCircle className="w-3 h-3" /> Approve</>
-                          )}
-                        </Button>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <Button
+                            size="sm"
+                            className="h-8 gap-1 text-xs"
+                            onClick={() => handleApproveEnrollment(enrollment)}
+                            disabled={approvingEnrollmentId === enrollment.id || rejectingEnrollmentId === enrollment.id}
+                            data-testid={`approve-enrollment-${enrollment.id}`}
+                          >
+                            {approvingEnrollmentId === enrollment.id ? (
+                              <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <><CheckCircle className="w-3 h-3" /> Approve</>
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="h-8 gap-1 text-xs"
+                            onClick={() => handleRejectEnrollment(enrollment)}
+                            disabled={approvingEnrollmentId === enrollment.id || rejectingEnrollmentId === enrollment.id}
+                            data-testid={`reject-enrollment-${enrollment.id}`}
+                          >
+                            {rejectingEnrollmentId === enrollment.id ? (
+                              <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <><XCircle className="w-3 h-3" /> Reject</>
+                            )}
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
