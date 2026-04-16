@@ -34,6 +34,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem("sidebar-collapsed") === "true"; } catch { return false; }
   });
+  // Track screen size so we render exactly ONE NotificationBell at a time (prevents double-polling)
+  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < 768 : false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
   const logoutMutation = useLogout();
   const queryClient = useQueryClient();
   const unreadCount = useUnreadCount(token);
@@ -72,7 +80,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <span className="font-bold text-sm text-sidebar-foreground tracking-tight whitespace-nowrap">AI Academy 2.0</span>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
-          <NotificationBell align="left" />
+          {!isMobile && <NotificationBell align="left" />}
           <button
             onClick={toggleCollapsed}
             title="Collapse sidebar"
@@ -215,7 +223,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <GraduationCap className="w-5 h-5 text-primary" />
             <span className="font-bold text-base">AI Academy 2.0</span>
           </div>
-          <NotificationBell />
+          {isMobile && <NotificationBell />}
         </header>
 
         <main className="flex-1 overflow-y-auto">

@@ -212,7 +212,10 @@ export default function AdminPage() {
     }
   };
 
-  const pendingUsers = (users as UserRow[] | undefined)?.filter(u => !u.isApproved) ?? [];
+  // Only show users who are NOT yet approved, NOT blocked, and NOT admins
+  const pendingUsers = (users as UserRow[] | undefined)?.filter(
+    u => !u.isApproved && !u.isBlocked && u.role !== "admin"
+  ) ?? [];
 
   const fetchPendingEnrollments = useCallback(async () => {
     setPendingEnrollmentsLoading(true);

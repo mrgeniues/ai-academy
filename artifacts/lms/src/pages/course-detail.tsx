@@ -347,7 +347,7 @@ export default function CourseDetailPage() {
 
             {/* Admin controls */}
             {isAdmin && (
-              <Dialog open={addLessonOpen} onOpenChange={v => { setAddLessonOpen(v); if (!v) { setLessonTitle(""); setLessonDesc(""); setLessonVideoUrl(""); } }}>
+              <Dialog open={addLessonOpen} onOpenChange={v => { setAddLessonOpen(v); if (!v) { setLessonTitle(""); setLessonDesc(""); setLessonVideoUrl(""); setLessonVisibility("public"); } }}>
                 <DialogTrigger asChild>
                   <Button data-testid="button-add-lesson" variant="outline" size="sm" className="gap-2">
                     <Plus className="w-4 h-4" /> Add Lesson
