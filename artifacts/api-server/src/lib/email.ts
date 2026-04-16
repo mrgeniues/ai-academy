@@ -20,9 +20,9 @@ function getClient(): Resend | null {
   return resendClient;
 }
 
-function resolveFromEmail(): string {
+async function resolveFromEmail(): Promise<string> {
   try {
-    const stored = getEmailFromSetting();
+    const stored = await getEmailFromSetting();
     if (stored) return stored;
   } catch {
     // fall through to env / default
@@ -34,7 +34,7 @@ export async function sendUserApprovedEmail(to: string, name: string): Promise<v
   const client = getClient();
   if (!client) return;
 
-  const fromEmail = resolveFromEmail();
+  const fromEmail = await resolveFromEmail();
 
   try {
     const { error } = await client.emails.send({
@@ -63,7 +63,7 @@ export async function sendUserRejectedEmail(to: string, name: string): Promise<v
   const client = getClient();
   if (!client) return;
 
-  const fromEmail = resolveFromEmail();
+  const fromEmail = await resolveFromEmail();
 
   try {
     const { error } = await client.emails.send({
@@ -96,7 +96,7 @@ export async function sendEnrollmentRejectedEmail(
   const client = getClient();
   if (!client) return;
 
-  const fromEmail = resolveFromEmail();
+  const fromEmail = await resolveFromEmail();
 
   try {
     const { error } = await client.emails.send({
@@ -129,7 +129,7 @@ export async function sendEnrollmentApprovedEmail(
   const client = getClient();
   if (!client) return;
 
-  const fromEmail = resolveFromEmail();
+  const fromEmail = await resolveFromEmail();
 
   try {
     const { error } = await client.emails.send({

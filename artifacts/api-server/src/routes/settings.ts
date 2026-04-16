@@ -1,37 +1,52 @@
 import { Router, type IRouter } from "express";
 import { requireAuth } from "../lib/auth";
-import fs from "node:fs";
-import path from "node:path";
+import { supabase } from "../lib/supabase";
 
 const router: IRouter = Router();
-
-const SETTINGS_FILE = path.resolve(process.cwd(), "data", "settings.json");
 
 type SiteSettings = {
   emailFrom?: string | null;
 };
 
-function readSettings(): SiteSettings {
+export async function getEmailFromSetting(): Promise<string | null> {
   try {
-    if (!fs.existsSync(SETTINGS_FILE)) return {};
-    const raw = fs.readFileSync(SETTINGS_FILE, "utf8");
-    return JSON.parse(raw) as SiteSettings;
-  } catch {
-    return {};
+    const { data, error } = await supabase
+      .from("site_settings")
+      .select("value")
+      .eq("key", "email_from")
+      .maybeSingle();
+
+    if (error) {
+      console.error("[settings] Failed to read email_from from DB:", error.message);
+      return null;
+    }
+
+    return data?.value ?? null;
+  } catch (err) {
+    console.error("[settings] Unexpected error reading email_from:", err);
+    return null;
   }
 }
 
-function writeSettings(settings: SiteSettings): void {
-  const dir = path.dirname(SETTINGS_FILE);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), "utf8");
-}
+async function writeEmailFromSetting(value: string | null): Promise<void> {
+  if (value === null) {
+    const { error } = await supabase
+      .from("site_settings")
+      .delete()
+      .eq("key", "email_from");
 
-export function getEmailFromSetting(): string | null {
-  const settings = readSettings();
-  return settings.emailFrom ?? null;
+    if (error) {
+      throw new Error(`Failed to delete email_from setting: ${error.message}`);
+    }
+  } else {
+    const { error } = await supabase
+      .from("site_settings")
+      .upsert({ key: "email_from", value, updated_at: new Date().toISOString() }, { onConflict: "key" });
+
+    if (error) {
+      throw new Error(`Failed to upsert email_from setting: ${error.message}`);
+    }
+  }
 }
 
 // Admin: get email settings
@@ -41,7 +56,7 @@ router.get("/settings/email", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const value = getEmailFromSetting();
+  const value = await getEmailFromSetting();
   const envDefault = process.env.EMAIL_FROM ?? "LMS Platform <notifications@resend.dev>";
 
   res.json({
@@ -63,11 +78,10 @@ router.post("/settings/email", requireAuth, async (req, res): Promise<void> => {
   const valueToStore = emailFrom && emailFrom.trim() ? emailFrom.trim() : null;
 
   try {
-    const current = readSettings();
-    writeSettings({ ...current, emailFrom: valueToStore });
+    await writeEmailFromSetting(valueToStore);
     res.json({ emailFrom: valueToStore });
   } catch (err) {
-    console.error("[settings] Failed to write settings file:", err);
+    console.error("[settings] Failed to write settings to DB:", err);
     res.status(500).json({ error: "Failed to save setting" });
   }
 });
