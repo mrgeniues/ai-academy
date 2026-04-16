@@ -202,9 +202,18 @@ router.get("/courses/:id", requireAuth, async (req, res): Promise<void> => {
     completedLessonIds = (completions ?? []).map(c => c.lesson_id);
   }
 
+  const isAdminUser = req.userRole === "admin";
+  const enrollmentRecord = enrollment as Record<string, unknown> | null;
+  const enrollmentApproved = enrollmentRecord && enrollmentRecord.is_approved !== false;
+  const canSeePrivate = isAdminUser || !!enrollmentApproved;
+
+  const visibleLessons = canSeePrivate
+    ? (lessons ?? [])
+    : (lessons ?? []).filter(l => l.is_public !== false);
+
   res.json({
     ...formatCourse(course as DbCourse, lessonCount ?? 0, enrollmentCount ?? 0),
-    lessons: (lessons ?? []).map(l => ({
+    lessons: visibleLessons.map(l => ({
       id: l.id,
       courseId: l.course_id,
       title: l.title,
@@ -212,6 +221,7 @@ router.get("/courses/:id", requireAuth, async (req, res): Promise<void> => {
       videoUrl: l.video_url ?? null,
       content: l.content ?? null,
       order: l.order,
+      isPublic: l.is_public ?? true,
       isCompleted: completedLessonIds.includes(l.id),
       createdAt: l.created_at,
     })),

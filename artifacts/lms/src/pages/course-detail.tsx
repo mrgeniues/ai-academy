@@ -11,11 +11,12 @@ import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { RichTextDisplay } from "@/components/rich-text-display";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { BookOpen, Users, PlayCircle, CheckCircle, Circle, FileText, Plus, ArrowLeft, Trash2, Lock, MessageCircle, Globe, ExternalLink, Clock } from "lucide-react";
+import { BookOpen, Users, PlayCircle, CheckCircle, Circle, FileText, Plus, ArrowLeft, Trash2, Lock, MessageCircle, Globe, ExternalLink, Clock, Pencil } from "lucide-react";
 import { Link } from "wouter";
 
 
@@ -43,6 +44,7 @@ type ExtendedLesson = {
   videoUrl?: string | null;
   content?: string | null;
   order: number;
+  isPublic?: boolean;
   isCompleted?: boolean;
 };
 
@@ -57,7 +59,17 @@ export default function CourseDetailPage() {
   const [lessonTitle, setLessonTitle] = useState("");
   const [lessonDesc, setLessonDesc] = useState("");
   const [lessonVideoUrl, setLessonVideoUrl] = useState("");
+  const [lessonVisibility, setLessonVisibility] = useState<"public" | "private">("public");
   const [completingLesson, setCompletingLesson] = useState<number | null>(null);
+
+  // Edit lesson state
+  const [editLessonOpen, setEditLessonOpen] = useState(false);
+  const [editLesson, setEditLesson] = useState<ExtendedLesson | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editVideoUrl, setEditVideoUrl] = useState("");
+  const [editVisibility, setEditVisibility] = useState<"public" | "private">("public");
+  const [editSaving, setEditSaving] = useState(false);
 
   const { data: courseRaw, isLoading } = useGetCourse(courseId, {
     query: { enabled: !!courseId, queryKey: getGetCourseQueryKey(courseId) }
@@ -132,14 +144,60 @@ export default function CourseDetailPage() {
     try {
       await createLessonMutation.mutateAsync({
         courseId,
-        data: { title: lessonTitle.trim(), content: lessonDesc.trim() || null, videoUrl: lessonVideoUrl.trim() || null, order: (course?.lessonCount ?? 0) + 1 },
+        data: {
+          title: lessonTitle.trim(),
+          content: lessonDesc.trim() || null,
+          videoUrl: lessonVideoUrl.trim() || null,
+          order: (course?.lessonCount ?? 0) + 1,
+          isPublic: lessonVisibility === "public",
+        } as Parameters<typeof createLessonMutation.mutateAsync>[0]["data"],
       });
       queryClient.invalidateQueries({ queryKey: getGetCourseQueryKey(courseId) });
       setAddLessonOpen(false);
-      setLessonTitle(""); setLessonDesc(""); setLessonVideoUrl("");
+      setLessonTitle(""); setLessonDesc(""); setLessonVideoUrl(""); setLessonVisibility("public");
       toast({ title: "Lesson added" });
     } catch {
       toast({ title: "Failed to add lesson", variant: "destructive" });
+    }
+  };
+
+  const openEditLesson = (lesson: ExtendedLesson) => {
+    setEditLesson(lesson);
+    setEditTitle(lesson.title);
+    setEditDesc(lesson.content ?? "");
+    setEditVideoUrl(lesson.videoUrl ?? "");
+    setEditVisibility(lesson.isPublic === false ? "private" : "public");
+    setEditLessonOpen(true);
+  };
+
+  const handleEditLesson = async () => {
+    if (!editLesson) return;
+    if (!editTitle.trim()) { toast({ title: "Lesson title is required", variant: "destructive" }); return; }
+    setEditSaving(true);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch(`/api/lessons/${editLesson.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({
+          title: editTitle.trim(),
+          content: editDesc.trim() || null,
+          videoUrl: editVideoUrl.trim() || null,
+          isPublic: editVisibility === "public",
+        }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Failed to update lesson");
+      }
+      queryClient.invalidateQueries({ queryKey: getGetCourseQueryKey(courseId) });
+      setEditLessonOpen(false);
+      setEditLesson(null);
+      toast({ title: "Lesson updated" });
+    } catch (err) {
+      toast({ title: (err as Error).message, variant: "destructive" });
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -317,6 +375,22 @@ export default function CourseDetailPage() {
                       <Label>Video URL</Label>
                       <Input className="mt-1" placeholder="https://youtube.com/watch?v=..." value={lessonVideoUrl} onChange={e => setLessonVideoUrl(e.target.value)} />
                     </div>
+                    <div>
+                      <Label>Visibility</Label>
+                      <Select value={lessonVisibility} onValueChange={v => setLessonVisibility(v as "public" | "private")}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="public">
+                            <span className="flex items-center gap-2"><Globe className="w-3.5 h-3.5 text-green-500" /> Public — visible to everyone</span>
+                          </SelectItem>
+                          <SelectItem value="private">
+                            <span className="flex items-center gap-2"><Lock className="w-3.5 h-3.5 text-red-400" /> Private — enrolled only</span>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div className="flex gap-2 justify-end">
                       <Button variant="outline" onClick={() => setAddLessonOpen(false)}>Cancel</Button>
                       <Button onClick={handleAddLesson} disabled={createLessonMutation.isPending}>
@@ -342,7 +416,7 @@ export default function CourseDetailPage() {
                 const isActive = activeLesson?.id === lesson.id;
                 const isCompleted = lesson.isCompleted ?? false;
                 return (
-                  <div key={lesson.id} className="flex items-center gap-1.5">
+                  <div key={lesson.id} className="flex items-center gap-1">
                     <button
                       data-testid={`button-lesson-${lesson.id}`}
                       onClick={() => setSelectedLesson(lesson.id)}
@@ -358,16 +432,32 @@ export default function CourseDetailPage() {
                         {isCompleted ? <CheckCircle className="w-3.5 h-3.5" /> : i + 1}
                       </span>
                       <span className="flex-1 truncate">{lesson.title}</span>
+                      {/* Visibility badge */}
+                      {lesson.isPublic === false
+                        ? <Lock className={`w-3 h-3 flex-shrink-0 ${isActive ? "text-white/60" : "text-red-400"}`} title="Private" />
+                        : <Globe className={`w-3 h-3 flex-shrink-0 ${isActive ? "text-white/60" : "text-green-500"}`} title="Public" />
+                      }
                       {lesson.videoUrl && <PlayCircle className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? "text-white/70" : "text-muted-foreground"}`} />}
                     </button>
                     {isAdmin && (
-                      <button
-                        onClick={() => handleDeleteLesson(lesson.id)}
-                        className="p-1.5 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
-                        data-testid={`button-delete-lesson-${lesson.id}`}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <>
+                        <button
+                          onClick={() => openEditLesson(lesson)}
+                          className="p-1.5 text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                          data-testid={`button-edit-lesson-${lesson.id}`}
+                          title="Edit lesson"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteLesson(lesson.id)}
+                          className="p-1.5 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
+                          data-testid={`button-delete-lesson-${lesson.id}`}
+                          title="Delete lesson"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
                     )}
                   </div>
                 );
@@ -491,6 +581,56 @@ export default function CourseDetailPage() {
           </Card>
         ) : null}
       </div>
+
+      {/* ── Edit Lesson Dialog ─────────────────────────────────────────────── */}
+      <Dialog open={editLessonOpen} onOpenChange={open => { if (!open) { setEditLessonOpen(false); setEditLesson(null); } }}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Edit Lesson</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label>Title <span className="text-destructive">*</span></Label>
+              <Input className="mt-1" value={editTitle} onChange={e => setEditTitle(e.target.value)} placeholder="Lesson title" />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <div className="mt-1">
+                <RichTextEditor
+                  value={editDesc}
+                  onChange={setEditDesc}
+                  placeholder="What will students learn in this lesson?"
+                  minHeight="200px"
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Video URL</Label>
+              <Input className="mt-1" placeholder="https://youtube.com/watch?v=..." value={editVideoUrl} onChange={e => setEditVideoUrl(e.target.value)} />
+            </div>
+            <div>
+              <Label>Visibility</Label>
+              <Select value={editVisibility} onValueChange={v => setEditVisibility(v as "public" | "private")}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="public">
+                    <span className="flex items-center gap-2"><Globe className="w-3.5 h-3.5 text-green-500" /> Public — visible to everyone</span>
+                  </SelectItem>
+                  <SelectItem value="private">
+                    <span className="flex items-center gap-2"><Lock className="w-3.5 h-3.5 text-red-400" /> Private — enrolled only</span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => { setEditLessonOpen(false); setEditLesson(null); }}>Cancel</Button>
+              <Button onClick={handleEditLesson} disabled={editSaving}>
+                {editSaving ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

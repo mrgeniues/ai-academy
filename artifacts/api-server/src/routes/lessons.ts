@@ -11,6 +11,7 @@ const CreateLessonBodyExt = z.object({
   videoUrl: z.string().optional().nullable(),
   content: z.string().optional().nullable(),
   order: z.number().optional(),
+  isPublic: z.boolean().optional().default(true),
 });
 
 function formatLesson(lesson: Record<string, unknown>, isCompleted = false) {
@@ -22,6 +23,7 @@ function formatLesson(lesson: Record<string, unknown>, isCompleted = false) {
     videoUrl: (lesson.video_url as string) ?? null,
     content: (lesson.content as string) ?? null,
     order: lesson.order,
+    isPublic: (lesson.is_public as boolean) ?? true,
     isCompleted,
     createdAt: lesson.created_at,
   };
@@ -86,6 +88,7 @@ router.post("/courses/:courseId/lessons", requireAuth, async (req, res): Promise
     course_id: courseId,
     title: parsed.data.title,
     order: parsed.data.order ?? (existingCount ?? 0) + 1,
+    is_public: parsed.data.isPublic ?? true,
   };
   if (parsed.data.description != null) lessonRow.description = parsed.data.description;
   if (parsed.data.videoUrl != null) lessonRow.video_url = parsed.data.videoUrl;
@@ -207,6 +210,7 @@ router.patch("/lessons/:id", requireAuth, async (req, res): Promise<void> => {
   if (body.videoUrl !== undefined) updates.video_url = body.videoUrl;
   if (body.content !== undefined) updates.content = body.content;
   if (body.order !== undefined) updates.order = body.order;
+  if (body.isPublic !== undefined) updates.is_public = body.isPublic;
 
   const { data: lesson, error } = await supabase.from("lessons").update(updates).eq("id", id).select().maybeSingle();
   if (error || !lesson) { res.status(404).json({ error: "Lesson not found" }); return; }
