@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { BookOpen, Users, PlayCircle, CheckCircle, Circle, FileText, Plus, ArrowLeft, Trash2, Lock, MessageCircle, Globe, ExternalLink } from "lucide-react";
+import { BookOpen, Users, PlayCircle, CheckCircle, Circle, FileText, Plus, ArrowLeft, Trash2, Lock, MessageCircle, Globe, ExternalLink, Clock } from "lucide-react";
 import { Link } from "wouter";
 
 
@@ -28,6 +28,7 @@ type ExtendedCourse = {
   lessonCount: number;
   enrollmentCount: number;
   isEnrolled?: boolean;
+  enrollmentApproved?: boolean | null;
   progress?: number | null;
   completedLessons?: number;
   lessons?: ExtendedLesson[];
@@ -257,8 +258,8 @@ export default function CourseDetailPage() {
               )}
             </div>
 
-            {/* Progress bar for enrolled users */}
-            {course.isEnrolled && (
+            {/* Progress bar for approved enrolled users */}
+            {course.isEnrolled && course.enrollmentApproved === true && (
               <div className="space-y-1.5 max-w-sm">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Progress</span>
@@ -266,6 +267,14 @@ export default function CourseDetailPage() {
                 </div>
                 <Progress value={progress} className="h-2" />
                 <p className="text-xs text-muted-foreground">{completedLessons} of {totalLessons} lessons done</p>
+              </div>
+            )}
+
+            {/* Pending approval badge */}
+            {course.isEnrolled && course.enrollmentApproved !== true && !isAdmin && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-sm max-w-sm">
+                <Clock className="w-4 h-4 flex-shrink-0" />
+                <span>Enrollment request sent — waiting for admin approval</span>
               </div>
             )}
 
@@ -314,7 +323,7 @@ export default function CourseDetailPage() {
         </div>
 
         {/* Lesson content area */}
-        {(course.isEnrolled || isAdmin) && course.lessons && course.lessons.length > 0 ? (
+        {((course.isEnrolled && course.enrollmentApproved === true) || isAdmin) && course.lessons && course.lessons.length > 0 ? (
           <div className="grid lg:grid-cols-3 gap-6">
             {/* Lesson list */}
             <div className="space-y-1.5">
@@ -440,6 +449,18 @@ export default function CourseDetailPage() {
               )}
             </div>
           </div>
+        ) : course.isEnrolled && course.enrollmentApproved !== true && !isAdmin ? (
+          <Card>
+            <CardContent className="py-12 text-center space-y-3">
+              <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mx-auto">
+                <Clock className="w-8 h-8 text-amber-500" />
+              </div>
+              <h3 className="font-semibold text-base">Waiting for Admin Approval</h3>
+              <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+                Your enrollment request has been received. You'll be able to access the course content once an admin approves it.
+              </p>
+            </CardContent>
+          </Card>
         ) : !course.isEnrolled && !isAdmin && canAccess ? (
           <Card>
             <CardContent className="py-12 text-center">

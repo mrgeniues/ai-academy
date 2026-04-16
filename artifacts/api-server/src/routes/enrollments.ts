@@ -40,6 +40,7 @@ router.get("/enrollments", requireAuth, async (req, res): Promise<void> => {
       userId: enrollment.user_id,
       courseId: enrollment.course_id,
       progress: enrollment.progress,
+      isApproved: enrollment.is_approved ?? false,
       createdAt: enrollment.created_at,
       course: {
         ...course,
@@ -50,6 +51,43 @@ router.get("/enrollments", requireAuth, async (req, res): Promise<void> => {
         createdAt: course.created_at,
         updatedAt: course.updated_at,
       },
+    };
+  }))).filter(Boolean);
+
+  res.json(enriched);
+});
+
+// Admin: list pending (unapproved) enrollment requests
+router.get("/enrollments/pending", requireAuth, async (req, res): Promise<void> => {
+  if (req.userRole !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+
+  const { data: enrollments, error } = await supabase
+    .from("enrollments")
+    .select("*")
+    .eq("is_approved", false)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    res.status(500).json({ error: "Failed to fetch pending enrollments" });
+    return;
+  }
+
+  const enriched = (await Promise.all((enrollments ?? []).map(async (enrollment) => {
+    const [{ data: user }, { data: course }] = await Promise.all([
+      supabase.from("users").select("id, name, email, avatar").eq("id", enrollment.user_id).maybeSingle(),
+      supabase.from("courses").select("id, title").eq("id", enrollment.course_id).maybeSingle(),
+    ]);
+    if (!user || !course) return null;
+    return {
+      id: enrollment.id,
+      userId: enrollment.user_id,
+      courseId: enrollment.course_id,
+      createdAt: enrollment.created_at,
+      user: { id: user.id, name: user.name, email: user.email, avatar: user.avatar ?? null },
+      course: { id: course.id, title: course.title },
     };
   }))).filter(Boolean);
 
@@ -79,7 +117,7 @@ router.post("/enrollments", requireAuth, async (req, res): Promise<void> => {
 
   const { data: enrollment, error } = await supabase
     .from("enrollments")
-    .insert({ user_id: req.userId!, course_id: courseId, progress: 0 })
+    .insert({ user_id: req.userId!, course_id: courseId, progress: 0, is_approved: false })
     .select()
     .single();
 
@@ -93,7 +131,39 @@ router.post("/enrollments", requireAuth, async (req, res): Promise<void> => {
     userId: enrollment.user_id,
     courseId: enrollment.course_id,
     progress: enrollment.progress,
+    isApproved: enrollment.is_approved ?? false,
     createdAt: enrollment.created_at,
+  });
+});
+
+// Admin: approve an enrollment
+router.patch("/enrollments/:id/approve", requireAuth, async (req, res): Promise<void> => {
+  if (req.userRole !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(rawId, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid enrollment id" }); return; }
+
+  const { data: enrollment, error } = await supabase
+    .from("enrollments")
+    .update({ is_approved: true })
+    .eq("id", id)
+    .select()
+    .maybeSingle();
+
+  if (error || !enrollment) {
+    res.status(404).json({ error: "Enrollment not found" });
+    return;
+  }
+
+  res.json({
+    id: enrollment.id,
+    userId: enrollment.user_id,
+    courseId: enrollment.course_id,
+    isApproved: true,
   });
 });
 
@@ -129,6 +199,7 @@ router.patch("/enrollments/:courseId/progress", requireAuth, async (req, res): P
     userId: enrollment.user_id,
     courseId: enrollment.course_id,
     progress: enrollment.progress,
+    isApproved: enrollment.is_approved ?? false,
     createdAt: enrollment.created_at,
   });
 });

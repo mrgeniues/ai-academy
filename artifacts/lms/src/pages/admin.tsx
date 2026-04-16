@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useListUsers, useUpdateUserRole, useListCourses, useDeleteCourse, useListPosts, useDeletePost, useGetDashboardStats, getListUsersQueryKey, getListCoursesQueryKey, getListPostsQueryKey, getGetDashboardStatsQueryKey } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { Layout } from "@/components/layout";
@@ -9,11 +9,20 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trash2, Users, BookOpen, MessageSquare, TrendingUp, Shield, Ban, CheckCircle, Clock, Calendar } from "lucide-react";
+import { Trash2, Users, BookOpen, MessageSquare, TrendingUp, Shield, Ban, CheckCircle, Clock, Calendar, GraduationCap } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
+
+type PendingEnrollment = {
+  id: number;
+  userId: number;
+  courseId: number;
+  createdAt: string;
+  user: { id: number; name: string; email: string; avatar: string | null };
+  course: { id: number; title: string };
+};
 
 type UserRow = {
   id: number;
@@ -35,6 +44,9 @@ export default function AdminPage() {
   const { toast } = useToast();
   const [blockingId, setBlockingId] = useState<number | null>(null);
   const [approvingId, setApprovingId] = useState<number | null>(null);
+  const [pendingEnrollments, setPendingEnrollments] = useState<PendingEnrollment[]>([]);
+  const [pendingEnrollmentsLoading, setPendingEnrollmentsLoading] = useState(true);
+  const [approvingEnrollmentId, setApprovingEnrollmentId] = useState<number | null>(null);
 
   // All hooks must be called unconditionally (Rules of Hooks)
   const { data: users, isLoading: usersLoading } = useListUsers({
@@ -139,6 +151,51 @@ export default function AdminPage() {
 
   const pendingUsers = (users as UserRow[] | undefined)?.filter(u => !u.isApproved) ?? [];
 
+  const fetchPendingEnrollments = useCallback(async () => {
+    setPendingEnrollmentsLoading(true);
+    try {
+      const token = localStorage.getItem("lms_token");
+      const resp = await fetch("/api/enrollments/pending", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (resp.ok) {
+        const data = await resp.json() as PendingEnrollment[];
+        setPendingEnrollments(data);
+      }
+    } catch {
+      // silently ignore
+    } finally {
+      setPendingEnrollmentsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user?.role === "admin") {
+      void fetchPendingEnrollments();
+    }
+  }, [user, fetchPendingEnrollments]);
+
+  const handleApproveEnrollment = async (enrollment: PendingEnrollment) => {
+    setApprovingEnrollmentId(enrollment.id);
+    try {
+      const token = localStorage.getItem("lms_token");
+      const resp = await fetch(`/api/enrollments/${enrollment.id}/approve`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Failed to approve enrollment");
+      }
+      await fetchPendingEnrollments();
+      toast({ title: `${enrollment.user.name} approved for "${enrollment.course.title}"` });
+    } catch (err) {
+      toast({ title: (err as Error).message, variant: "destructive" });
+    } finally {
+      setApprovingEnrollmentId(null);
+    }
+  };
+
   return (
     <Layout>
       <div className="p-6 max-w-6xl mx-auto space-y-6">
@@ -174,15 +231,21 @@ export default function AdminPage() {
 
         {/* Management tabs */}
         <Tabs defaultValue="pending">
-          <TabsList className="grid grid-cols-4 w-full max-w-lg">
+          <TabsList className="grid grid-cols-5 w-full max-w-2xl">
             <TabsTrigger value="pending" data-testid="tab-pending">
-              Need Approval
+              Approvals
               {pendingUsers.length > 0 && (
                 <Badge variant="destructive" className="ml-1.5 text-xs px-1.5 py-0 h-4">{pendingUsers.length}</Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger value="course-approval" data-testid="tab-course-approval">
+              Courses
+              {pendingEnrollments.length > 0 && (
+                <Badge variant="destructive" className="ml-1.5 text-xs px-1.5 py-0 h-4">{pendingEnrollments.length}</Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
-            <TabsTrigger value="courses" data-testid="tab-courses">Courses</TabsTrigger>
+            <TabsTrigger value="courses" data-testid="tab-courses">Manage</TabsTrigger>
             <TabsTrigger value="posts" data-testid="tab-posts">Posts</TabsTrigger>
           </TabsList>
 
@@ -229,6 +292,62 @@ export default function AdminPage() {
                           disabled={approvingId === u.id}
                         >
                           {approvingId === u.id ? (
+                            <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <><CheckCircle className="w-3 h-3" /> Approve</>
+                          )}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── Course Approval tab ───────────────────────────────────── */}
+          <TabsContent value="course-approval" className="mt-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  Pending Course Enrollments
+                  <Badge variant="secondary" className="text-xs font-normal">{pendingEnrollments.length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {pendingEnrollmentsLoading ? (
+                  <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div>
+                ) : pendingEnrollments.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <GraduationCap className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                    <p className="text-sm">No pending enrollment requests</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {pendingEnrollments.map(enrollment => (
+                      <div key={enrollment.id} className="flex items-center gap-3 py-4">
+                        <Avatar className="w-10 h-10 flex-shrink-0">
+                          <AvatarImage src={enrollment.user.avatar ?? undefined} />
+                          <AvatarFallback className="text-xs bg-muted font-semibold">
+                            {enrollment.user.name.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate">{enrollment.user.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">wants to join: <span className="font-medium text-foreground">{enrollment.course.title}</span></p>
+                          {enrollment.createdAt && (
+                            <p className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(new Date(enrollment.createdAt), { addSuffix: true })}
+                            </p>
+                          )}
+                        </div>
+                        <Button
+                          size="sm"
+                          className="h-8 gap-1 text-xs flex-shrink-0"
+                          onClick={() => handleApproveEnrollment(enrollment)}
+                          disabled={approvingEnrollmentId === enrollment.id}
+                        >
+                          {approvingEnrollmentId === enrollment.id ? (
                             <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
                           ) : (
                             <><CheckCircle className="w-3 h-3" /> Approve</>
