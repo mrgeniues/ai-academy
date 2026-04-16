@@ -211,7 +211,7 @@ router.get("/courses/:id", requireAuth, async (req, res): Promise<void> => {
       createdAt: l.created_at,
     })),
     isEnrolled: !!enrollment,
-    enrollmentApproved: enrollment ? (enrollment.is_approved ?? false) : null,
+    enrollmentApproved: enrollment ? ((enrollment as Record<string, unknown>).is_approved ?? true) : null,
     progress: enrollment?.progress ?? null,
     completedLessons: completedLessonIds.length,
   });

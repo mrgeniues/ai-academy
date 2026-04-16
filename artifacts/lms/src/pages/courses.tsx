@@ -38,7 +38,7 @@ type LessonDraft = { title: string; description: string; videoUrl: string };
 const emptyLesson = (): LessonDraft => ({ title: "", description: "", videoUrl: "" });
 
 export default function CoursesPage() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
@@ -74,8 +74,10 @@ export default function CoursesPage() {
   });
   const enrollMutation = useEnrollInCourse();
 
-  const enrolledIds = new Set<number>((enrollments ?? []).map((e: { courseId: number }) => e.courseId));
-  const progressMap = new Map<number, number>((enrollments ?? []).map((e: { courseId: number; progress: number }) => [e.courseId, e.progress] as [number, number]));
+  type EnrollmentRow = { courseId: number; progress: number; isApproved?: boolean };
+  const enrolledIds = new Set<number>((enrollments as EnrollmentRow[] ?? []).map(e => e.courseId));
+  const approvedIds = new Set<number>((enrollments as EnrollmentRow[] ?? []).filter(e => e.isApproved !== false).map(e => e.courseId));
+  const progressMap = new Map<number, number>((enrollments as EnrollmentRow[] ?? []).map(e => [e.courseId, e.progress] as [number, number]));
 
   const isAdmin = user?.role === "admin";
 
@@ -110,7 +112,7 @@ export default function CoursesPage() {
 
     setCreating(true);
     try {
-      const token = localStorage.getItem("lms_token");
+      const authToken = token ?? localStorage.getItem("lms_token");
 
       let uploadedImageUrl: string | null = null;
       if (imageFile) {
@@ -118,17 +120,20 @@ export default function CoursesPage() {
         fd.append("file", imageFile);
         const uploadResp = await fetch(`/api/upload`, {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${authToken}` },
           body: fd,
         });
-        if (!uploadResp.ok) throw new Error("Failed to upload image");
+        if (!uploadResp.ok) {
+          const errData = await uploadResp.json().catch(() => ({})) as { error?: string };
+          throw new Error(errData.error ?? `Failed to upload image (${uploadResp.status})`);
+        }
         const uploadData = await uploadResp.json() as { url: string };
         uploadedImageUrl = uploadData.url;
       }
 
       const resp = await fetch(`/api/courses`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
         body: JSON.stringify({
           title: title.trim(),
           description: description.trim(),
@@ -187,7 +192,7 @@ export default function CoursesPage() {
 
     setEditSaving(true);
     try {
-      const token = localStorage.getItem("lms_token");
+      const authToken = token ?? localStorage.getItem("lms_token");
 
       let thumbnailUrl: string | null | undefined = undefined;
       if (editImageFile) {
@@ -195,10 +200,13 @@ export default function CoursesPage() {
         fd.append("file", editImageFile);
         const uploadResp = await fetch(`/api/upload`, {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${authToken}` },
           body: fd,
         });
-        if (!uploadResp.ok) throw new Error("Failed to upload image");
+        if (!uploadResp.ok) {
+          const errData = await uploadResp.json().catch(() => ({})) as { error?: string };
+          throw new Error(errData.error ?? `Failed to upload image (${uploadResp.status})`);
+        }
         const uploadData = await uploadResp.json() as { url: string };
         thumbnailUrl = uploadData.url;
       } else if (editImagePreview === null) {
@@ -215,7 +223,7 @@ export default function CoursesPage() {
 
       const resp = await fetch(`/api/courses/${editCourse.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
         body: JSON.stringify(body),
       });
       if (!resp.ok) {
@@ -466,8 +474,13 @@ export default function CoursesPage() {
                           Enroll Free
                         </Button>
                       )}
-                      {isEnrolled && (
-                        <Badge variant="secondary" className="px-3 text-xs flex items-center">✓ Enrolled</Badge>
+                      {isEnrolled && approvedIds.has(course.id) && (
+                        <Badge variant="secondary" className="px-3 text-xs flex items-center gap-1">✓ Enrolled</Badge>
+                      )}
+                      {isEnrolled && !approvedIds.has(course.id) && !isAdmin && (
+                        <Badge variant="outline" className="px-3 text-xs flex items-center gap-1 border-amber-400 text-amber-600 dark:text-amber-400">
+                          ⏳ Pending Approval
+                        </Badge>
                       )}
                     </div>
                   </CardContent>

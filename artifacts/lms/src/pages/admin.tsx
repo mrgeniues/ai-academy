@@ -38,7 +38,7 @@ type UserRow = {
 };
 
 export default function AdminPage() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -89,10 +89,10 @@ export default function AdminPage() {
     const newBlocked = !u.isBlocked;
     setBlockingId(u.id);
     try {
-      const token = localStorage.getItem("lms_token");
+      const authToken = token ?? localStorage.getItem("lms_token");
       const resp = await fetch(`/api/users/${u.id}/block`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
         body: JSON.stringify({ blocked: newBlocked }),
       });
       if (!resp.ok) {
@@ -131,10 +131,10 @@ export default function AdminPage() {
   const handleApprove = async (u: UserRow) => {
     setApprovingId(u.id);
     try {
-      const token = localStorage.getItem("lms_token");
+      const authToken = token ?? localStorage.getItem("lms_token");
       const resp = await fetch(`/api/users/${u.id}/approve`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
       });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({})) as { error?: string };
@@ -154,9 +154,9 @@ export default function AdminPage() {
   const fetchPendingEnrollments = useCallback(async () => {
     setPendingEnrollmentsLoading(true);
     try {
-      const token = localStorage.getItem("lms_token");
+      const authToken = token ?? localStorage.getItem("lms_token");
       const resp = await fetch("/api/enrollments/pending", {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${authToken}` },
       });
       if (resp.ok) {
         const data = await resp.json() as PendingEnrollment[];
@@ -167,7 +167,7 @@ export default function AdminPage() {
     } finally {
       setPendingEnrollmentsLoading(false);
     }
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     if (user?.role === "admin") {
@@ -178,10 +178,10 @@ export default function AdminPage() {
   const handleApproveEnrollment = async (enrollment: PendingEnrollment) => {
     setApprovingEnrollmentId(enrollment.id);
     try {
-      const token = localStorage.getItem("lms_token");
+      const authToken = token ?? localStorage.getItem("lms_token");
       const resp = await fetch(`/api/enrollments/${enrollment.id}/approve`, {
         method: "PATCH",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${authToken}` },
       });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({})) as { error?: string };

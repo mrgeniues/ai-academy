@@ -40,7 +40,7 @@ router.get("/enrollments", requireAuth, async (req, res): Promise<void> => {
       userId: enrollment.user_id,
       courseId: enrollment.course_id,
       progress: enrollment.progress,
-      isApproved: enrollment.is_approved ?? false,
+      isApproved: (enrollment as Record<string, unknown>).is_approved ?? true,
       createdAt: enrollment.created_at,
       course: {
         ...course,
@@ -70,7 +70,12 @@ router.get("/enrollments/pending", requireAuth, async (req, res): Promise<void> 
     .eq("is_approved", false)
     .order("created_at", { ascending: true });
 
+  // If is_approved column doesn't exist yet, return empty list
   if (error) {
+    if (error.message.includes("is_approved") || error.code === "42703" || error.code === "PGRST204") {
+      res.json([]);
+      return;
+    }
     res.status(500).json({ error: "Failed to fetch pending enrollments" });
     return;
   }
@@ -115,11 +120,22 @@ router.post("/enrollments", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { data: enrollment, error } = await supabase
+  let { data: enrollment, error } = await supabase
     .from("enrollments")
     .insert({ user_id: req.userId!, course_id: courseId, progress: 0, is_approved: false })
     .select()
     .single();
+
+  // If is_approved column doesn't exist yet, retry without it
+  if (error && (error.message.includes("is_approved") || error.code === "42703")) {
+    const retry = await supabase
+      .from("enrollments")
+      .insert({ user_id: req.userId!, course_id: courseId, progress: 0 })
+      .select()
+      .single();
+    enrollment = retry.data;
+    error = retry.error;
+  }
 
   if (error || !enrollment) {
     res.status(500).json({ error: "Failed to enroll" });
@@ -131,7 +147,7 @@ router.post("/enrollments", requireAuth, async (req, res): Promise<void> => {
     userId: enrollment.user_id,
     courseId: enrollment.course_id,
     progress: enrollment.progress,
-    isApproved: enrollment.is_approved ?? false,
+    isApproved: (enrollment as Record<string, unknown>).is_approved ?? true,
     createdAt: enrollment.created_at,
   });
 });

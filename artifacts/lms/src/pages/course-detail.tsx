@@ -48,7 +48,7 @@ type ExtendedLesson = {
 export default function CourseDetailPage() {
   const [, params] = useRoute("/courses/:id");
   const courseId = parseInt(params?.id ?? "0", 10);
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [selectedLesson, setSelectedLesson] = useState<number | null>(null);
@@ -85,11 +85,11 @@ export default function CourseDetailPage() {
   const handleToggleComplete = async (lessonId: number, isCompleted: boolean) => {
     setCompletingLesson(lessonId);
     try {
-      const token = localStorage.getItem("lms_token");
+      const authToken = token ?? localStorage.getItem("lms_token");
       const method = isCompleted ? "DELETE" : "POST";
       const resp = await fetch(`/api/lessons/${lessonId}/complete`, {
         method,
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${authToken}` },
       });
       if (!resp.ok) {
         const errData = await resp.json().catch(() => ({})) as { error?: string };
