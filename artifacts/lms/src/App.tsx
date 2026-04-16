@@ -1,4 +1,4 @@
-import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
+import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -17,8 +17,10 @@ import UserProfilePage from "@/pages/user-profile";
 import MessagesPage from "@/pages/messages";
 import ResetPasswordPage from "@/pages/reset-password";
 import WaitingApprovalPage from "@/pages/waiting-approval";
+import MaintenancePage from "@/pages/maintenance";
 import NotFound from "@/pages/not-found";
 import { WhatsAppButton } from "@/components/whatsapp-button";
+import { useEffect, useRef } from "react";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,6 +30,50 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+type MaintenanceData = {
+  isActive: boolean;
+  startTime: string | null;
+  endTime: string | null;
+  description: string | null;
+};
+
+function MaintenanceGuard({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+  const [location, setLocation] = useLocation();
+  const checkedRef = useRef(false);
+
+  useEffect(() => {
+    // Don't check if already on maintenance page, or auth is loading, or user is admin
+    if (location === "/maintenance" || isLoading) return;
+    if (user?.role === "admin") return;
+    if (checkedRef.current) return;
+    checkedRef.current = true;
+
+    fetch("/api/maintenance")
+      .then(r => r.json())
+      .then((data: MaintenanceData) => {
+        if (!data.isActive) return;
+        const now = new Date();
+        const start = data.startTime ? new Date(data.startTime) : null;
+        const end = data.endTime ? new Date(data.endTime) : null;
+        const inWindow =
+          (!start || now >= start) &&
+          (!end || now <= end);
+        if (inWindow) {
+          setLocation("/maintenance");
+        }
+      })
+      .catch(() => {});
+  }, [location, user, isLoading, setLocation]);
+
+  // Reset check flag on route change so new pages also get checked
+  useEffect(() => {
+    checkedRef.current = false;
+  }, [location]);
+
+  return <>{children}</>;
+}
 
 function ProtectedRoute({ component: Component, adminOnly = false }: {
   component: React.ComponentType;
@@ -69,53 +115,56 @@ function PublicRoute({ component: Component }: { component: React.ComponentType 
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/">
-        <Redirect to="/dashboard" />
-      </Route>
-      <Route path="/login">
-        <PublicRoute component={LoginPage} />
-      </Route>
-      <Route path="/signup">
-        <PublicRoute component={SignupPage} />
-      </Route>
-      <Route path="/reset-password" component={ResetPasswordPage} />
-      <Route path="/waiting-approval" component={WaitingApprovalPage} />
-      <Route path="/dashboard">
-        <ProtectedRoute component={DashboardPage} />
-      </Route>
-      <Route path="/courses">
-        <ProtectedRoute component={CoursesPage} />
-      </Route>
-      <Route path="/courses/:id">
-        <ProtectedRoute component={CourseDetailPage} />
-      </Route>
-      <Route path="/vip-posts">
-        <ProtectedRoute component={VipPostsPage} />
-      </Route>
-      <Route path="/community">
-        <ProtectedRoute component={CommunityPage} />
-      </Route>
-      <Route path="/profile">
-        <ProtectedRoute component={ProfilePage} />
-      </Route>
-      <Route path="/admin">
-        <ProtectedRoute component={AdminPage} adminOnly />
-      </Route>
-      <Route path="/users/:id">
-        <ProtectedRoute component={UserProfilePage} />
-      </Route>
-      <Route path="/profile/:id">
-        <ProtectedRoute component={UserProfilePage} />
-      </Route>
-      <Route path="/messages/:userId">
-        <ProtectedRoute component={MessagesPage} />
-      </Route>
-      <Route path="/messages">
-        <ProtectedRoute component={MessagesPage} />
-      </Route>
-      <Route component={NotFound} />
-    </Switch>
+    <MaintenanceGuard>
+      <Switch>
+        <Route path="/">
+          <Redirect to="/dashboard" />
+        </Route>
+        <Route path="/login">
+          <PublicRoute component={LoginPage} />
+        </Route>
+        <Route path="/signup">
+          <PublicRoute component={SignupPage} />
+        </Route>
+        <Route path="/reset-password" component={ResetPasswordPage} />
+        <Route path="/waiting-approval" component={WaitingApprovalPage} />
+        <Route path="/maintenance" component={MaintenancePage} />
+        <Route path="/dashboard">
+          <ProtectedRoute component={DashboardPage} />
+        </Route>
+        <Route path="/courses">
+          <ProtectedRoute component={CoursesPage} />
+        </Route>
+        <Route path="/courses/:id">
+          <ProtectedRoute component={CourseDetailPage} />
+        </Route>
+        <Route path="/vip-posts">
+          <ProtectedRoute component={VipPostsPage} />
+        </Route>
+        <Route path="/community">
+          <ProtectedRoute component={CommunityPage} />
+        </Route>
+        <Route path="/profile">
+          <ProtectedRoute component={ProfilePage} />
+        </Route>
+        <Route path="/admin">
+          <ProtectedRoute component={AdminPage} adminOnly />
+        </Route>
+        <Route path="/users/:id">
+          <ProtectedRoute component={UserProfilePage} />
+        </Route>
+        <Route path="/profile/:id">
+          <ProtectedRoute component={UserProfilePage} />
+        </Route>
+        <Route path="/messages/:userId">
+          <ProtectedRoute component={MessagesPage} />
+        </Route>
+        <Route path="/messages">
+          <ProtectedRoute component={MessagesPage} />
+        </Route>
+        <Route component={NotFound} />
+      </Switch>
+    </MaintenanceGuard>
   );
 }
 

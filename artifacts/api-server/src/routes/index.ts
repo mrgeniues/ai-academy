@@ -10,6 +10,7 @@ import dashboardRouter from "./dashboard";
 import notificationsRouter from "./notifications";
 import uploadRouter from "./upload";
 import messagesRouter from "./messages";
+import maintenanceRouter from "./maintenance";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(dashboardRouter);
 router.use(notificationsRouter);
 router.use(uploadRouter);
 router.use(messagesRouter);
+router.use(maintenanceRouter);
 
 export default router;

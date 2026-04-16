@@ -9,7 +9,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trash2, Users, BookOpen, MessageSquare, TrendingUp, Shield, Ban, CheckCircle, Clock, Calendar, GraduationCap } from "lucide-react";
+import { Trash2, Users, BookOpen, MessageSquare, TrendingUp, Shield, Ban, CheckCircle, Clock, Calendar, GraduationCap, Wrench } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -47,6 +51,14 @@ export default function AdminPage() {
   const [pendingEnrollments, setPendingEnrollments] = useState<PendingEnrollment[]>([]);
   const [pendingEnrollmentsLoading, setPendingEnrollmentsLoading] = useState(true);
   const [approvingEnrollmentId, setApprovingEnrollmentId] = useState<number | null>(null);
+
+  // Maintenance state
+  const [maintActive, setMaintActive] = useState(false);
+  const [maintStart, setMaintStart] = useState("");
+  const [maintEnd, setMaintEnd] = useState("");
+  const [maintDesc, setMaintDesc] = useState("");
+  const [maintSaving, setMaintSaving] = useState(false);
+  const [maintLoaded, setMaintLoaded] = useState(false);
 
   // All hooks must be called unconditionally (Rules of Hooks)
   const { data: users, isLoading: usersLoading } = useListUsers({
@@ -175,6 +187,47 @@ export default function AdminPage() {
     }
   }, [user, fetchPendingEnrollments]);
 
+  const loadMaintenanceSettings = useCallback(async () => {
+    try {
+      const resp = await fetch("/api/maintenance");
+      if (!resp.ok) return;
+      const data = await resp.json() as {
+        isActive: boolean; startTime: string | null; endTime: string | null; description: string | null;
+      };
+      setMaintActive(data.isActive ?? false);
+      setMaintStart(data.startTime ? data.startTime.slice(0, 16) : "");
+      setMaintEnd(data.endTime ? data.endTime.slice(0, 16) : "");
+      setMaintDesc(data.description ?? "");
+      setMaintLoaded(true);
+    } catch { /* silently ignore */ }
+  }, []);
+
+  const handleSaveMaintenance = async () => {
+    setMaintSaving(true);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch("/api/maintenance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({
+          isActive: maintActive,
+          startTime: maintStart ? new Date(maintStart).toISOString() : null,
+          endTime: maintEnd ? new Date(maintEnd).toISOString() : null,
+          description: maintDesc.trim() || null,
+        }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Failed to save");
+      }
+      toast({ title: "Maintenance settings saved" });
+    } catch (err) {
+      toast({ title: (err as Error).message, variant: "destructive" });
+    } finally {
+      setMaintSaving(false);
+    }
+  };
+
   const handleApproveEnrollment = async (enrollment: PendingEnrollment) => {
     setApprovingEnrollmentId(enrollment.id);
     try {
@@ -231,7 +284,7 @@ export default function AdminPage() {
 
         {/* Management tabs */}
         <Tabs defaultValue="pending">
-          <TabsList className="grid grid-cols-5 w-full max-w-2xl">
+          <TabsList className="grid grid-cols-6 w-full max-w-3xl">
             <TabsTrigger value="pending" data-testid="tab-pending">
               Approvals
               {pendingUsers.length > 0 && (
@@ -247,6 +300,17 @@ export default function AdminPage() {
             <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
             <TabsTrigger value="courses" data-testid="tab-courses">Manage</TabsTrigger>
             <TabsTrigger value="posts" data-testid="tab-posts">Posts</TabsTrigger>
+            <TabsTrigger
+              value="maintenance"
+              data-testid="tab-maintenance"
+              onClick={() => { if (!maintLoaded) void loadMaintenanceSettings(); }}
+            >
+              <Wrench className="w-3.5 h-3.5 mr-1" />
+              Maint.
+              {maintActive && (
+                <Badge variant="destructive" className="ml-1.5 text-xs px-1.5 py-0 h-4">ON</Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           {/* ── Need Approval tab ─────────────────────────────────────── */}
@@ -553,6 +617,90 @@ export default function AdminPage() {
                       </div>
                     ))}
                   </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          {/* ── Maintenance tab ───────────────────────────────────────── */}
+          <TabsContent value="maintenance" className="mt-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Wrench className="w-4 h-4" /> Maintenance Mode
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {!maintLoaded ? (
+                  <div className="space-y-3">
+                    <Skeleton className="h-8 w-48" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-24 w-full" />
+                  </div>
+                ) : (
+                  <>
+                    {/* Toggle */}
+                    <div className="flex items-center gap-3 p-3 rounded-lg border border-border">
+                      <Switch
+                        id="maint-active"
+                        checked={maintActive}
+                        onCheckedChange={setMaintActive}
+                        data-testid="switch-maintenance-active"
+                      />
+                      <Label htmlFor="maint-active" className="cursor-pointer">
+                        <span className="font-medium">Enable Maintenance Mode</span>
+                        {maintActive && (
+                          <Badge variant="destructive" className="ml-2 text-xs">Active</Badge>
+                        )}
+                      </Label>
+                    </div>
+
+                    {/* Date/Time range */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="maint-start" className="text-sm">Start Date &amp; Time</Label>
+                        <Input
+                          id="maint-start"
+                          type="datetime-local"
+                          value={maintStart}
+                          onChange={e => setMaintStart(e.target.value)}
+                          data-testid="input-maintenance-start"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="maint-end" className="text-sm">End Date &amp; Time</Label>
+                        <Input
+                          id="maint-end"
+                          type="datetime-local"
+                          value={maintEnd}
+                          onChange={e => setMaintEnd(e.target.value)}
+                          data-testid="input-maintenance-end"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    <div className="space-y-1.5">
+                      <Label htmlFor="maint-desc" className="text-sm">Description / Reason</Label>
+                      <Textarea
+                        id="maint-desc"
+                        placeholder="We're performing scheduled maintenance to improve your experience…"
+                        value={maintDesc}
+                        onChange={e => setMaintDesc(e.target.value)}
+                        rows={4}
+                        data-testid="textarea-maintenance-description"
+                      />
+                    </div>
+
+                    <Button
+                      onClick={handleSaveMaintenance}
+                      disabled={maintSaving}
+                      data-testid="button-save-maintenance"
+                      className="w-full sm:w-auto"
+                    >
+                      {maintSaving ? "Saving…" : "Save Settings"}
+                    </Button>
+                  </>
                 )}
               </CardContent>
             </Card>

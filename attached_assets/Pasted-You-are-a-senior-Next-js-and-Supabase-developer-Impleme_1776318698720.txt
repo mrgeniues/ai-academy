@@ -1,0 +1,120 @@
+You are a senior Next.js and Supabase developer.
+
+Implement a MAINTENANCE MODE SYSTEM with STRICT requirements.
+
+IMPORTANT:
+
+* Do NOT add any extra features
+* Do NOT modify layout unnecessarily
+* ONLY implement maintenance system
+
+=====================================
+GOAL:
+
+Allow admin to:
+
+* Enable maintenance mode
+* Select FROM date/time
+* Select TO date/time
+* Add description/reason
+
+During this time:
+
+* All users see maintenance page
+* No access to dashboard or app
+
+=====================================
+DATABASE:
+
+Create table:
+
+maintenance_settings
+
+Fields:
+
+* id
+* is_active (boolean)
+* start_time (timestamp)
+* end_time (timestamp)
+* description (text)
+
+=====================================
+ADMIN PANEL:
+
+Add new tab:
+
+"Maintenance"
+
+=====================================
+FIELDS (ADMIN UI):
+
+* Toggle: Enable Maintenance
+
+* Start Date & Time
+
+* End Date & Time
+
+* Description (textarea)
+
+* Save button
+
+=====================================
+LOGIC:
+
+When admin saves:
+
+* Insert or update maintenance_settings
+
+=====================================
+FRONTEND CHECK:
+
+On every page load:
+
+1. Fetch maintenance_settings
+
+2. IF:
+   is_active = true
+   AND current time >= start_time
+   AND current time <= end_time
+
+THEN:
+
+* Redirect ALL users to:
+  /maintenance
+
+=====================================
+MAINTENANCE PAGE:
+
+Create page:
+
+/maintenance
+
+Show:
+
+* Title:
+  "Website is under maintenance"
+
+* Show description (from database)
+
+=====================================
+ADMIN EXCEPTION:
+
+* Admin should STILL access dashboard
+* Only block normal users
+
+=====================================
+STRICT RULES:
+
+* Do NOT block admin
+* Do NOT modify other features
+* Only apply global maintenance logic
+
+=====================================
+OUTPUT:
+
+* SQL for maintenance table
+* Admin panel UI logic
+* Global middleware check
+* Maintenance page
+
+Ensure everything works correctly without bugs.
