@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { BookOpen, Users, Plus, GraduationCap, Lock, Globe, Trash2, ImageIcon, X, MessageCircle, Link as LinkIcon, Pencil } from "lucide-react";
+import { BookOpen, Users, Plus, GraduationCap, Lock, Globe, Trash2, ImageIcon, X, MessageCircle, Link as LinkIcon, Pencil, Zap, Clock } from "lucide-react";
 import { Link } from "wouter";
 
 
@@ -458,6 +458,21 @@ export default function CoursesPage() {
                         </div>
                         <Progress value={progress} className="h-1.5" />
                       </div>
+                    )}
+
+                    {/* Enrollment mode indicator — only for non-admin, unenrolled students on public courses */}
+                    {canAccess && !isEnrolled && !isAdmin && (
+                      course.enrollmentMode === "open" ? (
+                        <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
+                          <Zap className="w-3.5 h-3.5" />
+                          <span>Instant Access</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>Approval Required</span>
+                        </div>
+                      )
                     )}
 
                     {/* Actions */}

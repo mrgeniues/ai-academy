@@ -16,7 +16,7 @@ import { RichTextEditor } from "@/components/rich-text-editor";
 import { RichTextDisplay } from "@/components/rich-text-display";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { BookOpen, Users, PlayCircle, CheckCircle, Circle, FileText, Plus, ArrowLeft, Trash2, Lock, MessageCircle, Globe, ExternalLink, Clock, Pencil } from "lucide-react";
+import { BookOpen, Users, PlayCircle, CheckCircle, Circle, FileText, Plus, ArrowLeft, Trash2, Lock, MessageCircle, Globe, ExternalLink, Clock, Pencil, Zap } from "lucide-react";
 import { Link } from "wouter";
 
 
@@ -27,6 +27,7 @@ type ExtendedCourse = {
   thumbnail?: string | null;
   externalUrl?: string | null;
   visibility?: string;
+  enrollmentMode?: "open" | "approval_required";
   lessonCount: number;
   enrollmentCount: number;
   isEnrolled?: boolean;
@@ -335,6 +336,21 @@ export default function CourseDetailPage() {
                 <Clock className="w-4 h-4 flex-shrink-0" />
                 <span>Enrollment request sent — waiting for admin approval</span>
               </div>
+            )}
+
+            {/* Enrollment mode indicator — shown to non-admin unenrolled students on public courses */}
+            {!course.isEnrolled && canAccess && !isAdmin && (
+              course.enrollmentMode === "open" ? (
+                <div className="inline-flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400">
+                  <Zap className="w-4 h-4" />
+                  <span>Instant Access — you'll be enrolled immediately</span>
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-400">
+                  <Clock className="w-4 h-4" />
+                  <span>Approval Required — an admin will review your request</span>
+                </div>
+              )
             )}
 
             {/* Enroll button */}
