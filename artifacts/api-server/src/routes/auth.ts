@@ -64,6 +64,11 @@ router.post("/auth/signup", async (req, res): Promise<void> => {
 
   const { email, password, name } = parsed.data;
 
+  if (!email.toLowerCase().endsWith("@gmail.com")) {
+    res.status(400).json({ error: "Only Gmail accounts are allowed (@gmail.com)" });
+    return;
+  }
+
   const { data: existing } = await supabase
     .from("users")
     .select("id")
