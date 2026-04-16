@@ -242,6 +242,9 @@ importers:
 
   artifacts/lms:
     dependencies:
+      '@supabase/supabase-js':
+        specifier: ^2.101.1
+        version: 2.101.1
       emoji-picker-react:
         specifier: ^4.18.0
         version: 4.18.0(react@19.1.0)

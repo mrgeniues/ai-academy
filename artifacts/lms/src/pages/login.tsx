@@ -3,11 +3,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useLogin } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
+import { supabase } from "@/lib/supabase-client";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
-import { GraduationCap, Eye, EyeOff } from "lucide-react";
+import { GraduationCap, Eye, EyeOff, ArrowLeft, CheckCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -16,7 +17,12 @@ const schema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
+const forgotSchema = z.object({
+  email: z.string().email("Please enter a valid email"),
+});
+
 type FormData = z.infer<typeof schema>;
+type ForgotData = z.infer<typeof forgotSchema>;
 
 export default function LoginPage() {
   const { user, login, isLoading } = useAuth();
@@ -24,6 +30,8 @@ export default function LoginPage() {
   const loginMutation = useLogin();
   const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
+  const [view, setView] = useState<"login" | "forgot" | "sent">("login");
+  const [isSending, setIsSending] = useState(false);
 
   useEffect(() => {
     if (!isLoading && user) {
@@ -34,6 +42,11 @@ export default function LoginPage() {
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { email: "", password: "" },
+  });
+
+  const forgotForm = useForm<ForgotData>({
+    resolver: zodResolver(forgotSchema),
+    defaultValues: { email: "" },
   });
 
   const onSubmit = async (data: FormData) => {
@@ -47,6 +60,25 @@ export default function LoginPage() {
         description: error?.data?.error || error?.message || "Invalid email or password",
         variant: "destructive",
       });
+    }
+  };
+
+  const onForgotSubmit = async (data: ForgotData) => {
+    setIsSending(true);
+    try {
+      const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/reset-password`;
+      const { error } = await supabase.auth.resetPasswordForEmail(data.email, { redirectTo });
+      if (error) throw error;
+      setView("sent");
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      toast({
+        title: "Error",
+        description: e?.message || "Failed to send reset email. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -103,75 +135,147 @@ export default function LoginPage() {
             <span className="font-bold text-lg">AI Academy 2.0</span>
           </div>
 
-          <h1 className="text-2xl font-bold mb-1">Welcome back</h1>
-          <p className="text-muted-foreground text-sm mb-8">Sign in to continue your learning journey</p>
+          {/* ── LOGIN VIEW ── */}
+          {view === "login" && (
+            <>
+              <h1 className="text-2xl font-bold mb-1">Welcome back</h1>
+              <p className="text-muted-foreground text-sm mb-8">Sign in to continue your learning journey</p>
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input
-                        data-testid="input-email"
-                        type="email"
-                        placeholder="you@example.com"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input
+                            data-testid="input-email"
+                            type="email"
+                            placeholder="you@example.com"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Input
-                          data-testid="input-password"
-                          type={showPassword ? "text" : "password"}
-                          placeholder="••••••••"
-                          {...field}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center justify-between">
+                          <FormLabel>Password</FormLabel>
+                          <button
+                            type="button"
+                            onClick={() => setView("forgot")}
+                            className="text-xs text-primary hover:underline"
+                          >
+                            Forgot password?
+                          </button>
+                        </div>
+                        <FormControl>
+                          <div className="relative">
+                            <Input
+                              data-testid="input-password"
+                              type={showPassword ? "text" : "password"}
+                              placeholder="••••••••"
+                              {...field}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(!showPassword)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            >
+                              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-              <Button
-                data-testid="button-login"
-                type="submit"
-                className="w-full"
-                disabled={loginMutation.isPending}
+                  <Button
+                    data-testid="button-login"
+                    type="submit"
+                    className="w-full"
+                    disabled={loginMutation.isPending}
+                  >
+                    {loginMutation.isPending ? "Signing in..." : "Sign in"}
+                  </Button>
+                </form>
+              </Form>
+
+              <p className="mt-6 text-center text-sm text-muted-foreground">
+                Don't have an account?{" "}
+                <Link href="/signup" className="text-primary font-medium hover:underline" data-testid="link-signup">
+                  Sign up
+                </Link>
+              </p>
+            </>
+          )}
+
+          {/* ── FORGOT PASSWORD VIEW ── */}
+          {view === "forgot" && (
+            <>
+              <button
+                onClick={() => setView("login")}
+                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6"
               >
-                {loginMutation.isPending ? "Signing in..." : "Sign in"}
-              </Button>
-            </form>
-          </Form>
+                <ArrowLeft className="w-4 h-4" /> Back to login
+              </button>
 
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            Don't have an account?{" "}
-            <Link href="/signup" className="text-primary font-medium hover:underline" data-testid="link-signup">
-              Sign up
-            </Link>
-          </p>
+              <h1 className="text-2xl font-bold mb-1">Forgot your password?</h1>
+              <p className="text-muted-foreground text-sm mb-8">
+                Enter your email and we'll send you a reset link.
+              </p>
+
+              <Form {...forgotForm}>
+                <form onSubmit={forgotForm.handleSubmit(onForgotSubmit)} className="space-y-4">
+                  <FormField
+                    control={forgotForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input type="email" placeholder="you@example.com" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <Button type="submit" className="w-full" disabled={isSending}>
+                    {isSending ? "Sending..." : "Send Reset Link"}
+                  </Button>
+                </form>
+              </Form>
+            </>
+          )}
+
+          {/* ── EMAIL SENT VIEW ── */}
+          {view === "sent" && (
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="w-8 h-8 text-green-600" />
+              </div>
+              <h1 className="text-2xl font-bold mb-2">Check your email</h1>
+              <p className="text-muted-foreground text-sm mb-6">
+                We sent a password reset link to your email address. Click the link to set a new password.
+              </p>
+              <button
+                onClick={() => setView("login")}
+                className="text-sm text-primary hover:underline"
+              >
+                Back to login
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -75,6 +75,7 @@
     "zod": "catalog:"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.101.1",
     "emoji-picker-react": "^4.18.0",
     "react-easy-crop": "^5.5.7"
   }

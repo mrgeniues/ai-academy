@@ -15,6 +15,7 @@ import ProfilePage from "@/pages/profile";
 import AdminPage from "@/pages/admin";
 import UserProfilePage from "@/pages/user-profile";
 import MessagesPage from "@/pages/messages";
+import ResetPasswordPage from "@/pages/reset-password";
 import NotFound from "@/pages/not-found";
 import { WhatsAppButton } from "@/components/whatsapp-button";
 
@@ -72,6 +73,7 @@ function Router() {
       <Route path="/signup">
         <PublicRoute component={SignupPage} />
       </Route>
+      <Route path="/reset-password" component={ResetPasswordPage} />
       <Route path="/dashboard">
         <ProtectedRoute component={DashboardPage} />
       </Route>
