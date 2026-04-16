@@ -9,7 +9,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trash2, Users, BookOpen, MessageSquare, TrendingUp, Shield, Ban, CheckCircle, Clock, Calendar, GraduationCap, Wrench } from "lucide-react";
+import { Trash2, Users, BookOpen, MessageSquare, TrendingUp, Shield, Ban, CheckCircle, Clock, Calendar, GraduationCap, Wrench, XCircle } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -48,6 +49,8 @@ export default function AdminPage() {
   const { toast } = useToast();
   const [blockingId, setBlockingId] = useState<number | null>(null);
   const [approvingId, setApprovingId] = useState<number | null>(null);
+  const [selectedPendingIds, setSelectedPendingIds] = useState<Set<number>>(new Set());
+  const [bulkActioning, setBulkActioning] = useState(false);
   const [pendingEnrollments, setPendingEnrollments] = useState<PendingEnrollment[]>([]);
   const [pendingEnrollmentsLoading, setPendingEnrollmentsLoading] = useState(true);
   const [approvingEnrollmentId, setApprovingEnrollmentId] = useState<number | null>(null);
@@ -177,6 +180,35 @@ export default function AdminPage() {
       toast({ title: (err as Error).message, variant: "destructive" });
     } finally {
       setApprovingId(null);
+    }
+  };
+
+  const handleBulkAction = async (action: "approve" | "reject") => {
+    if (selectedPendingIds.size === 0) return;
+    setBulkActioning(true);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch("/api/users/bulk-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ userIds: Array.from(selectedPendingIds), action }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? `Failed to ${action} users`);
+      }
+      const data = await resp.json() as { updated: number };
+      setSelectedPendingIds(new Set());
+      queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+      toast({
+        title: action === "approve"
+          ? `${data.updated} user${data.updated !== 1 ? "s" : ""} approved`
+          : `${data.updated} user${data.updated !== 1 ? "s" : ""} rejected`,
+      });
+    } catch (err) {
+      toast({ title: (err as Error).message, variant: "destructive" });
+    } finally {
+      setBulkActioning(false);
     }
   };
 
@@ -480,10 +512,44 @@ export default function AdminPage() {
           <TabsContent value="pending" className="mt-4">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  Pending Approval
-                  <Badge variant="secondary" className="text-xs font-normal">{pendingUsers.length}</Badge>
-                </CardTitle>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    Pending Approval
+                    <Badge variant="secondary" className="text-xs font-normal">{pendingUsers.length}</Badge>
+                  </CardTitle>
+                  {selectedPendingIds.size > 0 && (
+                    <div className="flex items-center gap-2" data-testid="bulk-action-toolbar">
+                      <span className="text-xs text-muted-foreground">{selectedPendingIds.size} selected</span>
+                      <Button
+                        size="sm"
+                        className="h-7 gap-1 text-xs"
+                        onClick={() => handleBulkAction("approve")}
+                        disabled={bulkActioning}
+                        data-testid="bulk-approve-btn"
+                      >
+                        {bulkActioning ? (
+                          <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <><CheckCircle className="w-3 h-3" /> Approve selected</>
+                        )}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="h-7 gap-1 text-xs"
+                        onClick={() => handleBulkAction("reject")}
+                        disabled={bulkActioning}
+                        data-testid="bulk-reject-btn"
+                      >
+                        {bulkActioning ? (
+                          <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <><XCircle className="w-3 h-3" /> Reject selected</>
+                        )}
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 {usersLoading ? (
@@ -495,8 +561,35 @@ export default function AdminPage() {
                   </div>
                 ) : (
                   <div className="divide-y divide-border">
+                    {/* Select all row */}
+                    <div className="flex items-center gap-3 pb-3">
+                      <Checkbox
+                        data-testid="select-all-pending"
+                        checked={selectedPendingIds.size === pendingUsers.length && pendingUsers.length > 0}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedPendingIds(new Set(pendingUsers.map(u => u.id)));
+                          } else {
+                            setSelectedPendingIds(new Set());
+                          }
+                        }}
+                      />
+                      <span className="text-xs text-muted-foreground">Select all</span>
+                    </div>
                     {pendingUsers.map(u => (
                       <div key={u.id} className="flex items-center gap-3 py-4">
+                        <Checkbox
+                          data-testid={`select-pending-${u.id}`}
+                          checked={selectedPendingIds.has(u.id)}
+                          onCheckedChange={(checked) => {
+                            setSelectedPendingIds(prev => {
+                              const next = new Set(prev);
+                              if (checked) next.add(u.id);
+                              else next.delete(u.id);
+                              return next;
+                            });
+                          }}
+                        />
                         <Avatar className="w-10 h-10 flex-shrink-0">
                           <AvatarImage src={u.avatar ?? undefined} />
                           <AvatarFallback className="text-xs bg-muted font-semibold">

@@ -282,6 +282,65 @@ router.patch("/users/:id/approve", requireAdmin, async (req, res): Promise<void>
   res.json(formatUser(user));
 });
 
+router.post("/users/bulk-action", requireAdmin, async (req, res): Promise<void> => {
+  const { userIds, action } = req.body as { userIds?: unknown; action?: unknown };
+
+  if (!Array.isArray(userIds) || userIds.length === 0) {
+    res.status(400).json({ error: "userIds must be a non-empty array" });
+    return;
+  }
+  if (action !== "approve" && action !== "reject") {
+    res.status(400).json({ error: "action must be 'approve' or 'reject'" });
+    return;
+  }
+
+  const ids = userIds.map(Number).filter(n => !isNaN(n));
+  if (ids.length === 0) {
+    res.status(400).json({ error: "No valid user IDs provided" });
+    return;
+  }
+
+  if (action === "approve") {
+    const { data: updatedUsers, error } = await supabase
+      .from("users")
+      .update({ is_approved: true })
+      .in("id", ids)
+      .select();
+
+    if (error) {
+      res.status(500).json({ error: error.message ?? "Failed to approve users" });
+      return;
+    }
+
+    for (const u of updatedUsers ?? []) {
+      sendUserApprovedEmail(u.email, u.name).catch((err) => {
+        console.error("[users] Failed to send approval email for user", u.id, err);
+      });
+    }
+
+    res.json({ updated: (updatedUsers ?? []).length });
+  } else {
+    const { data: updatedUsers, error } = await supabase
+      .from("users")
+      .update({ is_blocked: true })
+      .in("id", ids)
+      .select();
+
+    if (error) {
+      res.status(500).json({ error: error.message ?? "Failed to reject users" });
+      return;
+    }
+
+    for (const u of updatedUsers ?? []) {
+      sendUserRejectedEmail(u.email, u.name).catch((err) => {
+        console.error("[users] Failed to send rejection email for user", u.id, err);
+      });
+    }
+
+    res.json({ updated: (updatedUsers ?? []).length });
+  }
+});
+
 router.patch("/users/:id/role", requireAdmin, async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
