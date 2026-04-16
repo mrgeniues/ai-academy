@@ -63,19 +63,23 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo + collapse button */}
-      <div className="flex items-center gap-3 px-4 py-4 border-b border-sidebar-border">
-        <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
-          <GraduationCap className="w-5 h-5 text-white" />
+      <div className="flex items-center justify-between px-4 py-3 border-b border-sidebar-border">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
+            <GraduationCap className="w-4 h-4 text-white" />
+          </div>
+          <span className="font-bold text-sm text-sidebar-foreground tracking-tight whitespace-nowrap">AI Academy 2.0</span>
         </div>
-        <span className="font-bold text-sm text-sidebar-foreground tracking-tight flex-1 whitespace-nowrap overflow-hidden text-ellipsis">AI Academy 2.0</span>
-        <NotificationBell align="left" />
-        <button
-          onClick={toggleCollapsed}
-          title="Collapse sidebar"
-          className="hidden md:flex p-1 rounded-md text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
-        >
-          <PanelLeftClose className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <NotificationBell align="left" />
+          <button
+            onClick={toggleCollapsed}
+            title="Collapse sidebar"
+            className="hidden md:flex p-1 rounded-md text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+          >
+            <PanelLeftClose className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Navigation */}
