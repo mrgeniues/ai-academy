@@ -309,7 +309,7 @@ export default function CourseDetailPage() {
                           value={lessonDesc}
                           onChange={setLessonDesc}
                           placeholder="What will students learn in this lesson?"
-                          minHeight="100px"
+                          minHeight="200px"
                         />
                       </div>
                     </div>

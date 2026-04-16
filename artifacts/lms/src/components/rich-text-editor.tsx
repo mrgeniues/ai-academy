@@ -25,7 +25,7 @@ export function RichTextEditor({ value, onChange, placeholder = "Write something
     editorProps: {
       attributes: {
         class: "outline-none w-full",
-        style: `min-height: ${minHeight}; padding: 0.625rem 0.75rem;`,
+        style: "min-height: 100%; padding: 0.625rem 0.75rem;",
       },
     },
   });
@@ -99,9 +99,10 @@ export function RichTextEditor({ value, onChange, placeholder = "Write something
         </span>
       </div>
 
-      {/* Editor area */}
+      {/* Editor area — fixed height, vertical scroll only */}
       <div
-        className="text-sm text-foreground leading-relaxed relative"
+        className="relative text-sm text-foreground leading-relaxed overflow-y-auto overflow-x-hidden"
+        style={{ height: minHeight }}
         onClick={() => editor.commands.focus()}
       >
         {editor.isEmpty && (
