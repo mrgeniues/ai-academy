@@ -1,0 +1,121 @@
+You are a senior Next.js and Supabase developer.
+
+Enhance the LESSON SYSTEM with STRICT requirements.
+
+IMPORTANT:
+
+* Do NOT add extra features
+* Do NOT modify UI unnecessarily
+* ONLY implement lesson visibility, edit functionality, and full content protection
+
+=====================================
+GOAL:
+
+1. Admin can:
+
+   * Mark lesson as PUBLIC or PRIVATE
+   * MUST have EDIT option on EVERY lesson
+
+2. Users:
+
+IF lesson is PUBLIC:
+
+* Show full content (video + description + links)
+
+IF lesson is PRIVATE:
+
+* Completely block ALL content
+
+=====================================
+DATABASE:
+
+Ensure lessons table includes:
+
+* is_public (boolean, default true)
+
+=====================================
+LESSON CREATION (ADMIN):
+
+* Add visibility option:
+
+  * Public
+  * Private
+
+=====================================
+MANDATORY EDIT FEATURE:
+
+* EVERY lesson MUST have "Edit" button (admin only)
+
+=====================================
+PRIVATE LESSON SECURITY (VERY IMPORTANT):
+
+IF lesson is PRIVATE:
+
+BLOCK EVERYTHING:
+
+1. Video section:
+
+   * Do NOT show video player
+   * Do NOT load video URL
+
+2. Description:
+
+   * Do NOT render description HTML
+   * Do NOT show text content
+
+3. Links inside description:
+
+   * Must NOT be clickable
+   * Must NOT be visible
+
+=====================================
+REPLACE WITH MESSAGE:
+
+Show ONLY:
+
+"This lesson is private. Contact admin"
+
+=====================================
+DISPLAY RULE:
+
+* Lesson still visible in sidebar list
+* But content area completely blocked
+
+=====================================
+FRONTEND LOGIC:
+
+IF (lesson.is_public === false):
+
+* Do NOT render:
+
+  * video_url
+  * description
+  * any links
+
+ONLY render:
+private message
+
+=====================================
+SECURITY NOTE:
+
+* Do NOT rely only on UI
+* Ensure backend also does NOT send sensitive data if private
+
+=====================================
+STRICT RULES:
+
+* Do NOT show partial content
+* Do NOT allow link access
+* Do NOT expose video URL in DOM
+* Do NOT modify course system
+* Edit button only for admin
+
+=====================================
+OUTPUT:
+
+* Updated lesson visibility logic
+* Secure rendering conditions
+* Admin edit system
+* Full private content blocking
+
+Ensure everything works correctly without bugs.
