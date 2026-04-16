@@ -195,3 +195,11 @@ ALTER TABLE posts DISABLE ROW LEVEL SECURITY;
 ALTER TABLE comments DISABLE ROW LEVEL SECURITY;
 ALTER TABLE likes DISABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications DISABLE ROW LEVEL SECURITY;
+
+-- ============================================================
+-- Approval feature columns
+-- ============================================================
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_approved BOOLEAN NOT NULL DEFAULT FALSE;
+UPDATE users SET is_approved = TRUE WHERE role = 'admin';
+
+ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS is_approved BOOLEAN NOT NULL DEFAULT FALSE;

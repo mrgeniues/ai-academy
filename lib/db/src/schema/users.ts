@@ -22,6 +22,7 @@ export const usersTable = pgTable("users", {
   lastLogout: timestamp("last_logout", { withTimezone: true }),
   isOnline: boolean("is_online").notNull().default(false),
   lastSeen: timestamp("last_seen", { withTimezone: true }).defaultNow(),
+  isApproved: boolean("is_approved").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

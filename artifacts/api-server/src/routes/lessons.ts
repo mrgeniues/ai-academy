@@ -32,6 +32,26 @@ router.get("/courses/:courseId/lessons", requireAuth, async (req, res): Promise<
   const courseId = parseInt(rawId, 10);
   if (isNaN(courseId)) { res.status(400).json({ error: "Invalid course id" }); return; }
 
+  if (req.userRole !== "admin") {
+    const { data: enrollment } = await supabase
+      .from("enrollments")
+      .select("id, is_approved")
+      .eq("user_id", req.userId!)
+      .eq("course_id", courseId)
+      .maybeSingle();
+
+    if (!enrollment) {
+      res.status(403).json({ error: "Not enrolled in this course" });
+      return;
+    }
+
+    const approved = (enrollment as Record<string, unknown>).is_approved;
+    if (approved === false) {
+      res.status(403).json({ error: "Enrollment pending approval" });
+      return;
+    }
+  }
+
   const { data: lessons } = await supabase
     .from("lessons")
     .select("*")
@@ -124,12 +144,16 @@ router.post("/lessons/:id/complete", requireAuth, async (req, res): Promise<void
 
   const { data: enrollment, error: enrollErr } = await supabase
     .from("enrollments")
-    .select("id")
+    .select("id, is_approved")
     .eq("user_id", req.userId!)
     .eq("course_id", lesson.course_id)
     .maybeSingle();
   if (enrollErr) console.error("[POST /complete] enrollment check error:", enrollErr.message);
   if (!enrollment) { res.status(403).json({ error: "Not enrolled in this course" }); return; }
+  if ((enrollment as Record<string, unknown>).is_approved === false) {
+    res.status(403).json({ error: "Enrollment pending approval" });
+    return;
+  }
 
   const { error: upsertErr } = await supabase
     .from("lesson_completions")

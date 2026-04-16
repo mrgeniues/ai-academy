@@ -1,4 +1,4 @@
-import { pgTable, serial, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, serial, timestamp, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -9,6 +9,7 @@ export const enrollmentsTable = pgTable("enrollments", {
   userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   courseId: integer("course_id").notNull().references(() => coursesTable.id, { onDelete: "cascade" }),
   progress: integer("progress").notNull().default(0),
+  isApproved: boolean("is_approved").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
