@@ -26,6 +26,7 @@ type CourseWithExtras = {
   thumbnail?: string | null;
   externalUrl?: string | null;
   visibility?: string;
+  enrollmentMode?: "open" | "approval_required";
   lessonCount: number;
   enrollmentCount: number;
   createdBy: number;
@@ -52,6 +53,7 @@ export default function CoursesPage() {
   const [externalUrl, setExternalUrl] = useState("");
   const [visibility, setVisibility] = useState<"public" | "private">("public");
   const [lessonDrafts, setLessonDrafts] = useState<LessonDraft[]>([emptyLesson()]);
+  const [enrollmentMode, setEnrollmentMode] = useState<"open" | "approval_required">("approval_required");
   const [creating, setCreating] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
@@ -61,6 +63,7 @@ export default function CoursesPage() {
   const [editDescription, setEditDescription] = useState("");
   const [editExternalUrl, setEditExternalUrl] = useState("");
   const [editVisibility, setEditVisibility] = useState<"public" | "private">("public");
+  const [editEnrollmentMode, setEditEnrollmentMode] = useState<"open" | "approval_required">("approval_required");
   const [editImageFile, setEditImageFile] = useState<File | null>(null);
   const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
   const [editSaving, setEditSaving] = useState(false);
@@ -84,7 +87,7 @@ export default function CoursesPage() {
   // ── Create form helpers ──────────────────────────────────────────────────
   const resetForm = () => {
     setTitle(""); setDescription(""); setImageFile(null); setImagePreview(null); setExternalUrl("");
-    setVisibility("public"); setLessonDrafts([emptyLesson()]);
+    setVisibility("public"); setEnrollmentMode("approval_required"); setLessonDrafts([emptyLesson()]);
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -140,6 +143,7 @@ export default function CoursesPage() {
           thumbnail: uploadedImageUrl,
           externalUrl: externalUrl.trim() || null,
           visibility,
+          enrollmentMode,
           lessons: validLessons.map(l => ({
             title: l.title.trim(),
             description: l.description.trim() || null,
@@ -169,6 +173,7 @@ export default function CoursesPage() {
     setEditDescription(course.description ?? "");
     setEditExternalUrl(course.externalUrl ?? "");
     setEditVisibility((course.visibility as "public" | "private") ?? "public");
+    setEditEnrollmentMode(course.enrollmentMode ?? "approval_required");
     setEditImageFile(null);
     setEditImagePreview(course.thumbnail ?? null);
   };
@@ -218,6 +223,7 @@ export default function CoursesPage() {
         description: editDescription.trim() || null,
         externalUrl: editExternalUrl.trim() || null,
         visibility: editVisibility,
+        enrollmentMode: editEnrollmentMode,
       };
       if (thumbnailUrl !== undefined) body.thumbnail = thumbnailUrl;
 
@@ -318,6 +324,16 @@ export default function CoursesPage() {
                         <SelectContent>
                           <SelectItem value="public"><span className="flex items-center gap-2"><Globe className="w-3.5 h-3.5" /> Public — anyone can enroll</span></SelectItem>
                           <SelectItem value="private"><span className="flex items-center gap-2"><Lock className="w-3.5 h-3.5" /> Private — contact admin to access</span></SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Enrollment Mode</Label>
+                      <Select value={enrollmentMode} onValueChange={(v: "open" | "approval_required") => setEnrollmentMode(v)}>
+                        <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="open">Open — students are enrolled immediately</SelectItem>
+                          <SelectItem value="approval_required">Requires Approval — admin must approve</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -545,6 +561,16 @@ export default function CoursesPage() {
                 <SelectContent>
                   <SelectItem value="public"><span className="flex items-center gap-2"><Globe className="w-3.5 h-3.5" /> Public — anyone can enroll</span></SelectItem>
                   <SelectItem value="private"><span className="flex items-center gap-2"><Lock className="w-3.5 h-3.5" /> Private — contact admin to access</span></SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Enrollment Mode</Label>
+              <Select value={editEnrollmentMode} onValueChange={(v: "open" | "approval_required") => setEditEnrollmentMode(v)}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="open">Open — students are enrolled immediately</SelectItem>
+                  <SelectItem value="approval_required">Requires Approval — admin must approve</SelectItem>
                 </SelectContent>
               </Select>
             </div>

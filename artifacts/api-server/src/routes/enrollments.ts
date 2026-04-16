@@ -82,11 +82,33 @@ router.get("/enrollments/pending", requireAuth, async (req, res): Promise<void> 
   }
 
   const enriched = (await Promise.all((enrollments ?? []).map(async (enrollment) => {
-    const [{ data: user }, { data: course }] = await Promise.all([
+    const [{ data: user }, { data: courseWithMode, error: courseError }] = await Promise.all([
       supabase.from("users").select("id, name, email, avatar").eq("id", enrollment.user_id).maybeSingle(),
-      supabase.from("courses").select("id, title").eq("id", enrollment.course_id).maybeSingle(),
+      supabase.from("courses").select("id, title, enrollment_mode").eq("id", enrollment.course_id).maybeSingle(),
     ]);
-    if (!user || !course) return null;
+
+    if (!user) return null;
+
+    // If the enrollment_mode column doesn't exist yet, fall back to fetching without it
+    // and treat the course as approval_required (safe default — show enrollment as pending)
+    let course = courseWithMode;
+    let enrollmentMode: string = "approval_required";
+    if (courseError && (courseError.message.includes("enrollment_mode") || courseError.code === "42703" || courseError.code === "PGRST204")) {
+      const { data: courseBasic } = await supabase
+        .from("courses")
+        .select("id, title")
+        .eq("id", enrollment.course_id)
+        .maybeSingle();
+      course = courseBasic as typeof courseWithMode;
+    } else if (course) {
+      enrollmentMode = (course as Record<string, unknown>).enrollment_mode as string ?? "approval_required";
+    }
+
+    if (!course) return null;
+
+    // Only include enrollments from courses that require approval
+    if (enrollmentMode === "open") return null;
+
     return {
       id: enrollment.id,
       userId: enrollment.user_id,
@@ -121,9 +143,23 @@ router.post("/enrollments", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  // Check the course's enrollment_mode to decide if auto-approval applies
+  const { data: course, error: courseLookupError } = await supabase
+    .from("courses")
+    .select("enrollment_mode")
+    .eq("id", courseId)
+    .maybeSingle();
+
+  if (courseLookupError && !courseLookupError.message.includes("enrollment_mode") && courseLookupError.code !== "42703") {
+    // Non-column-missing error (network issue, permission error, etc.): log and default to approval_required
+    console.error("[POST /enrollments] Failed to fetch course enrollment_mode for course", courseId, ":", courseLookupError.message, "— defaulting to approval_required");
+  }
+
+  const isOpen = (course as Record<string, unknown> | null)?.enrollment_mode === "open";
+
   let { data: enrollment, error } = await supabase
     .from("enrollments")
-    .insert({ user_id: req.userId!, course_id: courseId, progress: 0, is_approved: false })
+    .insert({ user_id: req.userId!, course_id: courseId, progress: 0, is_approved: isOpen })
     .select()
     .single();
 

@@ -174,6 +174,11 @@ ALTER TABLE courses ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'p
 ALTER TABLE courses ADD COLUMN IF NOT EXISTS external_url TEXT;
 
 -- ============================================================
+-- Enrollment mode column (open = auto-approved, approval_required = needs admin)
+-- ============================================================
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS enrollment_mode TEXT NOT NULL DEFAULT 'approval_required';
+
+-- ============================================================
 -- Lesson feature columns (in case created with older schema)
 -- ============================================================
 ALTER TABLE lessons ADD COLUMN IF NOT EXISTS description TEXT;

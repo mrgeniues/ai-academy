@@ -12,6 +12,7 @@ const CreateCourseBodyExtended = z.object({
   thumbnail: z.string().optional().nullable(),
   externalUrl: z.string().optional().nullable(),
   visibility: z.enum(["public", "private"]).default("public"),
+  enrollmentMode: z.enum(["open", "approval_required"]).default("approval_required"),
   lessons: z.array(z.object({
     title: z.string().min(1),
     description: z.string().optional().nullable(),
@@ -25,6 +26,7 @@ const UpdateCourseBodyExtended = z.object({
   thumbnail: z.string().optional().nullable(),
   externalUrl: z.string().optional().nullable(),
   visibility: z.enum(["public", "private"]).optional(),
+  enrollmentMode: z.enum(["open", "approval_required"]).optional(),
 });
 
 type DbCourse = {
@@ -34,6 +36,7 @@ type DbCourse = {
   thumbnail: string | null;
   external_url: string | null;
   visibility: string;
+  enrollment_mode: string | null;
   created_by: number;
   created_at: string;
   updated_at: string;
@@ -47,6 +50,7 @@ function formatCourse(course: DbCourse, lessonCount: number, enrollmentCount: nu
     thumbnail: course.thumbnail ?? null,
     externalUrl: course.external_url ?? null,
     visibility: course.visibility ?? "public",
+    enrollmentMode: (course.enrollment_mode ?? "approval_required") as "open" | "approval_required",
     createdBy: course.created_by,
     lessonCount,
     enrollmentCount,
@@ -94,7 +98,7 @@ router.post("/courses", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { title, description, thumbnail, externalUrl, visibility, lessons } = parsed.data;
+  const { title, description, thumbnail, externalUrl, visibility, enrollmentMode, lessons } = parsed.data;
 
   // Build insert payload dynamically so missing optional columns don't crash the insert
   const coursePayload: Record<string, unknown> = {
@@ -105,6 +109,7 @@ router.post("/courses", requireAuth, async (req, res): Promise<void> => {
   if (thumbnail != null) coursePayload.thumbnail = thumbnail;
   if (externalUrl != null) coursePayload.external_url = externalUrl;
   coursePayload.visibility = visibility;
+  coursePayload.enrollment_mode = enrollmentMode;
 
   let { data: course, error } = await supabase
     .from("courses")
@@ -113,7 +118,7 @@ router.post("/courses", requireAuth, async (req, res): Promise<void> => {
     .single();
 
   // If optional columns don't exist yet (pending migration), retry with only the core columns
-  if (error && (error.message.includes("visibility") || error.message.includes("external_url"))) {
+  if (error && (error.message.includes("visibility") || error.message.includes("external_url") || error.message.includes("enrollment_mode"))) {
     console.warn("[POST /courses] Optional column missing, retrying with core fields only:", error.message);
     const fallbackPayload = {
       title: coursePayload.title,
@@ -236,8 +241,15 @@ router.patch("/courses/:id", requireAuth, async (req, res): Promise<void> => {
   if (parsed.data.thumbnail !== undefined) updates.thumbnail = parsed.data.thumbnail;
   if (parsed.data.externalUrl !== undefined) updates.external_url = parsed.data.externalUrl;
   if (parsed.data.visibility !== undefined) updates.visibility = parsed.data.visibility;
+  if (parsed.data.enrollmentMode !== undefined) updates.enrollment_mode = parsed.data.enrollmentMode;
 
-  await supabase.from("courses").update(updates).eq("id", id);
+  const { error: updateError } = await supabase.from("courses").update(updates).eq("id", id);
+
+  // If enrollment_mode column doesn't exist yet, retry without it
+  if (updateError && updateError.message.includes("enrollment_mode")) {
+    const { enrollment_mode: _omit, ...fallbackUpdates } = updates as Record<string, unknown> & { enrollment_mode?: unknown };
+    await supabase.from("courses").update(fallbackUpdates).eq("id", id);
+  }
 
   const [{ data: updated }, { count: lc }, { count: ec }] = await Promise.all([
     supabase.from("courses").select("*").eq("id", id).maybeSingle(),
