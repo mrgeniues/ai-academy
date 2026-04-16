@@ -59,6 +59,68 @@ export async function sendUserApprovedEmail(to: string, name: string): Promise<v
   }
 }
 
+export async function sendUserRejectedEmail(to: string, name: string): Promise<void> {
+  const client = getClient();
+  if (!client) return;
+
+  const fromEmail = resolveFromEmail();
+
+  try {
+    const { error } = await client.emails.send({
+      from: fromEmail,
+      to,
+      subject: "Your account application was not approved",
+      html: `
+        <p>Hi ${name},</p>
+        <p>Unfortunately, your account application has not been approved at this time.</p>
+        <p>If you believe this is a mistake, please contact the platform administrator for more information.</p>
+      `,
+      text: `Hi ${name},\n\nUnfortunately, your account application has not been approved at this time.\n\nIf you believe this is a mistake, please contact the platform administrator for more information.`,
+    });
+
+    if (error) {
+      console.error("[email] Failed to send user rejected email:", error);
+    } else {
+      console.info(`[email] Sent user rejected email to ${to}`);
+    }
+  } catch (err) {
+    console.error("[email] Unexpected error sending user rejected email:", err);
+  }
+}
+
+export async function sendEnrollmentRejectedEmail(
+  to: string,
+  name: string,
+  courseName: string
+): Promise<void> {
+  const client = getClient();
+  if (!client) return;
+
+  const fromEmail = resolveFromEmail();
+
+  try {
+    const { error } = await client.emails.send({
+      from: fromEmail,
+      to,
+      subject: `Your enrollment request for ${courseName} was not approved`,
+      html: `
+        <p>Hi ${name},</p>
+        <p>Unfortunately, your enrollment request for <strong>${courseName}</strong> has not been approved at this time.</p>
+        <p>If you believe this is a mistake, please contact the platform administrator for more information.</p>
+      `,
+      text: `Hi ${name},\n\nUnfortunately, your enrollment request for "${courseName}" has not been approved at this time.\n\nIf you believe this is a mistake, please contact the platform administrator for more information.`,
+    });
+
+    if (error) {
+      console.error("[email] Failed to send enrollment rejected email:", error);
+    } else {
+      console.info(`[email] Sent enrollment rejected email to ${to} for course "${courseName}"`);
+    }
+  } catch (err) {
+    console.error("[email] Unexpected error sending enrollment rejected email:", err);
+  }
+}
+
 export async function sendEnrollmentApprovedEmail(
   to: string,
   name: string,

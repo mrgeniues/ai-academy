@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { requireAuth } from "../lib/auth";
 import { EnrollInCourseBody, UpdateProgressBody } from "@workspace/api-zod";
 import { supabase } from "../lib/supabase";
-import { sendEnrollmentApprovedEmail } from "../lib/email";
+import { sendEnrollmentApprovedEmail, sendEnrollmentRejectedEmail } from "../lib/email";
 
 const router: IRouter = Router();
 
@@ -229,6 +229,43 @@ router.patch("/enrollments/:id/approve", requireAuth, async (req, res): Promise<
     courseId: enrollment.course_id,
     isApproved: true,
   });
+});
+
+// Admin: reject an enrollment
+router.patch("/enrollments/:id/reject", requireAuth, async (req, res): Promise<void> => {
+  if (req.userRole !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(rawId, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid enrollment id" }); return; }
+
+  const { data: enrollment, error } = await supabase
+    .from("enrollments")
+    .delete()
+    .eq("id", id)
+    .select()
+    .maybeSingle();
+
+  if (error || !enrollment) {
+    res.status(404).json({ error: "Enrollment not found" });
+    return;
+  }
+
+  const [{ data: enrolledUser }, { data: enrolledCourse }] = await Promise.all([
+    supabase.from("users").select("email, name").eq("id", enrollment.user_id).maybeSingle(),
+    supabase.from("courses").select("title").eq("id", enrollment.course_id).maybeSingle(),
+  ]);
+
+  if (enrolledUser && enrolledCourse) {
+    sendEnrollmentRejectedEmail(enrolledUser.email, enrolledUser.name, enrolledCourse.title).catch((err) => {
+      console.error("[enrollments] Failed to send rejection email for enrollment", id, err);
+    });
+  }
+
+  res.json({ id: enrollment.id, rejected: true });
 });
 
 router.patch("/enrollments/:courseId/progress", requireAuth, async (req, res): Promise<void> => {

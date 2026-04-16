@@ -3,7 +3,7 @@ import { requireAuth, requireAdmin } from "../lib/auth";
 import { formatUser } from "./auth";
 import { UpdateUserBody, UpdateUserRoleBody } from "@workspace/api-zod";
 import { supabase } from "../lib/supabase";
-import { sendUserApprovedEmail } from "../lib/email";
+import { sendUserApprovedEmail, sendUserRejectedEmail } from "../lib/email";
 
 const router: IRouter = Router();
 
@@ -237,6 +237,12 @@ router.patch("/users/:id/block", requireAdmin, async (req, res): Promise<void> =
   if (error || !user) {
     res.status(500).json({ error: error?.message ?? "Failed to update user" });
     return;
+  }
+
+  if (blocked) {
+    sendUserRejectedEmail(user.email, user.name).catch((err) => {
+      console.error("[users] Failed to send rejection email for user", id, err);
+    });
   }
 
   res.json(formatUser(user));
