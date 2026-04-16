@@ -81,7 +81,7 @@ export default function AdminPage() {
 
   // All hooks must be called unconditionally (Rules of Hooks)
   const { data: users, isLoading: usersLoading } = useListUsers({
-    query: { queryKey: getListUsersQueryKey() }
+    query: { queryKey: getListUsersQueryKey(), refetchInterval: 30_000 }
   });
   const { data: courses, isLoading: coursesLoading } = useListCourses({
     query: { queryKey: getListCoursesQueryKey() }
@@ -203,6 +203,8 @@ export default function AdminPage() {
   useEffect(() => {
     if (user?.role === "admin") {
       void fetchPendingEnrollments();
+      const interval = setInterval(() => { void fetchPendingEnrollments(); }, 30_000);
+      return () => clearInterval(interval);
     }
   }, [user, fetchPendingEnrollments]);
 
@@ -217,7 +219,11 @@ export default function AdminPage() {
   }, [token]);
 
   useEffect(() => {
-    if (user?.role === "admin") void fetchPendingToolRequests();
+    if (user?.role === "admin") {
+      void fetchPendingToolRequests();
+      const interval = setInterval(() => { void fetchPendingToolRequests(); }, 30_000);
+      return () => clearInterval(interval);
+    }
   }, [user, fetchPendingToolRequests]);
 
   const handleApproveToolRequest = async (request: PendingToolRequest) => {
@@ -375,6 +381,60 @@ export default function AdminPage() {
             </Card>
           ))}
         </div>
+
+        {/* Pending approvals summary */}
+        {(pendingUsers.length > 0 || pendingEnrollments.length > 0 || pendingToolRequests.length > 0) && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-testid="pending-approvals-summary">
+            {pendingUsers.length > 0 && (
+              <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20" data-testid="pending-users-card">
+                <CardContent className="pt-4 pb-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Pending Accounts</p>
+                      <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{pendingUsers.length}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {pendingUsers.length === 1 ? "account awaiting" : "accounts awaiting"} approval
+                      </p>
+                    </div>
+                    <Clock className="w-8 h-8 text-amber-500 opacity-60" />
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            {pendingEnrollments.length > 0 && (
+              <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20" data-testid="pending-enrollments-card">
+                <CardContent className="pt-4 pb-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Pending Enrollments</p>
+                      <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{pendingEnrollments.length}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {pendingEnrollments.length === 1 ? "enrollment awaiting" : "enrollments awaiting"} approval
+                      </p>
+                    </div>
+                    <GraduationCap className="w-8 h-8 text-amber-500 opacity-60" />
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            {pendingToolRequests.length > 0 && (
+              <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20" data-testid="pending-tool-requests-card">
+                <CardContent className="pt-4 pb-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Pending Tool Requests</p>
+                      <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{pendingToolRequests.length}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {pendingToolRequests.length === 1 ? "request awaiting" : "requests awaiting"} approval
+                      </p>
+                    </div>
+                    <Wrench className="w-8 h-8 text-amber-500 opacity-60" />
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
 
         {/* Management tabs */}
         <Tabs defaultValue="pending">
