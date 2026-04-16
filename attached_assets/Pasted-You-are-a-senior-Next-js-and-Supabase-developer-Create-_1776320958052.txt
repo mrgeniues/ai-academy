@@ -1,0 +1,159 @@
+You are a senior Next.js and Supabase developer.
+
+Create a NEW section called "AI Tools" with STRICT requirements.
+
+IMPORTANT:
+
+* Do NOT modify existing course system
+* Do NOT change UI unnecessarily
+* ONLY add AI Tools system as described
+
+=====================================
+GOAL:
+
+* Add new sidebar option: "AI Tools"
+* Similar to Courses section BUT with modified logic
+
+=====================================
+SIDEBAR:
+
+Add below "Courses":
+
+* AI Tools
+
+=====================================
+AI TOOLS PAGE:
+
+Design similar to Courses cards layout
+
+Each card should include:
+
+* Title
+* Description
+* Thumbnail image
+* Video link (optional preview)
+* Tool link (main access link)
+
+=====================================
+BUTTON CHANGE:
+
+Replace:
+
+"Enroll Free"
+
+WITH:
+
+"Access Tool"
+
+=====================================
+DATABASE:
+
+Create table:
+
+tools
+
+Fields:
+
+* id
+* title
+* description
+* image_url
+* video_url
+* tool_url
+* created_by
+* created_at
+
+=====================================
+NO LESSON SYSTEM:
+
+* Do NOT create lessons table for tools
+* Do NOT allow multiple sessions
+* Only single tool per card
+
+=====================================
+USER ACTION:
+
+When user clicks "Access Tool":
+
+* Create request record (like enrollment)
+
+=====================================
+CREATE TABLE:
+
+tool_requests
+
+Fields:
+
+* id
+* user_id
+* tool_id
+* is_approved (boolean default false)
+* created_at
+
+=====================================
+ACCESS CONTROL:
+
+IF:
+
+is_approved = true
+
+→ allow access to tool link
+
+ELSE:
+
+→ Show message:
+"Wait for admin approval"
+
+=====================================
+ADMIN PANEL:
+
+Add new tab:
+
+"Tool Access"
+
+=====================================
+ADMIN VIEW:
+
+* Show all requests where:
+  is_approved = false
+
+For each:
+
+* User name
+* Tool name
+
+=====================================
+ACTION:
+
+* Add "Approve" button
+
+=====================================
+APPROVAL LOGIC:
+
+* Update:
+  is_approved = true
+
+=====================================
+UI RULES:
+
+* Same design as course cards
+* Only button text change
+* No lesson UI
+
+=====================================
+STRICT RULES:
+
+* Do NOT modify courses
+* Do NOT add lessons
+* Do NOT add extra features
+* Only implement tool system
+
+=====================================
+OUTPUT:
+
+* Database schema
+* Tool card UI
+* Access request logic
+* Admin approval logic
+
+Ensure everything works correctly without bugs.

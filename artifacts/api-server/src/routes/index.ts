@@ -11,6 +11,7 @@ import notificationsRouter from "./notifications";
 import uploadRouter from "./upload";
 import messagesRouter from "./messages";
 import maintenanceRouter from "./maintenance";
+import toolsRouter from "./tools";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(notificationsRouter);
 router.use(uploadRouter);
 router.use(messagesRouter);
 router.use(maintenanceRouter);
+router.use(toolsRouter);
 
 export default router;

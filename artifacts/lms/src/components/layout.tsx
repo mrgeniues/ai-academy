@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { NotificationBell } from "@/components/notification-bell";
 import {
   LayoutDashboard, BookOpen, Users, User, LogOut, Sun, Moon, Palette, Shield, Menu,
-  GraduationCap, Crown, MessageSquare, PanelLeftClose, PanelLeftOpen,
+  GraduationCap, Crown, MessageSquare, PanelLeftClose, PanelLeftOpen, Wrench,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -19,6 +19,7 @@ import { useUnreadCount } from "@/hooks/use-unread-count";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/courses", label: "Courses", icon: BookOpen },
+  { href: "/ai-tools", label: "AI Tools", icon: Wrench },
   { href: "/vip-posts", label: "VIP Posts", icon: Crown },
   { href: "/community", label: "Community", icon: Users },
   { href: "/messages", label: "Messages", icon: MessageSquare },

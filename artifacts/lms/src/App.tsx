@@ -18,6 +18,7 @@ import MessagesPage from "@/pages/messages";
 import ResetPasswordPage from "@/pages/reset-password";
 import WaitingApprovalPage from "@/pages/waiting-approval";
 import MaintenancePage from "@/pages/maintenance";
+import AiToolsPage from "@/pages/ai-tools";
 import NotFound from "@/pages/not-found";
 import { WhatsAppButton } from "@/components/whatsapp-button";
 import { useEffect, useRef } from "react";
@@ -134,6 +135,9 @@ function Router() {
         </Route>
         <Route path="/courses">
           <ProtectedRoute component={CoursesPage} />
+        </Route>
+        <Route path="/ai-tools">
+          <ProtectedRoute component={AiToolsPage} />
         </Route>
         <Route path="/courses/:id">
           <ProtectedRoute component={CourseDetailPage} />

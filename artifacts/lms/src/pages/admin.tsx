@@ -52,6 +52,19 @@ export default function AdminPage() {
   const [pendingEnrollmentsLoading, setPendingEnrollmentsLoading] = useState(true);
   const [approvingEnrollmentId, setApprovingEnrollmentId] = useState<number | null>(null);
 
+  // Tool requests state
+  type PendingToolRequest = {
+    id: number;
+    userId: number;
+    toolId: number;
+    createdAt: string;
+    user: { id: number; name: string; email: string };
+    tool: { id: number; title: string };
+  };
+  const [pendingToolRequests, setPendingToolRequests] = useState<PendingToolRequest[]>([]);
+  const [toolRequestsLoading, setToolRequestsLoading] = useState(true);
+  const [approvingToolRequestId, setApprovingToolRequestId] = useState<number | null>(null);
+
   // Maintenance state
   const [maintActive, setMaintActive] = useState(false);
   const [maintStart, setMaintStart] = useState("");
@@ -187,6 +200,41 @@ export default function AdminPage() {
     }
   }, [user, fetchPendingEnrollments]);
 
+  const fetchPendingToolRequests = useCallback(async () => {
+    setToolRequestsLoading(true);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch("/api/tool-requests/pending", { headers: { Authorization: `Bearer ${authToken}` } });
+      if (resp.ok) setPendingToolRequests(await resp.json() as PendingToolRequest[]);
+    } catch { /* silently ignore */ }
+    finally { setToolRequestsLoading(false); }
+  }, [token]);
+
+  useEffect(() => {
+    if (user?.role === "admin") void fetchPendingToolRequests();
+  }, [user, fetchPendingToolRequests]);
+
+  const handleApproveToolRequest = async (request: PendingToolRequest) => {
+    setApprovingToolRequestId(request.id);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch(`/api/tool-requests/${request.id}/approve`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Failed to approve");
+      }
+      await fetchPendingToolRequests();
+      toast({ title: `${request.user.name} approved for "${request.tool.title}"` });
+    } catch (err) {
+      toast({ title: (err as Error).message, variant: "destructive" });
+    } finally {
+      setApprovingToolRequestId(null);
+    }
+  };
+
   const loadMaintenanceSettings = useCallback(async () => {
     try {
       const resp = await fetch("/api/maintenance");
@@ -284,7 +332,7 @@ export default function AdminPage() {
 
         {/* Management tabs */}
         <Tabs defaultValue="pending">
-          <TabsList className="grid grid-cols-6 w-full max-w-3xl">
+          <TabsList className="grid grid-cols-7 w-full max-w-4xl">
             <TabsTrigger value="pending" data-testid="tab-pending">
               Approvals
               {pendingUsers.length > 0 && (
@@ -300,6 +348,12 @@ export default function AdminPage() {
             <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
             <TabsTrigger value="courses" data-testid="tab-courses">Manage</TabsTrigger>
             <TabsTrigger value="posts" data-testid="tab-posts">Posts</TabsTrigger>
+            <TabsTrigger value="tool-access" data-testid="tab-tool-access">
+              Tools
+              {pendingToolRequests.length > 0 && (
+                <Badge variant="destructive" className="ml-1.5 text-xs px-1.5 py-0 h-4">{pendingToolRequests.length}</Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger
               value="maintenance"
               data-testid="tab-maintenance"
@@ -621,6 +675,57 @@ export default function AdminPage() {
               </CardContent>
             </Card>
           </TabsContent>
+          {/* ── Tool Access tab ───────────────────────────────────────── */}
+          <TabsContent value="tool-access" className="mt-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  Tool Access Requests
+                  <Badge variant="secondary" className="text-xs font-normal">{pendingToolRequests.length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {toolRequestsLoading ? (
+                  <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div>
+                ) : pendingToolRequests.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <CheckCircle className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                    <p className="text-sm">No pending tool access requests</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {pendingToolRequests.map(req => (
+                      <div key={req.id} className="flex items-center gap-3 py-4">
+                        <Avatar className="w-9 h-9 flex-shrink-0">
+                          <AvatarFallback className="text-xs bg-muted font-semibold">
+                            {req.user.name.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{req.user.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            wants access to <span className="font-medium text-foreground">"{req.tool.title}"</span>
+                          </p>
+                          <p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(req.createdAt), { addSuffix: true })}</p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleApproveToolRequest(req)}
+                          disabled={approvingToolRequestId === req.id}
+                          data-testid={`button-approve-tool-request-${req.id}`}
+                          className="flex-shrink-0 text-green-600 border-green-300 hover:bg-green-50 dark:hover:bg-green-900/20"
+                        >
+                          {approvingToolRequestId === req.id ? "Approving…" : "Approve"}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           {/* ── Maintenance tab ───────────────────────────────────────── */}
           <TabsContent value="maintenance" className="mt-4">
             <Card>
