@@ -66,7 +66,7 @@ router.post("/tools", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  res.status(201).json({
+  const created = {
     id: data.id,
     title: data.title,
     description: data.description ?? null,
@@ -75,7 +75,29 @@ router.post("/tools", requireAuth, async (req, res): Promise<void> => {
     toolUrl: data.tool_url ?? null,
     createdBy: data.created_by,
     createdAt: data.created_at,
-  });
+  };
+
+  res.status(201).json(created);
+
+  // Broadcast a notification to every user (fire-and-forget, don't block response)
+  void (async () => {
+    try {
+      const { data: users } = await supabase.from("users").select("id");
+      if (!users || users.length === 0) return;
+      await supabase.from("notifications").insert(
+        users.map(u => ({
+          user_id: u.id,
+          type: "tool",
+          title: "New AI Tool Available 🛠️",
+          message: `"${created.title}" has been added to AI Tools — go check it out!`,
+          is_read: false,
+          is_vip: false,
+        }))
+      );
+    } catch (e) {
+      console.error("[POST /tools] Failed to broadcast notification:", e);
+    }
+  })();
 });
 
 // ── Update a tool (admin only) ────────────────────────────────────────────
