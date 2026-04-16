@@ -3,6 +3,7 @@ import { requireAuth, requireAdmin } from "../lib/auth";
 import { formatUser } from "./auth";
 import { UpdateUserBody, UpdateUserRoleBody } from "@workspace/api-zod";
 import { supabase } from "../lib/supabase";
+import { sendUserApprovedEmail } from "../lib/email";
 
 const router: IRouter = Router();
 
@@ -267,6 +268,10 @@ router.patch("/users/:id/approve", requireAdmin, async (req, res): Promise<void>
     res.status(500).json({ error: error?.message ?? "Failed to approve user" });
     return;
   }
+
+  sendUserApprovedEmail(user.email, user.name).catch((err) => {
+    console.error("[users] Failed to send approval email for user", id, err);
+  });
 
   res.json(formatUser(user));
 });

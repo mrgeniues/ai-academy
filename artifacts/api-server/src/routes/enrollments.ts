@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { requireAuth } from "../lib/auth";
 import { EnrollInCourseBody, UpdateProgressBody } from "@workspace/api-zod";
 import { supabase } from "../lib/supabase";
+import { sendEnrollmentApprovedEmail } from "../lib/email";
 
 const router: IRouter = Router();
 
@@ -173,6 +174,17 @@ router.patch("/enrollments/:id/approve", requireAuth, async (req, res): Promise<
   if (error || !enrollment) {
     res.status(404).json({ error: "Enrollment not found" });
     return;
+  }
+
+  const [{ data: enrolledUser }, { data: enrolledCourse }] = await Promise.all([
+    supabase.from("users").select("email, name").eq("id", enrollment.user_id).maybeSingle(),
+    supabase.from("courses").select("title").eq("id", enrollment.course_id).maybeSingle(),
+  ]);
+
+  if (enrolledUser && enrolledCourse) {
+    sendEnrollmentApprovedEmail(enrolledUser.email, enrolledUser.name, enrolledCourse.title).catch((err) => {
+      console.error("[enrollments] Failed to send approval email for enrollment", id, err);
+    });
   }
 
   res.json({
