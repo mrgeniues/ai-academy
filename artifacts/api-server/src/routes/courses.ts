@@ -213,18 +213,23 @@ router.get("/courses/:id", requireAuth, async (req, res): Promise<void> => {
 
   res.json({
     ...formatCourse(course as DbCourse, lessonCount ?? 0, enrollmentCount ?? 0),
-    lessons: visibleLessons.map(l => ({
-      id: l.id,
-      courseId: l.course_id,
-      title: l.title,
-      description: l.description ?? null,
-      videoUrl: l.video_url ?? null,
-      content: l.content ?? null,
-      order: l.order,
-      isPublic: l.is_public ?? true,
-      isCompleted: completedLessonIds.includes(l.id),
-      createdAt: l.created_at,
-    })),
+    lessons: visibleLessons.map(l => {
+      const lessonIsPrivate = l.is_public === false;
+      // Non-admins never receive the sensitive fields of private lessons
+      const stripContent = lessonIsPrivate && !isAdminUser;
+      return {
+        id: l.id,
+        courseId: l.course_id,
+        title: l.title,
+        description: stripContent ? null : (l.description ?? null),
+        videoUrl: stripContent ? null : (l.video_url ?? null),
+        content: stripContent ? null : (l.content ?? null),
+        order: l.order,
+        isPublic: l.is_public ?? true,
+        isCompleted: completedLessonIds.includes(l.id),
+        createdAt: l.created_at,
+      };
+    }),
     isEnrolled: !!enrollment,
     enrollmentApproved: enrollment ? ((enrollment as Record<string, unknown>).is_approved ?? true) : null,
     progress: enrollment?.progress ?? null,

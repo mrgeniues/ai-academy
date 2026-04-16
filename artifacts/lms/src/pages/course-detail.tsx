@@ -470,75 +470,105 @@ export default function CourseDetailPage() {
                 <Card>
                   <CardHeader className="pb-3 border-b">
                     <CardTitle className="text-lg flex items-center gap-2">
-                      <FileText className="w-5 h-5 text-primary" />
+                      {activeLesson.isPublic === false
+                        ? <Lock className="w-5 h-5 text-red-400" />
+                        : <FileText className="w-5 h-5 text-primary" />
+                      }
                       {activeLesson.title}
+                      {activeLesson.isPublic === false && (
+                        <Badge variant="destructive" className="ml-auto text-xs font-medium">Private</Badge>
+                      )}
                     </CardTitle>
-                    {activeLesson.description && (
+                    {/* Only show description in header for public lessons / admins */}
+                    {activeLesson.isPublic !== false && activeLesson.description && (
                       <div className="text-sm text-muted-foreground mt-1">
                         <RichTextDisplay html={activeLesson.description} />
                       </div>
                     )}
                   </CardHeader>
                   <CardContent className="pt-4 space-y-4">
-                    {activeLesson.videoUrl && (
-                      <div className="rounded-lg overflow-hidden bg-black">
-                        {activeLesson.videoUrl.includes("youtube.com") || activeLesson.videoUrl.includes("youtu.be") ? (
-                          <iframe
-                            src={activeLesson.videoUrl.replace("watch?v=", "embed/").replace("youtu.be/", "youtube.com/embed/")}
-                            className="w-full aspect-video"
-                            allowFullScreen
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          />
-                        ) : (
-                          <a
-                            data-testid="link-video"
-                            href={activeLesson.videoUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 text-primary hover:underline text-sm p-4"
-                          >
-                            <PlayCircle className="w-5 h-5" /> Watch Video
-                          </a>
+                    {/* ── PRIVATE LESSON WALL ──────────────────────────────────────── */}
+                    {activeLesson.isPublic === false && !isAdmin ? (
+                      <div className="flex flex-col items-center justify-center py-14 gap-4 text-center">
+                        <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                          <Lock className="w-8 h-8 text-red-500" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-base">This lesson is private. Contact admin.</p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Reach out to unlock access to this lesson.
+                          </p>
+                        </div>
+                        <a href="https://wa.me/923278035433" target="_blank" rel="noopener noreferrer">
+                          <Button size="sm" className="gap-2 bg-green-500 hover:bg-green-600 text-white">
+                            <MessageCircle className="w-4 h-4" /> Contact Admin on WhatsApp
+                          </Button>
+                        </a>
+                      </div>
+                    ) : (
+                      <>
+                        {/* ── PUBLIC / ADMIN CONTENT ──────────────────────────────── */}
+                        {activeLesson.videoUrl && (
+                          <div className="rounded-lg overflow-hidden bg-black">
+                            {activeLesson.videoUrl.includes("youtube.com") || activeLesson.videoUrl.includes("youtu.be") ? (
+                              <iframe
+                                src={activeLesson.videoUrl.replace("watch?v=", "embed/").replace("youtu.be/", "youtube.com/embed/")}
+                                className="w-full aspect-video"
+                                allowFullScreen
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              />
+                            ) : (
+                              <a
+                                data-testid="link-video"
+                                href={activeLesson.videoUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 text-primary hover:underline text-sm p-4"
+                              >
+                                <PlayCircle className="w-5 h-5" /> Watch Video
+                              </a>
+                            )}
+                          </div>
                         )}
-                      </div>
-                    )}
-                    {activeLesson.content && (
-                      <div className="text-sm text-foreground">
-                        <RichTextDisplay html={activeLesson.content} />
-                      </div>
-                    )}
+                        {activeLesson.content && (
+                          <div className="text-sm text-foreground">
+                            <RichTextDisplay html={activeLesson.content} />
+                          </div>
+                        )}
 
-                    {/* Mark complete / undo — only for enrolled non-admin users */}
-                    {course.isEnrolled && !isAdmin && (
-                      <div className="flex items-center gap-3 pt-2 border-t border-border">
-                        {activeLesson.isCompleted ? (
-                          <Button
-                            data-testid="button-update-progress"
-                            size="sm"
-                            variant="outline"
-                            className="gap-2 text-green-600 border-green-300 hover:bg-green-50"
-                            onClick={() => handleToggleComplete(activeLesson.id, true)}
-                            disabled={completingLesson === activeLesson.id}
-                          >
-                            <CheckCircle className="w-4 h-4" />
-                            {completingLesson === activeLesson.id ? "Updating..." : "Completed — Click to Undo"}
-                          </Button>
-                        ) : (
-                          <Button
-                            data-testid="button-update-progress"
-                            size="sm"
-                            className="gap-2"
-                            onClick={() => handleToggleComplete(activeLesson.id, false)}
-                            disabled={completingLesson === activeLesson.id}
-                          >
-                            <Circle className="w-4 h-4" />
-                            {completingLesson === activeLesson.id ? "Updating..." : "Mark as Complete"}
-                          </Button>
+                        {/* Mark complete / undo — only for enrolled non-admin users on public lessons */}
+                        {course.isEnrolled && !isAdmin && (
+                          <div className="flex items-center gap-3 pt-2 border-t border-border">
+                            {activeLesson.isCompleted ? (
+                              <Button
+                                data-testid="button-update-progress"
+                                size="sm"
+                                variant="outline"
+                                className="gap-2 text-green-600 border-green-300 hover:bg-green-50"
+                                onClick={() => handleToggleComplete(activeLesson.id, true)}
+                                disabled={completingLesson === activeLesson.id}
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                                {completingLesson === activeLesson.id ? "Updating..." : "Completed — Click to Undo"}
+                              </Button>
+                            ) : (
+                              <Button
+                                data-testid="button-update-progress"
+                                size="sm"
+                                className="gap-2"
+                                onClick={() => handleToggleComplete(activeLesson.id, false)}
+                                disabled={completingLesson === activeLesson.id}
+                              >
+                                <Circle className="w-4 h-4" />
+                                {completingLesson === activeLesson.id ? "Updating..." : "Mark as Complete"}
+                              </Button>
+                            )}
+                            <span className="text-xs text-muted-foreground">
+                              {completedLessons}/{totalLessons} lessons completed
+                            </span>
+                          </div>
                         )}
-                        <span className="text-xs text-muted-foreground">
-                          {completedLessons}/{totalLessons} lessons completed
-                        </span>
-                      </div>
+                      </>
                     )}
                   </CardContent>
                 </Card>
