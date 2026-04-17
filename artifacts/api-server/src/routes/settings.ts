@@ -92,6 +92,47 @@ router.post("/settings/email", requireAuth, async (req, res): Promise<void> => {
   }
 });
 
+// Admin: preview test email (returns content without sending)
+router.get("/settings/email/test/preview", requireAuth, async (req, res): Promise<void> => {
+  if (req.userRole !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+
+  const { data: userRow, error: userErr } = await supabase
+    .from("users")
+    .select("email, name")
+    .eq("id", req.userId!)
+    .single();
+
+  if (userErr || !userRow) {
+    res.status(500).json({ error: "Could not look up your account details" });
+    return;
+  }
+
+  const fromEmail = await (async () => {
+    try {
+      const stored = await getEmailFromSetting();
+      if (stored) return stored;
+    } catch { /* fall through */ }
+    return process.env.EMAIL_FROM ?? "LMS Platform <notifications@resend.dev>";
+  })();
+
+  const name = userRow.name as string;
+
+  res.json({
+    subject: "Test email from LMS Platform",
+    from: fromEmail,
+    to: userRow.email as string,
+    html: `
+      <p>Hi ${name},</p>
+      <p>This is a test email from your LMS Platform to verify that email delivery is working correctly.</p>
+      <p>If you received this, your email configuration is set up properly.</p>
+      <p><strong>Sending from:</strong> ${fromEmail}</p>
+    `,
+  });
+});
+
 // Admin: send test email
 router.post("/settings/email/test", requireAuth, async (req, res): Promise<void> => {
   if (req.userRole !== "admin") {

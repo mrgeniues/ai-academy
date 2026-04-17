@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
@@ -119,6 +120,9 @@ export default function AdminPage() {
   const [emailFromSaving, setEmailFromSaving] = useState(false);
   const [emailFromLoaded, setEmailFromLoaded] = useState(false);
   const [emailFromTesting, setEmailFromTesting] = useState(false);
+  const [testEmailPreviewOpen, setTestEmailPreviewOpen] = useState(false);
+  const [testEmailPreviewLoading, setTestEmailPreviewLoading] = useState(false);
+  const [testEmailPreview, setTestEmailPreview] = useState<{ subject: string; from: string; to: string; html: string } | null>(null);
 
   // General / platform settings state
   const [platformName, setPlatformName] = useState("");
@@ -410,6 +414,27 @@ export default function AdminPage() {
     }
   };
 
+  const handleOpenTestEmailPreview = async () => {
+    setTestEmailPreviewLoading(true);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch("/api/settings/email/test/preview", {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Failed to load email preview");
+      }
+      const data = await resp.json() as { subject: string; from: string; to: string; html: string };
+      setTestEmailPreview(data);
+      setTestEmailPreviewOpen(true);
+    } catch (err) {
+      toast({ title: (err as Error).message, variant: "destructive" });
+    } finally {
+      setTestEmailPreviewLoading(false);
+    }
+  };
+
   const handleSendTestEmail = async () => {
     setEmailFromTesting(true);
     try {
@@ -423,6 +448,7 @@ export default function AdminPage() {
         throw new Error(err.error ?? "Failed to send test email");
       }
       const data = await resp.json() as { message: string };
+      setTestEmailPreviewOpen(false);
       toast({ title: data.message });
     } catch (err) {
       toast({ title: (err as Error).message, variant: "destructive" });
@@ -1554,12 +1580,12 @@ export default function AdminPage() {
                       </Button>
                       <Button
                         variant="outline"
-                        onClick={handleSendTestEmail}
-                        disabled={emailFromTesting || emailFromSaving}
+                        onClick={handleOpenTestEmailPreview}
+                        disabled={testEmailPreviewLoading || emailFromSaving}
                         data-testid="button-test-email"
                         className="w-full sm:w-auto"
                       >
-                        {emailFromTesting ? "Sending…" : "Send Test Email"}
+                        {testEmailPreviewLoading ? "Loading…" : "Send Test Email"}
                       </Button>
                       {emailFrom && (
                         <Button
@@ -1747,6 +1773,44 @@ export default function AdminPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <Dialog open={testEmailPreviewOpen} onOpenChange={setTestEmailPreviewOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Test Email Preview</DialogTitle>
+            <DialogDescription>
+              Review the email below before sending it to your inbox.
+            </DialogDescription>
+          </DialogHeader>
+          {testEmailPreview && (
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-[80px_1fr] gap-x-3 gap-y-1.5">
+                <span className="text-muted-foreground font-medium">From</span>
+                <span className="font-mono break-all">{testEmailPreview.from}</span>
+                <span className="text-muted-foreground font-medium">To</span>
+                <span className="font-mono break-all">{testEmailPreview.to}</span>
+                <span className="text-muted-foreground font-medium">Subject</span>
+                <span>{testEmailPreview.subject}</span>
+              </div>
+              <div className="border rounded-md overflow-hidden">
+                <div className="bg-muted px-3 py-1.5 text-xs text-muted-foreground font-medium border-b">Email Body</div>
+                <div
+                  className="p-4 prose prose-sm max-w-none"
+                  dangerouslySetInnerHTML={{ __html: testEmailPreview.html }}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setTestEmailPreviewOpen(false)} disabled={emailFromTesting}>
+              Cancel
+            </Button>
+            <Button onClick={handleSendTestEmail} disabled={emailFromTesting} data-testid="button-confirm-send-test-email">
+              {emailFromTesting ? "Sending…" : "Send"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
