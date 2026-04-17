@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { requireAuth } from "../lib/auth";
+import { sendTestEmail } from "../lib/email";
 import { supabase } from "../lib/supabase";
 
 const router: IRouter = Router();
@@ -84,6 +85,34 @@ router.post("/settings/email", requireAuth, async (req, res): Promise<void> => {
     console.error("[settings] Failed to write settings to DB:", err);
     res.status(500).json({ error: "Failed to save setting" });
   }
+});
+
+// Admin: send test email
+router.post("/settings/email/test", requireAuth, async (req, res): Promise<void> => {
+  if (req.userRole !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+
+  const { data: userRow, error: userErr } = await supabase
+    .from("users")
+    .select("email, name")
+    .eq("id", req.userId!)
+    .single();
+
+  if (userErr || !userRow) {
+    res.status(500).json({ error: "Could not look up your account details" });
+    return;
+  }
+
+  const result = await sendTestEmail(userRow.email as string, userRow.name as string);
+
+  if (!result.ok) {
+    res.status(500).json({ error: result.error ?? "Failed to send test email" });
+    return;
+  }
+
+  res.json({ message: `Test email sent to ${userRow.email as string}` });
 });
 
 export default router;

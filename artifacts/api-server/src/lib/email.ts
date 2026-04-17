@@ -121,6 +121,41 @@ export async function sendEnrollmentRejectedEmail(
   }
 }
 
+export async function sendTestEmail(to: string, name: string): Promise<{ ok: boolean; error?: string }> {
+  const client = getClient();
+  if (!client) {
+    return { ok: false, error: "Email is not configured — RESEND_API_KEY is missing." };
+  }
+
+  const fromEmail = resolveFromEmail();
+
+  try {
+    const { error } = await client.emails.send({
+      from: fromEmail,
+      to,
+      subject: "Test email from LMS Platform",
+      html: `
+        <p>Hi ${name},</p>
+        <p>This is a test email from your LMS Platform to verify that email delivery is working correctly.</p>
+        <p>If you received this, your email configuration is set up properly.</p>
+        <p><strong>Sending from:</strong> ${fromEmail}</p>
+      `,
+      text: `Hi ${name},\n\nThis is a test email from your LMS Platform to verify that email delivery is working correctly.\n\nIf you received this, your email configuration is set up properly.\n\nSending from: ${fromEmail}`,
+    });
+
+    if (error) {
+      console.error("[email] Failed to send test email:", error);
+      return { ok: false, error: error.message ?? "Failed to send test email" };
+    }
+
+    console.info(`[email] Sent test email to ${to}`);
+    return { ok: true };
+  } catch (err) {
+    console.error("[email] Unexpected error sending test email:", err);
+    return { ok: false, error: (err as Error).message ?? "Unexpected error" };
+  }
+}
+
 export async function sendEnrollmentApprovedEmail(
   to: string,
   name: string,

@@ -82,6 +82,7 @@ export default function AdminPage() {
   const [emailFromEffective, setEmailFromEffective] = useState("");
   const [emailFromSaving, setEmailFromSaving] = useState(false);
   const [emailFromLoaded, setEmailFromLoaded] = useState(false);
+  const [emailFromTesting, setEmailFromTesting] = useState(false);
 
   // All hooks must be called unconditionally (Rules of Hooks)
   const { data: users, isLoading: usersLoading } = useListUsers({
@@ -320,6 +321,27 @@ export default function AdminPage() {
       toast({ title: (err as Error).message, variant: "destructive" });
     } finally {
       setEmailFromSaving(false);
+    }
+  };
+
+  const handleSendTestEmail = async () => {
+    setEmailFromTesting(true);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch("/api/settings/email/test", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Failed to send test email");
+      }
+      const data = await resp.json() as { message: string };
+      toast({ title: data.message });
+    } catch (err) {
+      toast({ title: (err as Error).message, variant: "destructive" });
+    } finally {
+      setEmailFromTesting(false);
     }
   };
 
@@ -1010,7 +1032,7 @@ export default function AdminPage() {
                         </p>
                       )}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button
                         onClick={handleSaveEmailFrom}
                         disabled={emailFromSaving}
@@ -1018,6 +1040,15 @@ export default function AdminPage() {
                         className="w-full sm:w-auto"
                       >
                         {emailFromSaving ? "Saving…" : "Save Address"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={handleSendTestEmail}
+                        disabled={emailFromTesting || emailFromSaving}
+                        data-testid="button-test-email"
+                        className="w-full sm:w-auto"
+                      >
+                        {emailFromTesting ? "Sending…" : "Send Test Email"}
                       </Button>
                       {emailFrom && (
                         <Button
