@@ -84,6 +84,9 @@ export default function CoursesPage() {
 
   const isAdmin = user?.role === "admin";
 
+  // ── Enrollment type filter ───────────────────────────────────────────────
+  const [enrollmentFilter, setEnrollmentFilter] = useState<"all" | "open" | "approval_required">("all");
+
   // ── Create form helpers ──────────────────────────────────────────────────
   const resetForm = () => {
     setTitle(""); setDescription(""); setImageFile(null); setImagePreview(null); setExternalUrl("");
@@ -375,6 +378,34 @@ export default function CoursesPage() {
           )}
         </div>
 
+        {/* Enrollment type filter */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-muted-foreground font-medium mr-1">Filter:</span>
+          {(
+            [
+              { value: "all", label: "All Courses" },
+              { value: "open", label: "Instant Access" },
+              { value: "approval_required", label: "Approval Required" },
+            ] as { value: "all" | "open" | "approval_required"; label: string }[]
+          ).map(({ value, label }) => (
+            <button
+              key={value}
+              data-testid={`filter-enrollment-${value}`}
+              onClick={() => setEnrollmentFilter(value)}
+              className={[
+                "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                enrollmentFilter === value
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-background text-muted-foreground border-border hover:border-primary hover:text-primary",
+              ].join(" ")}
+            >
+              {value === "open" && <Zap className="w-3 h-3 inline-block mr-1 -mt-0.5" />}
+              {value === "approval_required" && <Clock className="w-3 h-3 inline-block mr-1 -mt-0.5" />}
+              {label}
+            </button>
+          ))}
+        </div>
+
         {/* Course grid */}
         {coursesLoading ? (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -382,14 +413,28 @@ export default function CoursesPage() {
               <Card key={i}><CardContent className="pt-0"><Skeleton className="h-44 w-full" /><div className="p-4 space-y-2"><Skeleton className="h-5 w-3/4" /><Skeleton className="h-4 w-full" /></div></CardContent></Card>
             ))}
           </div>
-        ) : courses && courses.length > 0 ? (
+        ) : courses && courses.length > 0 ? (() => {
+          const filteredCourses = (courses as CourseWithExtras[]).filter(course =>
+            enrollmentFilter === "all" || course.enrollmentMode === enrollmentFilter
+          );
+          return filteredCourses.length === 0 ? (
+            <div className="text-center py-16 text-muted-foreground">
+              <GraduationCap className="w-12 h-12 mx-auto mb-3 opacity-30" />
+              <p className="font-medium">No courses match this filter</p>
+              <p className="text-sm mt-1">
+                <button onClick={() => setEnrollmentFilter("all")} className="text-primary underline underline-offset-2">
+                  Show all courses
+                </button>
+              </p>
+            </div>
+          ) : (
           <motion.div
             className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
           >
-            {(courses as CourseWithExtras[]).map(course => {
+            {filteredCourses.map(course => {
               const isEnrolled = enrolledIds.has(course.id);
               const progress = progressMap.get(course.id) ?? 0;
               const isPrivate = course.visibility === "private";
@@ -520,7 +565,8 @@ export default function CoursesPage() {
               );
             })}
           </motion.div>
-        ) : (
+          );
+        })() : (
           <div className="text-center py-16 text-muted-foreground">
             <GraduationCap className="w-12 h-12 mx-auto mb-3 opacity-30" />
             <p className="font-medium">No courses yet</p>
