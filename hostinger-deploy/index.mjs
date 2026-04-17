@@ -92336,8 +92336,21 @@ var tools_default = router14;
 // src/routes/admin-actions.ts
 var import_express15 = __toESM(require_express2(), 1);
 var router15 = (0, import_express15.Router)();
-router15.get("/admin-actions", requireAdmin, async (_req, res) => {
-  const { data, error } = await supabase.from("admin_actions").select("*").order("created_at", { ascending: false }).limit(200);
+router15.get("/admin-actions", requireAdmin, async (req, res) => {
+  const { action, startDate, endDate } = req.query;
+  let query = supabase.from("admin_actions").select("*").order("created_at", { ascending: false }).limit(200);
+  if (action && action !== "all") {
+    query = query.eq("action", action);
+  }
+  if (startDate) {
+    query = query.gte("created_at", new Date(startDate).toISOString());
+  }
+  if (endDate) {
+    const end = new Date(endDate);
+    end.setDate(end.getDate() + 1);
+    query = query.lt("created_at", end.toISOString());
+  }
+  const { data, error } = await query;
   if (error) {
     if (error.message.includes("admin_actions") || error.code === "42P01") {
       res.json([]);
