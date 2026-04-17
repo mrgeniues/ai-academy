@@ -20490,27 +20490,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router16;
+    module.exports = Router17;
     module.exports.Route = Route;
-    function Router16(options) {
-      if (!(this instanceof Router16)) {
-        return new Router16(options);
+    function Router17(options) {
+      if (!(this instanceof Router17)) {
+        return new Router17(options);
       }
       const opts = options || {};
-      function router16(req, res, next) {
-        router16.handle(req, res, next);
+      function router17(req, res, next) {
+        router17.handle(req, res, next);
       }
-      Object.setPrototypeOf(router16, this);
-      router16.caseSensitive = opts.caseSensitive;
-      router16.mergeParams = opts.mergeParams;
-      router16.params = {};
-      router16.strict = opts.strict;
-      router16.stack = [];
-      return router16;
+      Object.setPrototypeOf(router17, this);
+      router17.caseSensitive = opts.caseSensitive;
+      router17.mergeParams = opts.mergeParams;
+      router17.params = {};
+      router17.strict = opts.strict;
+      router17.stack = [];
+      return router17;
     }
-    Router16.prototype = function() {
+    Router17.prototype = function() {
     };
-    Router16.prototype.param = function param(name, fn) {
+    Router17.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20530,7 +20530,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router16.prototype.handle = function handle(req, res, callback) {
+    Router17.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20657,7 +20657,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router16.prototype.use = function use(handler) {
+    Router17.prototype.use = function use(handler) {
       let offset = 0;
       let path2 = "/";
       if (typeof handler !== "function") {
@@ -20690,7 +20690,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router16.prototype.route = function route(path2) {
+    Router17.prototype.route = function route(path2) {
       const route2 = new Route(path2);
       const layer = new Layer(path2, {
         sensitive: this.caseSensitive,
@@ -20705,7 +20705,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router16.prototype[method] = function(path2) {
+      Router17.prototype[method] = function(path2) {
         const route = this.route(path2);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -20888,13 +20888,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve = __require("node:path").resolve;
     var once = require_once();
-    var Router16 = require_router();
+    var Router17 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router16 = null;
+      var router17 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -20903,13 +20903,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router16 === null) {
-            router16 = new Router16({
+          if (router17 === null) {
+            router17 = new Router17({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router16;
+          return router17;
         }
       });
     };
@@ -20980,15 +20980,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router16 = this.router;
+      var router17 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router16.use(path2, fn2);
+          return router17.use(path2, fn2);
         }
         debug(".use app under %s", path2);
         fn2.mountpath = path2;
         fn2.parent = this;
-        router16.use(path2, function mounted_app(req, res, next) {
+        router17.use(path2, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23515,7 +23515,7 @@ var require_express = __commonJS({
     var EventEmitter = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router16 = require_router();
+    var Router17 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23537,8 +23537,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router16.Route;
-    exports.Router = Router16;
+    exports.Route = Router17.Route;
+    exports.Router = Router17;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -69853,14 +69853,14 @@ var require_multer = __commonJS({
 });
 
 // src/app.ts
-var import_express16 = __toESM(require_express2(), 1);
+var import_express17 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
 import path from "path";
 import { fileURLToPath } from "url";
 
 // src/routes/index.ts
-var import_express15 = __toESM(require_express2(), 1);
+var import_express16 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -89772,6 +89772,24 @@ Happy learning!`
   }
 }
 
+// src/lib/audit.ts
+async function logAdminAction(opts) {
+  const { error } = await supabase.from("admin_actions").insert({
+    actor_id: opts.actorId,
+    target_user_id: opts.targetUserId ?? null,
+    action: opts.action,
+    entity_type: opts.entityType,
+    entity_id: opts.entityId ?? null,
+    reason: opts.reason ?? null
+  });
+  if (error) {
+    if (error.message.includes("admin_actions") || error.code === "42P01") {
+      return;
+    }
+    console.error("[audit] Failed to log admin action:", error.message);
+  }
+}
+
 // src/routes/users.ts
 var router4 = (0, import_express4.Router)();
 router4.get("/users", requireAdmin, async (_req, res) => {
@@ -89958,6 +89976,16 @@ router4.patch("/users/:id/block", requireAdmin, async (req, res) => {
       console.error("[users] Failed to send rejection email for user", id, err);
     });
   }
+  logAdminAction({
+    actorId: req.userId,
+    targetUserId: id,
+    action: blocked ? "user_rejected" : "user_unblocked",
+    entityType: "user",
+    entityId: id,
+    reason: blocked ? rejectionReason ?? null : null
+  }).catch((err) => {
+    console.error("[audit] logAdminAction fire-and-forget failed:", err);
+  });
   res.json(formatUser(user));
 });
 router4.patch("/users/:id/approve", requireAdmin, async (req, res) => {
@@ -89980,6 +90008,15 @@ router4.patch("/users/:id/approve", requireAdmin, async (req, res) => {
   }
   sendUserApprovedEmail(user.email, user.name).catch((err) => {
     console.error("[users] Failed to send approval email for user", id, err);
+  });
+  logAdminAction({
+    actorId: req.userId,
+    targetUserId: id,
+    action: "user_approved",
+    entityType: "user",
+    entityId: id
+  }).catch((err) => {
+    console.error("[audit] logAdminAction fire-and-forget failed:", err);
   });
   res.json(formatUser(user));
 });
@@ -90009,6 +90046,15 @@ router4.post("/users/bulk-action", requireAdmin, async (req, res) => {
       sendUserApprovedEmail(u.email, u.name).catch((err) => {
         console.error("[users] Failed to send approval email for user", u.id, err);
       });
+      logAdminAction({
+        actorId: req.userId,
+        targetUserId: u.id,
+        action: "user_approved",
+        entityType: "user",
+        entityId: u.id
+      }).catch((err) => {
+        console.error("[audit] logAdminAction fire-and-forget failed:", err);
+      });
     }
     res.json({ updated: (updatedUsers ?? []).length });
   } else {
@@ -90020,6 +90066,16 @@ router4.post("/users/bulk-action", requireAdmin, async (req, res) => {
     for (const u of updatedUsers ?? []) {
       sendUserRejectedEmail(u.email, u.name, bulkRejectionReason).catch((err) => {
         console.error("[users] Failed to send rejection email for user", u.id, err);
+      });
+      logAdminAction({
+        actorId: req.userId,
+        targetUserId: u.id,
+        action: "user_rejected",
+        entityType: "user",
+        entityId: u.id,
+        reason: bulkRejectionReason ?? null
+      }).catch((err) => {
+        console.error("[audit] logAdminAction fire-and-forget failed:", err);
       });
     }
     res.json({ updated: (updatedUsers ?? []).length });
@@ -90645,6 +90701,15 @@ router7.patch("/enrollments/:id/approve", requireAuth, async (req, res) => {
       console.error("[enrollments] Failed to send approval email for enrollment", id, err);
     });
   }
+  logAdminAction({
+    actorId: req.userId,
+    targetUserId: enrollment.user_id,
+    action: "enrollment_approved",
+    entityType: "enrollment",
+    entityId: id
+  }).catch((err) => {
+    console.error("[audit] logAdminAction fire-and-forget failed:", err);
+  });
   res.json({
     id: enrollment.id,
     userId: enrollment.user_id,
@@ -90679,6 +90744,16 @@ router7.patch("/enrollments/:id/reject", requireAuth, async (req, res) => {
       console.error("[enrollments] Failed to send rejection email for enrollment", id, err);
     });
   }
+  logAdminAction({
+    actorId: req.userId,
+    targetUserId: enrollment.user_id,
+    action: "enrollment_rejected",
+    entityType: "enrollment",
+    entityId: id,
+    reason: rejectionReason ?? null
+  }).catch((err) => {
+    console.error("[audit] logAdminAction fire-and-forget failed:", err);
+  });
   res.json({ id: enrollment.id, rejected: true });
 });
 router7.patch("/enrollments/:courseId/progress", requireAuth, async (req, res) => {
@@ -91727,23 +91802,65 @@ router14.patch("/tool-requests/:id/approve", requireAuth, async (req, res) => {
 });
 var tools_default = router14;
 
-// src/routes/index.ts
+// src/routes/admin-actions.ts
+var import_express15 = __toESM(require_express2(), 1);
 var router15 = (0, import_express15.Router)();
-router15.use(health_default);
-router15.use(auth_default);
-router15.use(users_default);
-router15.use(courses_default);
-router15.use(lessons_default);
-router15.use(enrollments_default);
-router15.use(posts_default);
-router15.use(dashboard_default);
-router15.use(notifications_default);
-router15.use(upload_default);
-router15.use(messages_default);
-router15.use(maintenance_default);
-router15.use(tools_default);
-router15.use(settings_default);
-var routes_default = router15;
+router15.get("/admin-actions", requireAdmin, async (_req, res) => {
+  const { data, error } = await supabase.from("admin_actions").select("*").order("created_at", { ascending: false }).limit(200);
+  if (error) {
+    if (error.message.includes("admin_actions") || error.code === "42P01") {
+      res.json([]);
+      return;
+    }
+    res.status(500).json({ error: "Failed to fetch audit log" });
+    return;
+  }
+  if (!data || data.length === 0) {
+    res.json([]);
+    return;
+  }
+  const actorIds = [...new Set(data.map((r) => r.actor_id).filter(Boolean))];
+  const targetIds = [...new Set(data.map((r) => r.target_user_id).filter(Boolean))];
+  const allUserIds = [.../* @__PURE__ */ new Set([...actorIds, ...targetIds])];
+  let usersMap = {};
+  if (allUserIds.length > 0) {
+    const { data: users } = await supabase.from("users").select("id, name, email").in("id", allUserIds);
+    for (const u of users ?? []) {
+      usersMap[u.id] = { name: u.name, email: u.email };
+    }
+  }
+  const enriched = data.map((row) => ({
+    id: row.id,
+    action: row.action,
+    entityType: row.entity_type,
+    entityId: row.entity_id,
+    reason: row.reason,
+    createdAt: row.created_at,
+    actor: row.actor_id ? usersMap[row.actor_id] ?? { name: "Unknown", email: "" } : null,
+    targetUser: row.target_user_id ? usersMap[row.target_user_id] ?? { name: "Deleted user", email: "" } : null
+  }));
+  res.json(enriched);
+});
+var admin_actions_default = router15;
+
+// src/routes/index.ts
+var router16 = (0, import_express16.Router)();
+router16.use(health_default);
+router16.use(auth_default);
+router16.use(users_default);
+router16.use(courses_default);
+router16.use(lessons_default);
+router16.use(enrollments_default);
+router16.use(posts_default);
+router16.use(dashboard_default);
+router16.use(notifications_default);
+router16.use(upload_default);
+router16.use(messages_default);
+router16.use(maintenance_default);
+router16.use(tools_default);
+router16.use(settings_default);
+router16.use(admin_actions_default);
+var routes_default = router16;
 
 // src/lib/logger.ts
 var import_pino = __toESM(require_pino(), 1);
@@ -91765,7 +91882,7 @@ var logger = (0, import_pino.default)({
 
 // src/app.ts
 var __dirname2 = path.dirname(fileURLToPath(import.meta.url));
-var app = (0, import_express16.default)();
+var app = (0, import_express17.default)();
 app.use(
   (0, import_pino_http.default)({
     logger,
@@ -91786,12 +91903,12 @@ app.use(
   })
 );
 app.use((0, import_cors.default)());
-app.use(import_express16.default.json());
-app.use(import_express16.default.urlencoded({ extended: true }));
+app.use(import_express17.default.json());
+app.use(import_express17.default.urlencoded({ extended: true }));
 app.use("/api", routes_default);
 if (process.env["NODE_ENV"] === "production") {
   const staticPath = process.env["STATIC_PATH"] ? path.resolve(process.cwd(), process.env["STATIC_PATH"]) : path.resolve(__dirname2, "../../lms/dist/public");
-  app.use(import_express16.default.static(staticPath));
+  app.use(import_express17.default.static(staticPath));
   app.use((_req, res) => {
     res.sendFile(path.join(staticPath, "index.html"));
   });
@@ -91864,6 +91981,14 @@ async function seedDemoData() {
   ]);
   logger.info("Demo data seeded successfully");
 }
+async function checkAuditTable() {
+  const { error } = await supabase.from("admin_actions").select("id").limit(1);
+  if (error && (error.message.includes("admin_actions") || error.code === "42P01")) {
+    logger.warn(
+      "admin_actions table not found \u2014 audit logging is disabled. Run the latest SQL in artifacts/api-server/supabase-setup.sql to enable it."
+    );
+  }
+}
 async function initializeDatabase() {
   logger.info("Checking database connectivity...");
   const exists = await tablesExist();
@@ -91878,6 +92003,7 @@ async function initializeDatabase() {
     return;
   }
   await seedDemoData();
+  await checkAuditTable();
   logger.info("Database ready \u2713");
 }
 
