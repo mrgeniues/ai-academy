@@ -7,11 +7,33 @@ const router: IRouter = Router();
 // In-memory typing state: key = `${typingUserId}_to_${receiverId}`, value = expiry timestamp
 const typingState = new Map<string, number>();
 
+function decodeVideoUrlAsFile(videoUrl: unknown): { file_url: string; file_type: string | null } | null {
+  if (!videoUrl || typeof videoUrl !== "string") return null;
+  try {
+    const parsed = JSON.parse(videoUrl) as { u?: string; t?: string };
+    if (parsed && typeof parsed.u === "string" && parsed.u.startsWith("http")) {
+      return { file_url: parsed.u, file_type: parsed.t || null };
+    }
+  } catch { /* not JSON-encoded file */ }
+  return null;
+}
+
+function normaliseMsg(msg: Record<string, unknown>): Record<string, unknown> {
+  if (msg.file_url) return msg;
+  const decoded = decodeVideoUrlAsFile(msg.video_url);
+  if (decoded) {
+    return { ...msg, file_url: decoded.file_url, file_type: decoded.file_type };
+  }
+  return msg;
+}
+
 function mediaPreview(msg: Record<string, unknown>): string {
   const text = (msg.message as string) ?? "";
   if (text) return text;
   if (msg.image_url) return "📷 Image";
   if (msg.file_url) return "📄 Document";
+  const decoded = decodeVideoUrlAsFile(msg.video_url);
+  if (decoded) return "📄 Document";
   return "";
 }
 
@@ -178,7 +200,7 @@ router.get("/messages/:userId", requireAuth, async (req, res): Promise<void> => 
 
   if (error) { res.status(500).json({ error: error.message }); return; }
 
-  res.json(messages ?? []);
+  res.json((messages ?? []).map(m => normaliseMsg(m as Record<string, unknown>)));
 });
 
 // Send a message (text + optional image/video)
@@ -212,48 +234,53 @@ router.post("/messages/:userId", requireAuth, async (req, res): Promise<void> =>
     is_read: false,
   };
   if (image_url) insertData.image_url = image_url;
-  if (file_url) insertData.file_url = file_url;
-  if (file_type) insertData.file_type = file_type;
+  if (file_url) {
+    insertData.file_url = file_url;
+    if (file_type) insertData.file_type = file_type;
+    // Fallback: encode file in image_url as JSON if file_url column doesn't exist
+    // Using a different field since messages uses image_url for actual images
+    // We encode as video_url for consistency with posts/comments
+    insertData.video_url = JSON.stringify({ u: file_url, t: file_type ?? "" });
+  }
 
-  const { data, error } = await supabase
-    .from("messages")
-    .insert(insertData)
-    .select()
-    .single();
+  // Retry with progressive column stripping on PGRST204 schema cache misses
+  let current = { ...insertData };
+  let msgData: Record<string, unknown> | null = null;
+  let msgError: { code?: string; message?: string } | null = null;
 
-  if (error) {
-    // If is_read column doesn't exist, retry without it
-    if (error.code === "PGRST204" || error.message?.includes("is_read")) {
-      const fallbackData: Record<string, unknown> = {
-        sender_id: req.userId!,
-        receiver_id: receiverId,
-        message: text,
-      };
-      if (image_url) fallbackData.image_url = image_url;
-      if (file_url) fallbackData.file_url = file_url;
-      if (file_type) fallbackData.file_type = file_type;
+  for (let attempt = 0; attempt <= 6; attempt++) {
+    const result = await (supabase.from("messages") as ReturnType<typeof supabase.from>)
+      .insert(current)
+      .select()
+      .single() as { data: Record<string, unknown> | null; error: { code?: string; message?: string } | null };
 
-      const { data: fallback, error: fallbackError } = await supabase
-        .from("messages")
-        .insert(fallbackData)
-        .select()
-        .single();
-
-      if (fallbackError) {
-        console.error("[POST /messages] fallback error:", fallbackError.message);
-        res.status(500).json({ error: fallbackError.message });
-        return;
-      }
-      res.status(201).json(fallback);
-      return;
+    if (!result.error) {
+      msgData = result.data;
+      break;
     }
 
-    console.error("[POST /messages] error:", error.message, error.code);
-    res.status(500).json({ error: error.message });
+    msgError = result.error;
+    if (result.error.code === "PGRST204" && result.error.message) {
+      const m = result.error.message.match(/Could not find the '(\w+)' column/);
+      const col = m?.[1];
+      if (col && col in current) {
+        console.warn(`[POST /messages] Stripping unknown column '${col}' and retrying...`);
+        const next = { ...current };
+        delete next[col];
+        current = next;
+        continue;
+      }
+    }
+    break;
+  }
+
+  if (!msgData) {
+    console.error("[POST /messages] error:", msgError?.message, msgError?.code);
+    res.status(500).json({ error: msgError?.message ?? "Failed to send message" });
     return;
   }
 
-  res.status(201).json(data);
+  res.status(201).json(normaliseMsg(msgData));
 });
 
 export default router;

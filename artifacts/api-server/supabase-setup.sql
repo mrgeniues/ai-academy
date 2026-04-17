@@ -139,8 +139,13 @@ INSERT INTO posts (user_id, content) VALUES
 -- ============================================================
 ALTER TABLE posts ADD COLUMN IF NOT EXISTS image_url TEXT;
 ALTER TABLE posts ADD COLUMN IF NOT EXISTS video_url TEXT;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS file_url TEXT;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS file_type TEXT;
 ALTER TABLE comments ADD COLUMN IF NOT EXISTS image_url TEXT;
 ALTER TABLE comments ADD COLUMN IF NOT EXISTS video_url TEXT;
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS file_url TEXT;
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS file_type TEXT;
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES comments(id) ON DELETE CASCADE;
 
 -- ============================================================
 -- Notifications table

@@ -95,7 +95,8 @@ function ProtectedRoute({ component: Component, adminOnly = false }: {
   }
 
   const isApproved = (user as Record<string, unknown>).isApproved === true;
-  if (!isApproved) {
+  const isAdmin = user.role === "admin";
+  if (!isApproved && !isAdmin) {
     return <Redirect to="/waiting-approval" />;
   }
 

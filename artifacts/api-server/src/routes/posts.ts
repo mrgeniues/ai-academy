@@ -23,6 +23,101 @@ const CreateCommentSchema = z.object({
   parentId: z.number().int().positive().optional().nullable(),
 });
 
+/**
+ * Extract the missing column name from a PGRST204 error message.
+ * e.g. "Could not find the 'file_type' column of 'posts' in the schema cache"
+ */
+function extractMissingColumn(msg: string): string | null {
+  const m = msg.match(/Could not find the '(\w+)' column/);
+  return m ? m[1] : null;
+}
+
+/**
+ * Insert into a Supabase table with automatic retry on PGRST204 schema-cache misses.
+ * Strips the offending column from the payload and retries up to `maxRetries` times.
+ */
+async function insertWithRetry(
+  table: "posts" | "comments",
+  payload: Record<string, unknown>,
+  selectClause: string,
+  maxRetries = 8
+): Promise<{ data: Record<string, unknown> | null; error: unknown }> {
+  let current = { ...payload };
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const { data, error } = await (supabase.from(table) as ReturnType<typeof supabase.from>)
+      .insert(current)
+      .select(selectClause)
+      .single() as { data: Record<string, unknown> | null; error: { code?: string; message?: string } | null };
+
+    if (!error) return { data, error: null };
+
+    if (error.code === "PGRST204" && error.message) {
+      const col = extractMissingColumn(error.message);
+      if (col && col in current) {
+        console.warn(`[insertWithRetry] Stripping unknown column '${col}' from ${table} and retrying...`);
+        const next = { ...current };
+        delete next[col];
+        current = next;
+        continue;
+      }
+    }
+
+    return { data: null, error };
+  }
+
+  return { data: null, error: new Error("Max retries exceeded") };
+}
+
+/**
+ * Encode file URL + type into the video_url column (since file_url/file_type columns may not exist).
+ * Format: JSON string {"u":"<url>","t":"<type>"}
+ */
+function encodeFileAsVideoUrl(fileUrl: string, fileType: string | null | undefined): string {
+  return JSON.stringify({ u: fileUrl, t: fileType ?? "" });
+}
+
+/**
+ * Decode file info from video_url column.
+ * Returns { fileUrl, fileType } if video_url contains encoded file info, otherwise null.
+ */
+function decodeFileFromVideoUrl(videoUrl: unknown): { fileUrl: string; fileType: string | null } | null {
+  if (!videoUrl || typeof videoUrl !== "string") return null;
+  try {
+    const parsed = JSON.parse(videoUrl) as { u?: string; t?: string };
+    if (parsed && typeof parsed.u === "string" && parsed.u.startsWith("http")) {
+      return { fileUrl: parsed.u, fileType: parsed.t || null };
+    }
+  } catch { /* not JSON */ }
+  return null;
+}
+
+/**
+ * Map a raw posts/comments DB row to normalised media fields.
+ * Handles both native file_url/file_type columns and the video_url fallback encoding.
+ */
+function extractMediaFields(row: Record<string, unknown>): {
+  imageUrl: string | null;
+  fileUrl: string | null;
+  fileType: string | null;
+} {
+  const imageUrl = (row.image_url as string | null) ?? null;
+  const nativeFileUrl = (row.file_url as string | null) ?? null;
+  const nativeFileType = (row.file_type as string | null) ?? null;
+
+  if (nativeFileUrl) {
+    return { imageUrl, fileUrl: nativeFileUrl, fileType: nativeFileType };
+  }
+
+  // Fallback: check video_url for encoded file data
+  const decoded = decodeFileFromVideoUrl(row.video_url);
+  if (decoded) {
+    return { imageUrl, fileUrl: decoded.fileUrl, fileType: decoded.fileType };
+  }
+
+  return { imageUrl, fileUrl: null, fileType: null };
+}
+
 router.get("/posts", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   const isVipFilter = req.query.vip === "true";
@@ -77,20 +172,23 @@ router.get("/posts", requireAuth, async (req, res): Promise<void> => {
     commentCountMap.set(c.post_id, (commentCountMap.get(c.post_id) ?? 0) + 1);
   }
 
-  const enriched = (posts ?? []).map(post => ({
-    id: post.id,
-    userId: post.user_id,
-    content: post.content,
-    imageUrl: post.image_url ?? null,
-    fileUrl: (post as Record<string, unknown>).file_url ?? null,
-    fileType: (post as Record<string, unknown>).file_type ?? null,
-    isVip: post.is_vip ?? false,
-    likeCount: likeCountMap.get(post.id) ?? 0,
-    commentCount: commentCountMap.get(post.id) ?? 0,
-    isLiked: myLikeSet.has(post.id),
-    createdAt: post.created_at,
-    author: formatUser(post.author),
-  }));
+  const enriched = (posts ?? []).map(post => {
+    const media = extractMediaFields(post as Record<string, unknown>);
+    return {
+      id: post.id,
+      userId: post.user_id,
+      content: post.content,
+      imageUrl: media.imageUrl,
+      fileUrl: media.fileUrl,
+      fileType: media.fileType,
+      isVip: (post as Record<string, unknown>).is_vip ?? false,
+      likeCount: likeCountMap.get(post.id) ?? 0,
+      commentCount: commentCountMap.get(post.id) ?? 0,
+      isLiked: myLikeSet.has(post.id),
+      createdAt: post.created_at,
+      author: formatUser(post.author),
+    };
+  });
 
   res.json(enriched);
 });
@@ -115,25 +213,14 @@ router.post("/posts", requireAuth, async (req, res): Promise<void> => {
     is_vip: isVip ?? false,
   };
   if (imageUrl) insertPayload.image_url = imageUrl;
-  if (fileUrl) insertPayload.file_url = fileUrl;
-  if (fileType) insertPayload.file_type = fileType;
-
-  let { data: post, error } = await supabase
-    .from("posts")
-    .insert(insertPayload)
-    .select("*, author:users(*)")
-    .single();
-
-  if (error && (error.message?.includes("is_vip") || error.code === "42703" || error.code === "PGRST204")) {
-    const { is_vip: _dropped, ...payloadWithoutVip } = insertPayload as Record<string, unknown> & { is_vip?: unknown };
-    const retry = await supabase
-      .from("posts")
-      .insert(payloadWithoutVip)
-      .select("*, author:users(*)")
-      .single();
-    post = retry.data;
-    error = retry.error;
+  // Try native file columns first; fall back to video_url encoding if they don't exist
+  if (fileUrl) {
+    insertPayload.file_url = fileUrl;
+    if (fileType) insertPayload.file_type = fileType;
+    insertPayload.video_url = encodeFileAsVideoUrl(fileUrl, fileType);
   }
+
+  const { data: post, error } = await insertWithRetry("posts", insertPayload, "*, author:users(*)");
 
   if (error || !post) {
     console.error("[POST /posts] Supabase error:", error);
@@ -148,25 +235,26 @@ router.post("/posts", requireAuth, async (req, res): Promise<void> => {
   broadcastNotification({
     type: vipPost ? "admin_post" : isAdmin ? "admin_post" : "post",
     title: vipPost ? "New VIP Post ⭐" : isAdmin ? "New Admin Post" : "New Post",
-    message: `${post.author?.name ?? "Someone"}: ${preview}`,
-    postId: post.id,
+    message: `${(post as Record<string, unknown> & { author?: { name?: string } }).author?.name ?? "Someone"}: ${preview}`,
+    postId: post.id as number,
     isVip: vipPost,
     excludeUserId: req.userId!,
   }).catch(err => console.error("[broadcastNotification] Failed:", err));
 
+  const postMedia = extractMediaFields(post);
   res.status(201).json({
     id: post.id,
     userId: post.user_id,
     content: post.content,
-    imageUrl: post.image_url ?? null,
-    fileUrl: (post as Record<string, unknown>).file_url ?? null,
-    fileType: (post as Record<string, unknown>).file_type ?? null,
-    isVip: post.is_vip ?? false,
+    imageUrl: postMedia.imageUrl,
+    fileUrl: postMedia.fileUrl,
+    fileType: postMedia.fileType,
+    isVip: (post as Record<string, unknown>).is_vip ?? false,
     likeCount: 0,
     commentCount: 0,
     isLiked: false,
     createdAt: post.created_at,
-    author: formatUser(post.author),
+    author: formatUser((post as Record<string, unknown>).author as Parameters<typeof formatUser>[0]),
   });
 });
 
@@ -261,20 +349,24 @@ router.get("/posts/:postId/comments", requireAuth, async (req, res): Promise<voi
     } catch { /* comment_likes table may not exist yet */ }
   }
 
-  res.json((comments ?? []).map(comment => ({
-    id: comment.id,
-    postId: comment.post_id,
-    userId: comment.user_id,
-    comment: comment.comment,
-    imageUrl: comment.image_url ?? null,
-    fileUrl: (comment as Record<string, unknown>).file_url ?? null,
-    fileType: (comment as Record<string, unknown>).file_type ?? null,
-    parentId: (comment as Record<string, unknown>).parent_id ?? null,
-    likesCount: likesCountMap.get(comment.id) ?? 0,
-    isLiked: isLikedSet.has(comment.id),
-    createdAt: comment.created_at,
-    author: formatUser(comment.author),
-  })));
+  res.json((comments ?? []).map(comment => {
+    const cm = comment as Record<string, unknown>;
+    const media = extractMediaFields(cm);
+    return {
+      id: comment.id,
+      postId: comment.post_id,
+      userId: comment.user_id,
+      comment: comment.comment,
+      imageUrl: media.imageUrl,
+      fileUrl: media.fileUrl,
+      fileType: media.fileType,
+      parentId: cm.parent_id ?? null,
+      likesCount: likesCountMap.get(comment.id) ?? 0,
+      isLiked: isLikedSet.has(comment.id),
+      createdAt: comment.created_at,
+      author: formatUser(comment.author),
+    };
+  }));
 });
 
 router.post("/posts/:postId/comments", requireAuth, async (req, res): Promise<void> => {
@@ -299,15 +391,14 @@ router.post("/posts/:postId/comments", requireAuth, async (req, res): Promise<vo
     comment,
   };
   if (imageUrl) insertPayload.image_url = imageUrl;
-  if (fileUrl) insertPayload.file_url = fileUrl;
-  if (fileType) insertPayload.file_type = fileType;
+  if (fileUrl) {
+    insertPayload.file_url = fileUrl;
+    if (fileType) insertPayload.file_type = fileType;
+    insertPayload.video_url = encodeFileAsVideoUrl(fileUrl, fileType);
+  }
   if (parentId) insertPayload.parent_id = parentId;
 
-  const { data: newComment, error } = await supabase
-    .from("comments")
-    .insert(insertPayload)
-    .select("*, author:users(*)")
-    .single();
+  const { data: newComment, error } = await insertWithRetry("comments", insertPayload, "*, author:users(*)");
 
   if (error || !newComment) {
     console.error("[POST /posts/:postId/comments] Supabase error:", error);
@@ -318,25 +409,26 @@ router.post("/posts/:postId/comments", requireAuth, async (req, res): Promise<vo
   broadcastNotification({
     type: "comment",
     title: "New Comment",
-    message: `${newComment.author?.name ?? "Someone"} commented on a post`,
+    message: `${(newComment as Record<string, unknown> & { author?: { name?: string } }).author?.name ?? "Someone"} commented on a post`,
     postId: postId,
     isVip: false,
     excludeUserId: req.userId!,
   }).catch(err => console.error("[broadcastNotification] Failed:", err));
 
+  const commentMedia = extractMediaFields(newComment);
   res.status(201).json({
     id: newComment.id,
-    postId: newComment.post_id,
-    userId: newComment.user_id,
-    comment: newComment.comment,
-    imageUrl: newComment.image_url ?? null,
-    fileUrl: (newComment as Record<string, unknown>).file_url ?? null,
-    fileType: (newComment as Record<string, unknown>).file_type ?? null,
+    postId: (newComment as Record<string, unknown>).post_id,
+    userId: (newComment as Record<string, unknown>).user_id,
+    comment: (newComment as Record<string, unknown>).comment,
+    imageUrl: commentMedia.imageUrl,
+    fileUrl: commentMedia.fileUrl,
+    fileType: commentMedia.fileType,
     parentId: (newComment as Record<string, unknown>).parent_id ?? null,
     likesCount: 0,
     isLiked: false,
-    createdAt: newComment.created_at,
-    author: formatUser(newComment.author),
+    createdAt: (newComment as Record<string, unknown>).created_at,
+    author: formatUser((newComment as Record<string, unknown>).author as Parameters<typeof formatUser>[0]),
   });
 });
 
