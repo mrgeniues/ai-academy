@@ -29,7 +29,7 @@ title = "hostinger-final-fixed.zip — 8/8 Tests Passed ✓ (1.0 MB)"
 id = "yQqSSRx-E28HOrfxtfApk"
 uri = "file://ai-academy-2-hostinger.tar.gz"
 type = "unspecified"
-title = "AI Academy 2.0 — Hostinger Production Package"
+title = "STEP 1 — Main Package (extract this to Hostinger)"
 
 [[outputs]]
 id = "wCYXBR3LW38iwzKoZGHub"
@@ -42,3 +42,9 @@ id = "ypCCWv__E34rHlBWRBN4M"
 uri = "file://ai-academy-2.0.tar.gz"
 type = "unspecified"
 title = "AI Academy 2.0 — Full Project"
+
+[[outputs]]
+id = "o6tUnt9RiX0KSipaTyaO-"
+uri = "file://hostinger-env-FILL-IN.txt"
+type = "text"
+title = "STEP 2 — Your .env file (fill in, rename to .env, upload)"

@@ -1,0 +1,24 @@
+# ============================================================
+# AI Academy 2.0 — Environment Variables for Hostinger
+# Fill in ALL values below before uploading to Hostinger
+# ============================================================
+
+# ── Server ──────────────────────────────────────────────────
+NODE_ENV=production
+PORT=3000
+
+# ── Supabase (get from: supabase.com → Project → Settings → API) ──
+SUPABASE_URL=https://YOUR-PROJECT-ID.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+SUPABASE_ANON_KEY=your-anon-key-here
+
+# ── Session secret (generate a random 32+ char string) ──────
+SESSION_SECRET=change-this-to-a-random-secret-at-least-32-chars
+
+# ── Your site URL (your Hostinger domain) ───────────────────
+SITE_URL=https://yourdomain.com
+
+# ── Email via Resend (optional — for approval/reset emails) ──
+# Get a free API key at: https://resend.com
+RESEND_API_KEY=re_your_resend_api_key
+EMAIL_FROM=noreply@yourdomain.com
