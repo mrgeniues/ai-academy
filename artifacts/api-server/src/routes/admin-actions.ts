@@ -4,12 +4,35 @@ import { supabase } from "../lib/supabase";
 
 const router: IRouter = Router();
 
-router.get("/admin-actions", requireAdmin, async (_req, res): Promise<void> => {
-  const { data, error } = await supabase
+router.get("/admin-actions", requireAdmin, async (req, res): Promise<void> => {
+  const { action, startDate, endDate } = req.query as {
+    action?: string;
+    startDate?: string;
+    endDate?: string;
+  };
+
+  let query = supabase
     .from("admin_actions")
     .select("*")
     .order("created_at", { ascending: false })
     .limit(200);
+
+  if (action && action !== "all") {
+    query = query.eq("action", action);
+  }
+
+  if (startDate) {
+    query = query.gte("created_at", new Date(startDate).toISOString());
+  }
+
+  if (endDate) {
+    // Include the full end date day
+    const end = new Date(endDate);
+    end.setDate(end.getDate() + 1);
+    query = query.lt("created_at", end.toISOString());
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     if (error.message.includes("admin_actions") || error.code === "42P01") {

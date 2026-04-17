@@ -92,6 +92,9 @@ export default function AdminPage() {
   const [auditLog, setAuditLog] = useState<AdminAction[]>([]);
   const [auditLogLoading, setAuditLogLoading] = useState(false);
   const [auditLogLoaded, setAuditLogLoaded] = useState(false);
+  const [auditLogActionFilter, setAuditLogActionFilter] = useState("all");
+  const [auditLogStartDate, setAuditLogStartDate] = useState("");
+  const [auditLogEndDate, setAuditLogEndDate] = useState("");
 
   // Tool requests state
   type PendingToolRequest = {
@@ -1706,68 +1709,170 @@ export default function AdminPage() {
                     {auditLogLoading ? "Refreshing…" : "Refresh"}
                   </Button>
                 </div>
+                {/* Filter bar */}
+                <div className="flex flex-wrap items-end gap-3 pt-3" data-testid="audit-log-filter-bar">
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-xs text-muted-foreground">Action type</Label>
+                    <Select
+                      value={auditLogActionFilter}
+                      onValueChange={setAuditLogActionFilter}
+                    >
+                      <SelectTrigger className="w-48 h-8 text-xs" data-testid="select-audit-action-filter">
+                        <SelectValue placeholder="All actions" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All actions</SelectItem>
+                        <SelectItem value="user_approved">Account approved</SelectItem>
+                        <SelectItem value="user_rejected">Account rejected</SelectItem>
+                        <SelectItem value="user_blocked">Account blocked</SelectItem>
+                        <SelectItem value="user_unblocked">Account unblocked</SelectItem>
+                        <SelectItem value="enrollment_approved">Enrollment approved</SelectItem>
+                        <SelectItem value="enrollment_rejected">Enrollment rejected</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-xs text-muted-foreground">From</Label>
+                    <Input
+                      type="date"
+                      className="h-8 text-xs w-36"
+                      value={auditLogStartDate}
+                      onChange={e => setAuditLogStartDate(e.target.value)}
+                      data-testid="input-audit-start-date"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-xs text-muted-foreground">To</Label>
+                    <Input
+                      type="date"
+                      className="h-8 text-xs w-36"
+                      value={auditLogEndDate}
+                      onChange={e => setAuditLogEndDate(e.target.value)}
+                      data-testid="input-audit-end-date"
+                    />
+                  </div>
+                  {(auditLogActionFilter !== "all" || auditLogStartDate || auditLogEndDate) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs self-end"
+                      onClick={() => {
+                        setAuditLogActionFilter("all");
+                        setAuditLogStartDate("");
+                        setAuditLogEndDate("");
+                      }}
+                      data-testid="button-clear-audit-filters"
+                    >
+                      Clear filters
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
-                {auditLogLoading && !auditLogLoaded ? (
-                  <div className="space-y-3 py-2">
-                    {[...Array(5)].map((_, i) => (
-                      <Skeleton key={i} className="h-12 w-full" />
-                    ))}
-                  </div>
-                ) : auditLog.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-6 text-center">
-                    No actions recorded yet. Approvals and rejections will appear here.
-                  </p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm" data-testid="audit-log-table">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left py-2 pr-4 font-medium text-muted-foreground">When</th>
-                          <th className="text-left py-2 pr-4 font-medium text-muted-foreground">Action</th>
-                          <th className="text-left py-2 pr-4 font-medium text-muted-foreground">Target</th>
-                          <th className="text-left py-2 pr-4 font-medium text-muted-foreground">By</th>
-                          <th className="text-left py-2 font-medium text-muted-foreground">Reason</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {auditLog.map((entry) => {
-                          const actionLabels: Record<string, { label: string; color: string }> = {
-                            user_approved: { label: "Account approved", color: "text-green-600 dark:text-green-400" },
-                            user_rejected: { label: "Account rejected", color: "text-red-600 dark:text-red-400" },
-                            user_unblocked: { label: "Account unblocked", color: "text-blue-600 dark:text-blue-400" },
-                            enrollment_approved: { label: "Enrollment approved", color: "text-green-600 dark:text-green-400" },
-                            enrollment_rejected: { label: "Enrollment rejected", color: "text-red-600 dark:text-red-400" },
-                          };
-                          const { label, color } = actionLabels[entry.action] ?? { label: entry.action, color: "" };
-                          return (
-                            <tr key={entry.id} className="border-b last:border-0 hover:bg-muted/30">
-                              <td className="py-2.5 pr-4 text-muted-foreground whitespace-nowrap">
-                                {formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true })}
-                              </td>
-                              <td className={`py-2.5 pr-4 font-medium whitespace-nowrap ${color}`}>
-                                {label}
-                              </td>
-                              <td className="py-2.5 pr-4">
-                                {entry.targetUser ? (
-                                  <span className="font-medium">{entry.targetUser.name}</span>
-                                ) : (
-                                  <span className="text-muted-foreground italic">—</span>
-                                )}
-                              </td>
-                              <td className="py-2.5 pr-4 text-muted-foreground">
-                                {entry.actor?.name ?? "—"}
-                              </td>
-                              <td className="py-2.5 text-muted-foreground">
-                                {entry.reason ?? <span className="italic">—</span>}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                {(() => {
+                  const actionLabels: Record<string, { label: string; color: string }> = {
+                    user_approved: { label: "Account approved", color: "text-green-600 dark:text-green-400" },
+                    user_rejected: { label: "Account rejected", color: "text-red-600 dark:text-red-400" },
+                    user_blocked: { label: "Account blocked", color: "text-orange-600 dark:text-orange-400" },
+                    user_unblocked: { label: "Account unblocked", color: "text-blue-600 dark:text-blue-400" },
+                    enrollment_approved: { label: "Enrollment approved", color: "text-green-600 dark:text-green-400" },
+                    enrollment_rejected: { label: "Enrollment rejected", color: "text-red-600 dark:text-red-400" },
+                  };
+
+                  const filteredLog = auditLog.filter(entry => {
+                    if (auditLogActionFilter !== "all" && entry.action !== auditLogActionFilter) return false;
+                    if (auditLogStartDate) {
+                      const entryDate = new Date(entry.createdAt);
+                      const start = new Date(auditLogStartDate);
+                      start.setHours(0, 0, 0, 0);
+                      if (entryDate < start) return false;
+                    }
+                    if (auditLogEndDate) {
+                      const entryDate = new Date(entry.createdAt);
+                      const end = new Date(auditLogEndDate);
+                      end.setHours(23, 59, 59, 999);
+                      if (entryDate > end) return false;
+                    }
+                    return true;
+                  });
+
+                  const hasActiveFilters = auditLogActionFilter !== "all" || auditLogStartDate || auditLogEndDate;
+
+                  if (auditLogLoading && !auditLogLoaded) {
+                    return (
+                      <div className="space-y-3 py-2">
+                        {[...Array(5)].map((_, i) => (
+                          <Skeleton key={i} className="h-12 w-full" />
+                        ))}
+                      </div>
+                    );
+                  }
+
+                  if (auditLog.length === 0) {
+                    return (
+                      <p className="text-sm text-muted-foreground py-6 text-center">
+                        No actions recorded yet. Approvals and rejections will appear here.
+                      </p>
+                    );
+                  }
+
+                  if (filteredLog.length === 0) {
+                    return (
+                      <p className="text-sm text-muted-foreground py-6 text-center" data-testid="audit-log-empty-filtered">
+                        No entries match the selected filters.
+                      </p>
+                    );
+                  }
+
+                  return (
+                    <div className="overflow-x-auto">
+                      {hasActiveFilters && (
+                        <p className="text-xs text-muted-foreground mb-2" data-testid="audit-log-filter-count">
+                          Showing {filteredLog.length} of {auditLog.length} entries
+                        </p>
+                      )}
+                      <table className="w-full text-sm" data-testid="audit-log-table">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left py-2 pr-4 font-medium text-muted-foreground">When</th>
+                            <th className="text-left py-2 pr-4 font-medium text-muted-foreground">Action</th>
+                            <th className="text-left py-2 pr-4 font-medium text-muted-foreground">Target</th>
+                            <th className="text-left py-2 pr-4 font-medium text-muted-foreground">By</th>
+                            <th className="text-left py-2 font-medium text-muted-foreground">Reason</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredLog.map((entry) => {
+                            const { label, color } = actionLabels[entry.action] ?? { label: entry.action, color: "" };
+                            return (
+                              <tr key={entry.id} className="border-b last:border-0 hover:bg-muted/30">
+                                <td className="py-2.5 pr-4 text-muted-foreground whitespace-nowrap">
+                                  {formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true })}
+                                </td>
+                                <td className={`py-2.5 pr-4 font-medium whitespace-nowrap ${color}`}>
+                                  {label}
+                                </td>
+                                <td className="py-2.5 pr-4">
+                                  {entry.targetUser ? (
+                                    <span className="font-medium">{entry.targetUser.name}</span>
+                                  ) : (
+                                    <span className="text-muted-foreground italic">—</span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 pr-4 text-muted-foreground">
+                                  {entry.actor?.name ?? "—"}
+                                </td>
+                                <td className="py-2.5 text-muted-foreground">
+                                  {entry.reason ?? <span className="italic">—</span>}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           </TabsContent>
