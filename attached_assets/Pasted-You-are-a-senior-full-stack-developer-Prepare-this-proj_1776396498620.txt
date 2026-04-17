@@ -1,0 +1,133 @@
+You are a senior full-stack developer.
+
+Prepare this project for PRODUCTION deployment on Hostinger (Node.js environment).
+
+IMPORTANT:
+
+* Do NOT break any existing features
+* Do NOT remove any functionality
+* Do NOT change UI/UX
+* Only optimize and prepare for deployment
+
+=====================================
+GOAL:
+
+Convert the project into a fully production-ready Node.js app that can run on Hostinger.
+
+=====================================
+REQUIREMENTS:
+
+1. PROJECT STRUCTURE FIX:
+
+* Ensure correct root structure:
+
+  * package.json
+  * server.js (or entry file)
+  * .env (not .env.example)
+  * /public (static files)
+  * /dist or build folder if needed
+
+=====================================
+2. BUILD SETUP:
+
+* Add proper scripts in package.json:
+
+"scripts": {
+"build": "next build || echo 'No build step'",
+"start": "node server.js"
+}
+
+* Ensure app runs using:
+  npm install
+  npm run build
+  npm start
+
+=====================================
+3. ENVIRONMENT VARIABLES:
+
+* Replace .env.example → .env
+
+Ensure it includes:
+
+* SESSION_SECRET
+
+* RESEND_API_KEY
+
+* EMAIL_FROM
+
+* SUPABASE keys
+
+* Load env properly using:
+  process.env
+
+=====================================
+4. SERVER CONFIG:
+
+* Ensure server.js:
+
+* Uses dynamic PORT:
+
+const PORT = process.env.PORT || 3000;
+
+* Starts server properly
+
+=====================================
+5. STATIC FILE HANDLING:
+
+* Ensure public folder is served correctly
+
+=====================================
+6. ERROR HANDLING:
+
+* Fix any runtime errors
+* Ensure no "undefined env" errors
+
+=====================================
+7. REMOVE DEV DEPENDENCIES:
+
+* Optimize dependencies for production
+* Clean unused files
+
+=====================================
+8. ZIP EXPORT:
+
+* Prepare final production folder
+* Ensure zip includes:
+
+✔ package.json
+✔ server.js
+✔ .env
+✔ node_modules (optional skip)
+✔ public
+✔ build files
+
+=====================================
+9. TEST BEFORE EXPORT:
+
+* Run locally:
+  npm install
+  npm start
+
+* Ensure:
+  ✔ Login works
+  ✔ Dashboard loads
+  ✔ Supabase works
+  ✔ Emails work
+  ✔ All features working
+
+=====================================
+STRICT RULES:
+
+* Do NOT remove features
+* Do NOT modify logic unnecessarily
+* Do NOT break auth, LMS, chat, or admin system
+
+=====================================
+OUTPUT:
+
+* Fixed project structure
+* Updated package.json
+* Ready-to-upload ZIP for Hostinger
+* Confirmation that project runs without errors
+
+Ensure everything is fully production-ready and bug-free.
