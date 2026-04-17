@@ -45,17 +45,21 @@ router.get("/users/:id", requireAuth, async (req, res): Promise<void> => {
   let followersCount = 0;
   let followingCount = 0;
 
-  const [followerRes, followersCountRes, followingCountRes] = await Promise.all([
-    req.userId && req.userId !== id
-      ? supabase.from("followers").select("id").eq("follower_id", req.userId).eq("following_id", id).maybeSingle()
-      : Promise.resolve({ data: null, error: null }),
-    supabase.from("followers").select("*", { count: "exact", head: true }).eq("following_id", id),
-    supabase.from("followers").select("*", { count: "exact", head: true }).eq("follower_id", id),
-  ]);
+  try {
+    const [followerRes, followersCountRes, followingCountRes] = await Promise.all([
+      req.userId && req.userId !== id
+        ? supabase.from("followers").select("id").eq("follower_id", req.userId).eq("following_id", id).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      supabase.from("followers").select("*", { count: "exact", head: true }).eq("following_id", id),
+      supabase.from("followers").select("*", { count: "exact", head: true }).eq("follower_id", id),
+    ]);
 
-  if (!followerRes.error) isFollowing = !!followerRes.data;
-  if (!followersCountRes.error) followersCount = followersCountRes.count ?? 0;
-  if (!followingCountRes.error) followingCount = followingCountRes.count ?? 0;
+    if (!followerRes.error) isFollowing = !!followerRes.data;
+    if (!followersCountRes.error) followersCount = followersCountRes.count ?? 0;
+    if (!followingCountRes.error) followingCount = followingCountRes.count ?? 0;
+  } catch (_err) {
+    // followers table may not exist yet — return zero counts gracefully
+  }
 
   res.json({ ...formatUser(user), isFollowing, followersCount, followingCount });
 });
@@ -76,6 +80,11 @@ router.post("/users/:id/follow", requireAuth, async (req, res): Promise<void> =>
 
   if (error) {
     if (error.code === "23505") { res.json({ isFollowing: true }); return; }
+    // PGRST205 = table not found in schema cache
+    if (error.code === "PGRST205" || error.message?.includes("followers")) {
+      res.status(503).json({ error: "Follow feature not available — run the SQL setup in Supabase first" });
+      return;
+    }
     console.error("[POST /follow] error:", error.message, error.code);
     res.status(500).json({ error: error.message });
     return;

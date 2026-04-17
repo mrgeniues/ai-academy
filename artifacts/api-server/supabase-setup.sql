@@ -265,6 +265,20 @@ CREATE TABLE IF NOT EXISTS password_resets (
 );
 
 -- ============================================================
+-- Followers table (social follow/unfollow between users)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS followers (
+  id SERIAL PRIMARY KEY,
+  follower_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  following_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(follower_id, following_id)
+);
+ALTER TABLE followers DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS followers_follower_id_idx ON followers(follower_id);
+CREATE INDEX IF NOT EXISTS followers_following_id_idx ON followers(following_id);
+
+-- ============================================================
 -- AI Tools table
 -- ============================================================
 CREATE TABLE IF NOT EXISTS tools (
