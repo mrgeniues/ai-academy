@@ -263,3 +263,47 @@ CREATE TABLE IF NOT EXISTS password_resets (
   used BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- ============================================================
+-- AI Tools table
+-- ============================================================
+CREATE TABLE IF NOT EXISTS tools (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  image_url TEXT,
+  video_url TEXT,
+  tool_url TEXT,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE tools DISABLE ROW LEVEL SECURITY;
+
+-- ============================================================
+-- Tool requests table (user requests access to a tool)
+-- ON DELETE CASCADE ensures deleting a user removes their requests
+-- ============================================================
+CREATE TABLE IF NOT EXISTS tool_requests (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  tool_id INTEGER NOT NULL REFERENCES tools(id) ON DELETE CASCADE,
+  is_approved BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, tool_id)
+);
+ALTER TABLE tool_requests DISABLE ROW LEVEL SECURITY;
+
+-- Fix existing tool_requests foreign key to use ON DELETE CASCADE
+-- (Run this if tool_requests table already exists without CASCADE)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'tool_requests_user_id_fkey'
+    AND conrelid = 'tool_requests'::regclass
+  ) THEN
+    ALTER TABLE tool_requests DROP CONSTRAINT tool_requests_user_id_fkey;
+    ALTER TABLE tool_requests ADD CONSTRAINT tool_requests_user_id_fkey
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+  END IF;
+END $$;
