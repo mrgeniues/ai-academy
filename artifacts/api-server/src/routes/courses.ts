@@ -250,6 +250,15 @@ router.patch("/courses/:id", requireAuth, async (req, res): Promise<void> => {
   const parsed = UpdateCourseBodyExtended.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  // Fetch current course state before updating so we can detect a real mode transition
+  const { data: existingCourse } = await supabase
+    .from("courses")
+    .select("enrollment_mode")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!existingCourse) { res.status(404).json({ error: "Course not found" }); return; }
+
   const updates: Record<string, unknown> = {};
   if (parsed.data.title !== undefined) updates.title = parsed.data.title;
   if (parsed.data.description !== undefined) updates.description = parsed.data.description;
@@ -261,9 +270,25 @@ router.patch("/courses/:id", requireAuth, async (req, res): Promise<void> => {
   const { error: updateError } = await supabase.from("courses").update(updates).eq("id", id);
 
   // If enrollment_mode column doesn't exist yet, retry without it
+  let updateSucceeded = !updateError;
   if (updateError && updateError.message.includes("enrollment_mode")) {
     const { enrollment_mode: _omit, ...fallbackUpdates } = updates as Record<string, unknown> & { enrollment_mode?: unknown };
-    await supabase.from("courses").update(fallbackUpdates).eq("id", id);
+    const { error: fallbackError } = await supabase.from("courses").update(fallbackUpdates).eq("id", id);
+    updateSucceeded = !fallbackError;
+  }
+
+  // Auto-approve pending enrollments only when the course actually transitioned to open enrollment
+  const previousMode = (existingCourse as Record<string, unknown>).enrollment_mode ?? "approval_required";
+  const switchingToOpen = parsed.data.enrollmentMode === "open" && previousMode !== "open";
+  if (updateSucceeded && switchingToOpen) {
+    const { error: approveError } = await supabase
+      .from("enrollments")
+      .update({ is_approved: true })
+      .eq("course_id", id)
+      .eq("is_approved", false);
+    if (approveError) {
+      console.error("[PATCH /courses/:id] Failed to auto-approve pending enrollments:", approveError.message);
+    }
   }
 
   const [{ data: updated }, { count: lc }, { count: ec }] = await Promise.all([
