@@ -4,10 +4,12 @@
   "description": "AI Academy 2.0 — Full-stack LMS Platform",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build": "echo 'App is pre-built — no build step required on Hostinger'"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=18",
+    "npm":  ">=8"
   },
   "license": "UNLICENSED"
 }

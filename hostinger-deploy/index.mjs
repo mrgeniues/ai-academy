@@ -89565,6 +89565,23 @@ router3.post("/settings/email", requireAuth, async (req, res) => {
     res.status(500).json({ error: "Failed to save setting" });
   }
 });
+router3.post("/settings/email/test", requireAuth, async (req, res) => {
+  if (req.userRole !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+  const { data: userRow, error: userErr } = await supabase.from("users").select("email, name").eq("id", req.userId).single();
+  if (userErr || !userRow) {
+    res.status(500).json({ error: "Could not look up your account details" });
+    return;
+  }
+  const result = await sendTestEmail(userRow.email, userRow.name);
+  if (!result.ok) {
+    res.status(500).json({ error: result.error ?? "Failed to send test email" });
+    return;
+  }
+  res.json({ message: `Test email sent to ${userRow.email}` });
+});
 var settings_default = router3;
 
 // src/lib/email.ts
@@ -89621,10 +89638,14 @@ Welcome aboard!`
     console.error("[email] Unexpected error sending user approved email:", err);
   }
 }
-async function sendUserRejectedEmail(to, name) {
+async function sendUserRejectedEmail(to, name, reason) {
   const client = getClient();
   if (!client) return;
   const fromEmail = await resolveFromEmail();
+  const reasonHtml = reason ? `<p><strong>Reason:</strong> ${reason}</p>` : "";
+  const reasonText = reason ? `
+
+Reason: ${reason}` : "";
   try {
     const { error } = await client.emails.send({
       from: fromEmail,
@@ -89633,11 +89654,12 @@ async function sendUserRejectedEmail(to, name) {
       html: `
         <p>Hi ${name},</p>
         <p>Unfortunately, your account application has not been approved at this time.</p>
+        ${reasonHtml}
         <p>If you believe this is a mistake, please contact the platform administrator for more information.</p>
       `,
       text: `Hi ${name},
 
-Unfortunately, your account application has not been approved at this time.
+Unfortunately, your account application has not been approved at this time.${reasonText}
 
 If you believe this is a mistake, please contact the platform administrator for more information.`
     });
@@ -89650,10 +89672,14 @@ If you believe this is a mistake, please contact the platform administrator for 
     console.error("[email] Unexpected error sending user rejected email:", err);
   }
 }
-async function sendEnrollmentRejectedEmail(to, name, courseName) {
+async function sendEnrollmentRejectedEmail(to, name, courseName, reason) {
   const client = getClient();
   if (!client) return;
   const fromEmail = await resolveFromEmail();
+  const reasonHtml = reason ? `<p><strong>Reason:</strong> ${reason}</p>` : "";
+  const reasonText = reason ? `
+
+Reason: ${reason}` : "";
   try {
     const { error } = await client.emails.send({
       from: fromEmail,
@@ -89662,11 +89688,12 @@ async function sendEnrollmentRejectedEmail(to, name, courseName) {
       html: `
         <p>Hi ${name},</p>
         <p>Unfortunately, your enrollment request for <strong>${courseName}</strong> has not been approved at this time.</p>
+        ${reasonHtml}
         <p>If you believe this is a mistake, please contact the platform administrator for more information.</p>
       `,
       text: `Hi ${name},
 
-Unfortunately, your enrollment request for "${courseName}" has not been approved at this time.
+Unfortunately, your enrollment request for "${courseName}" has not been approved at this time.${reasonText}
 
 If you believe this is a mistake, please contact the platform administrator for more information.`
     });
@@ -89677,6 +89704,42 @@ If you believe this is a mistake, please contact the platform administrator for 
     }
   } catch (err) {
     console.error("[email] Unexpected error sending enrollment rejected email:", err);
+  }
+}
+async function sendTestEmail(to, name) {
+  const client = getClient();
+  if (!client) {
+    return { ok: false, error: "Email is not configured \u2014 RESEND_API_KEY is missing." };
+  }
+  const fromEmail = resolveFromEmail();
+  try {
+    const { error } = await client.emails.send({
+      from: fromEmail,
+      to,
+      subject: "Test email from LMS Platform",
+      html: `
+        <p>Hi ${name},</p>
+        <p>This is a test email from your LMS Platform to verify that email delivery is working correctly.</p>
+        <p>If you received this, your email configuration is set up properly.</p>
+        <p><strong>Sending from:</strong> ${fromEmail}</p>
+      `,
+      text: `Hi ${name},
+
+This is a test email from your LMS Platform to verify that email delivery is working correctly.
+
+If you received this, your email configuration is set up properly.
+
+Sending from: ${fromEmail}`
+    });
+    if (error) {
+      console.error("[email] Failed to send test email:", error);
+      return { ok: false, error: error.message ?? "Failed to send test email" };
+    }
+    console.info(`[email] Sent test email to ${to}`);
+    return { ok: true };
+  } catch (err) {
+    console.error("[email] Unexpected error sending test email:", err);
+    return { ok: false, error: err.message ?? "Unexpected error" };
   }
 }
 async function sendEnrollmentApprovedEmail(to, name, courseName) {
@@ -89873,11 +89936,12 @@ router4.patch("/users/:id/block", requireAdmin, async (req, res) => {
     res.status(400).json({ error: "You cannot block yourself" });
     return;
   }
-  const { blocked } = req.body;
+  const { blocked, reason } = req.body;
   if (typeof blocked !== "boolean") {
     res.status(400).json({ error: "blocked field (boolean) is required" });
     return;
   }
+  const rejectionReason = typeof reason === "string" && reason.trim() ? reason.trim() : void 0;
   let { data: user, error } = await supabase.from("users").update({ is_blocked: blocked }).eq("id", id).select().maybeSingle();
   if (error?.message?.includes("is_blocked")) {
     res.status(422).json({
@@ -89890,7 +89954,7 @@ router4.patch("/users/:id/block", requireAdmin, async (req, res) => {
     return;
   }
   if (blocked) {
-    sendUserRejectedEmail(user.email, user.name).catch((err) => {
+    sendUserRejectedEmail(user.email, user.name, rejectionReason).catch((err) => {
       console.error("[users] Failed to send rejection email for user", id, err);
     });
   }
@@ -89920,7 +89984,8 @@ router4.patch("/users/:id/approve", requireAdmin, async (req, res) => {
   res.json(formatUser(user));
 });
 router4.post("/users/bulk-action", requireAdmin, async (req, res) => {
-  const { userIds, action } = req.body;
+  const { userIds, action, reason } = req.body;
+  const bulkRejectionReason = typeof reason === "string" && reason.trim() ? reason.trim() : void 0;
   if (!Array.isArray(userIds) || userIds.length === 0) {
     res.status(400).json({ error: "userIds must be a non-empty array" });
     return;
@@ -89953,7 +90018,7 @@ router4.post("/users/bulk-action", requireAdmin, async (req, res) => {
       return;
     }
     for (const u of updatedUsers ?? []) {
-      sendUserRejectedEmail(u.email, u.name).catch((err) => {
+      sendUserRejectedEmail(u.email, u.name, bulkRejectionReason).catch((err) => {
         console.error("[users] Failed to send rejection email for user", u.id, err);
       });
     }
@@ -90598,6 +90663,8 @@ router7.patch("/enrollments/:id/reject", requireAuth, async (req, res) => {
     res.status(400).json({ error: "Invalid enrollment id" });
     return;
   }
+  const { reason } = req.body;
+  const rejectionReason = typeof reason === "string" && reason.trim() ? reason.trim() : void 0;
   const { data: enrollment, error } = await supabase.from("enrollments").delete().eq("id", id).select().maybeSingle();
   if (error || !enrollment) {
     res.status(404).json({ error: "Enrollment not found" });
@@ -90608,7 +90675,7 @@ router7.patch("/enrollments/:id/reject", requireAuth, async (req, res) => {
     supabase.from("courses").select("title").eq("id", enrollment.course_id).maybeSingle()
   ]);
   if (enrolledUser && enrolledCourse) {
-    sendEnrollmentRejectedEmail(enrolledUser.email, enrolledUser.name, enrolledCourse.title).catch((err) => {
+    sendEnrollmentRejectedEmail(enrolledUser.email, enrolledUser.name, enrolledCourse.title, rejectionReason).catch((err) => {
       console.error("[enrollments] Failed to send rejection email for enrollment", id, err);
     });
   }
