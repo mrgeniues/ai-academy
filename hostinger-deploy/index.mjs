@@ -89833,6 +89833,7 @@ function formatUser(user) {
     isApproved: user.is_approved ?? false,
     isOnline: user.is_online ?? false,
     lastSeen: user.last_seen ?? null,
+    rejectionReason: user.rejection_reason ?? null,
     createdAt: user.created_at
   };
 }
@@ -89881,7 +89882,12 @@ router3.post("/auth/login", async (req, res) => {
     return;
   }
   if (user.is_blocked) {
-    res.status(403).json({ error: "Your account has been blocked. Contact admin for help." });
+    const rejectionReason = user.rejection_reason ?? null;
+    res.status(403).json({
+      error: "Your account has not been approved.",
+      blocked: true,
+      rejectionReason
+    });
     return;
   }
   await supabase.from("users").update({ last_login: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", user.id);
@@ -90183,7 +90189,19 @@ router4.patch("/users/:id/block", requireAdmin, async (req, res) => {
     return;
   }
   const rejectionReason = typeof reason === "string" && reason.trim() ? reason.trim() : void 0;
-  let { data: user, error } = await supabase.from("users").update({ is_blocked: blocked }).eq("id", id).select().maybeSingle();
+  const blockUpdate = { is_blocked: blocked };
+  if (blocked) {
+    blockUpdate.rejection_reason = rejectionReason ?? null;
+  } else {
+    blockUpdate.rejection_reason = null;
+  }
+  let { data: user, error } = await supabase.from("users").update(blockUpdate).eq("id", id).select().maybeSingle();
+  if (error?.message?.includes("rejection_reason")) {
+    const retryUpdate = { is_blocked: blocked };
+    const retry = await supabase.from("users").update(retryUpdate).eq("id", id).select().maybeSingle();
+    user = retry.data;
+    error = retry.error;
+  }
   if (error?.message?.includes("is_blocked")) {
     res.status(422).json({
       error: "Database column missing. Run this SQL in Supabase:\nALTER TABLE users ADD COLUMN IF NOT EXISTS is_blocked BOOLEAN NOT NULL DEFAULT FALSE;"
@@ -90281,7 +90299,16 @@ router4.post("/users/bulk-action", requireAdmin, async (req, res) => {
     }
     res.json({ updated: (updatedUsers ?? []).length, updatedIds: (updatedUsers ?? []).map((u) => u.id) });
   } else {
-    const { data: updatedUsers, error } = await supabase.from("users").update({ is_blocked: true }).in("id", ids).select();
+    const bulkBlockUpdate = {
+      is_blocked: true,
+      rejection_reason: bulkRejectionReason ?? null
+    };
+    let { data: updatedUsers, error } = await supabase.from("users").update(bulkBlockUpdate).in("id", ids).select();
+    if (error?.message?.includes("rejection_reason")) {
+      const retry = await supabase.from("users").update({ is_blocked: true }).in("id", ids).select();
+      updatedUsers = retry.data;
+      error = retry.error;
+    }
     if (error) {
       res.status(500).json({ error: error.message ?? "Failed to reject users" });
       return;
@@ -90338,7 +90365,13 @@ router4.post("/users/bulk-undo", requireAdmin, async (req, res) => {
     }
     res.json({ updated: (updatedUsers ?? []).length });
   } else {
-    const { data: updatedUsers, error } = await supabase.from("users").update({ is_blocked: false }).in("id", ids).select();
+    const undoRejectUpdate = { is_blocked: false, rejection_reason: null };
+    let { data: updatedUsers, error } = await supabase.from("users").update(undoRejectUpdate).in("id", ids).select();
+    if (error?.message?.includes("rejection_reason")) {
+      const retry = await supabase.from("users").update({ is_blocked: false }).in("id", ids).select();
+      updatedUsers = retry.data;
+      error = retry.error;
+    }
     if (error) {
       res.status(500).json({ error: error.message ?? "Failed to undo rejection" });
       return;
@@ -91008,6 +91041,28 @@ router7.patch("/enrollments/:id/approve", requireAuth, async (req, res) => {
     isApproved: true
   });
 });
+router7.get("/enrollments/rejection-reason", requireAuth, async (req, res) => {
+  const rawCourseId = Array.isArray(req.query.courseId) ? req.query.courseId[0] : req.query.courseId;
+  const courseId = parseInt(rawCourseId, 10);
+  if (isNaN(courseId)) {
+    res.status(400).json({ error: "Invalid courseId" });
+    return;
+  }
+  const { data, error } = await supabase.from("rejected_enrollments").select("reason, rejected_at").eq("user_id", req.userId).eq("course_id", courseId).order("rejected_at", { ascending: false }).limit(1).maybeSingle();
+  if (error) {
+    if (error.code === "42P01" || error.message.includes("rejected_enrollments")) {
+      res.json({ found: false });
+      return;
+    }
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  if (!data) {
+    res.json({ found: false });
+    return;
+  }
+  res.json({ found: true, reason: data.reason ?? null, rejectedAt: data.rejected_at });
+});
 router7.patch("/enrollments/:id/reject", requireAuth, async (req, res) => {
   if (req.userRole !== "admin") {
     res.status(403).json({ error: "Admin access required" });
@@ -91025,6 +91080,14 @@ router7.patch("/enrollments/:id/reject", requireAuth, async (req, res) => {
   if (error || !enrollment) {
     res.status(404).json({ error: "Enrollment not found" });
     return;
+  }
+  const { error: rejErr } = await supabase.from("rejected_enrollments").insert({
+    user_id: enrollment.user_id,
+    course_id: enrollment.course_id,
+    reason: rejectionReason ?? null
+  });
+  if (rejErr && rejErr.code !== "42P01" && !rejErr.message.includes("rejected_enrollments")) {
+    console.error("[enrollments] Failed to store rejection reason:", rejErr.message);
   }
   const [{ data: enrolledUser }, { data: enrolledCourse }] = await Promise.all([
     supabase.from("users").select("email, name").eq("id", enrollment.user_id).maybeSingle(),
@@ -91102,6 +91165,17 @@ router7.post("/enrollments/bulk-action", requireAuth, async (req, res) => {
       return;
     }
     updated = enrollments?.length ?? 0;
+    if (enrollments && enrollments.length > 0) {
+      const rejectionRows = enrollments.map((e) => ({
+        user_id: e.user_id,
+        course_id: e.course_id,
+        reason: rejectionReason ?? null
+      }));
+      const { error: bulkRejErr } = await supabase.from("rejected_enrollments").insert(rejectionRows);
+      if (bulkRejErr && bulkRejErr.code !== "42P01" && !bulkRejErr.message.includes("rejected_enrollments")) {
+        console.error("[enrollments] Failed to store bulk rejection reasons:", bulkRejErr.message);
+      }
+    }
     await Promise.allSettled((enrollments ?? []).map(async (enrollment) => {
       const [{ data: enrolledUser }, { data: enrolledCourse }] = await Promise.all([
         supabase.from("users").select("email, name").eq("id", enrollment.user_id).maybeSingle(),
@@ -92446,6 +92520,14 @@ async function checkAuditTable() {
     );
   }
 }
+async function checkRejectionTables() {
+  const { error } = await supabase.from("rejected_enrollments").select("id").limit(1);
+  if (error && (error.code === "42P01" || error.message.includes("rejected_enrollments"))) {
+    logger.warn(
+      "rejected_enrollments table not found \u2014 enrollment rejection reasons will not be stored in-app. Run the latest SQL in artifacts/api-server/supabase-setup.sql to enable it."
+    );
+  }
+}
 async function initializeDatabase() {
   logger.info("Checking database connectivity...");
   const exists = await tablesExist();
@@ -92461,6 +92543,7 @@ async function initializeDatabase() {
   }
   await seedDemoData();
   await checkAuditTable();
+  await checkRejectionTables();
   logger.info("Database ready \u2713");
 }
 
