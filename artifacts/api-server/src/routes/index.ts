@@ -13,6 +13,7 @@ import messagesRouter from "./messages";
 import maintenanceRouter from "./maintenance";
 import toolsRouter from "./tools";
 import settingsRouter from "./settings";
+import adminActionsRouter from "./admin-actions";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(messagesRouter);
 router.use(maintenanceRouter);
 router.use(toolsRouter);
 router.use(settingsRouter);
+router.use(adminActionsRouter);
 
 export default router;

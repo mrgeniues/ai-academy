@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trash2, Users, BookOpen, MessageSquare, TrendingUp, Shield, Ban, CheckCircle, Clock, Calendar, GraduationCap, Wrench, XCircle } from "lucide-react";
+import { Trash2, Users, BookOpen, MessageSquare, TrendingUp, Shield, Ban, CheckCircle, Clock, Calendar, GraduationCap, Wrench, XCircle, ScrollText } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -61,6 +61,21 @@ export default function AdminPage() {
   const [blockUserReason, setBlockUserReason] = useState("");
   const [showBulkRejectReason, setShowBulkRejectReason] = useState(false);
   const [bulkRejectReason, setBulkRejectReason] = useState("");
+
+  // Audit log state
+  type AdminAction = {
+    id: number;
+    action: string;
+    entityType: string;
+    entityId: number | null;
+    reason: string | null;
+    createdAt: string;
+    actor: { name: string; email: string } | null;
+    targetUser: { name: string; email: string } | null;
+  };
+  const [auditLog, setAuditLog] = useState<AdminAction[]>([]);
+  const [auditLogLoading, setAuditLogLoading] = useState(false);
+  const [auditLogLoaded, setAuditLogLoaded] = useState(false);
 
   // Tool requests state
   type PendingToolRequest = {
@@ -145,6 +160,7 @@ export default function AdminPage() {
       }
       queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
       toast({ title: newBlocked ? `${u.name} has been blocked` : `${u.name} has been unblocked` });
+      if (auditLogLoaded) void fetchAuditLog();
     } catch (err) {
       toast({ title: (err as Error).message, variant: "destructive" });
     } finally {
@@ -186,6 +202,7 @@ export default function AdminPage() {
       }
       queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
       toast({ title: `${u.name} has been approved` });
+      if (auditLogLoaded) void fetchAuditLog();
     } catch (err) {
       toast({ title: (err as Error).message, variant: "destructive" });
     } finally {
@@ -217,6 +234,7 @@ export default function AdminPage() {
           ? `${data.updated} user${data.updated !== 1 ? "s" : ""} approved`
           : `${data.updated} user${data.updated !== 1 ? "s" : ""} rejected`,
       });
+      if (auditLogLoaded) void fetchAuditLog();
     } catch (err) {
       toast({ title: (err as Error).message, variant: "destructive" });
     } finally {
@@ -355,6 +373,22 @@ export default function AdminPage() {
     }
   };
 
+  const fetchAuditLog = useCallback(async () => {
+    setAuditLogLoading(true);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch("/api/admin-actions", {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (resp.ok) {
+        const data = await resp.json() as AdminAction[];
+        setAuditLog(data);
+        setAuditLogLoaded(true);
+      }
+    } catch { /* silently ignore */ }
+    finally { setAuditLogLoading(false); }
+  }, [token]);
+
   const loadMaintenanceSettings = useCallback(async () => {
     try {
       const resp = await fetch("/api/maintenance");
@@ -410,6 +444,7 @@ export default function AdminPage() {
       }
       await fetchPendingEnrollments();
       toast({ title: `${enrollment.user.name} approved for "${enrollment.course.title}"` });
+      if (auditLogLoaded) void fetchAuditLog();
     } catch (err) {
       toast({ title: (err as Error).message, variant: "destructive" });
     } finally {
@@ -434,6 +469,7 @@ export default function AdminPage() {
       }
       await fetchPendingEnrollments();
       toast({ title: `Enrollment request from ${enrollment.user.name} rejected` });
+      if (auditLogLoaded) void fetchAuditLog();
     } catch (err) {
       toast({ title: (err as Error).message, variant: "destructive" });
     } finally {
@@ -530,7 +566,7 @@ export default function AdminPage() {
 
         {/* Management tabs */}
         <Tabs defaultValue="pending">
-          <TabsList className="grid grid-cols-7 w-full max-w-4xl">
+          <TabsList className="grid grid-cols-8 w-full max-w-4xl">
             <TabsTrigger value="pending" data-testid="tab-pending">
               Approvals
               {pendingUsers.length > 0 && (
@@ -565,6 +601,14 @@ export default function AdminPage() {
               {maintActive && (
                 <Badge variant="destructive" className="ml-1.5 text-xs px-1.5 py-0 h-4">ON</Badge>
               )}
+            </TabsTrigger>
+            <TabsTrigger
+              value="activity-log"
+              data-testid="tab-activity-log"
+              onClick={() => { if (!auditLogLoaded) void fetchAuditLog(); }}
+            >
+              <ScrollText className="w-3.5 h-3.5 mr-1" />
+              Log
             </TabsTrigger>
           </TabsList>
 
@@ -1276,6 +1320,91 @@ export default function AdminPage() {
                       {maintSaving ? "Saving…" : "Save Settings"}
                     </Button>
                   </>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── Activity Log tab ──────────────────────────────────────── */}
+          <TabsContent value="activity-log" className="mt-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <ScrollText className="w-4 h-4" />
+                    Activity Log
+                  </CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void fetchAuditLog()}
+                    disabled={auditLogLoading}
+                    data-testid="button-refresh-audit-log"
+                  >
+                    {auditLogLoading ? "Refreshing…" : "Refresh"}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {auditLogLoading && !auditLogLoaded ? (
+                  <div className="space-y-3 py-2">
+                    {[...Array(5)].map((_, i) => (
+                      <Skeleton key={i} className="h-12 w-full" />
+                    ))}
+                  </div>
+                ) : auditLog.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-6 text-center">
+                    No actions recorded yet. Approvals and rejections will appear here.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm" data-testid="audit-log-table">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left py-2 pr-4 font-medium text-muted-foreground">When</th>
+                          <th className="text-left py-2 pr-4 font-medium text-muted-foreground">Action</th>
+                          <th className="text-left py-2 pr-4 font-medium text-muted-foreground">Target</th>
+                          <th className="text-left py-2 pr-4 font-medium text-muted-foreground">By</th>
+                          <th className="text-left py-2 font-medium text-muted-foreground">Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {auditLog.map((entry) => {
+                          const actionLabels: Record<string, { label: string; color: string }> = {
+                            user_approved: { label: "Account approved", color: "text-green-600 dark:text-green-400" },
+                            user_rejected: { label: "Account rejected", color: "text-red-600 dark:text-red-400" },
+                            user_unblocked: { label: "Account unblocked", color: "text-blue-600 dark:text-blue-400" },
+                            enrollment_approved: { label: "Enrollment approved", color: "text-green-600 dark:text-green-400" },
+                            enrollment_rejected: { label: "Enrollment rejected", color: "text-red-600 dark:text-red-400" },
+                          };
+                          const { label, color } = actionLabels[entry.action] ?? { label: entry.action, color: "" };
+                          return (
+                            <tr key={entry.id} className="border-b last:border-0 hover:bg-muted/30">
+                              <td className="py-2.5 pr-4 text-muted-foreground whitespace-nowrap">
+                                {formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true })}
+                              </td>
+                              <td className={`py-2.5 pr-4 font-medium whitespace-nowrap ${color}`}>
+                                {label}
+                              </td>
+                              <td className="py-2.5 pr-4">
+                                {entry.targetUser ? (
+                                  <span className="font-medium">{entry.targetUser.name}</span>
+                                ) : (
+                                  <span className="text-muted-foreground italic">—</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 pr-4 text-muted-foreground">
+                                {entry.actor?.name ?? "—"}
+                              </td>
+                              <td className="py-2.5 text-muted-foreground">
+                                {entry.reason ?? <span className="italic">—</span>}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </CardContent>
             </Card>

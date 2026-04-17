@@ -3,6 +3,7 @@ import { requireAuth } from "../lib/auth";
 import { EnrollInCourseBody, UpdateProgressBody } from "@workspace/api-zod";
 import { supabase } from "../lib/supabase";
 import { sendEnrollmentApprovedEmail, sendEnrollmentRejectedEmail } from "../lib/email";
+import { logAdminAction } from "../lib/audit";
 
 const router: IRouter = Router();
 
@@ -223,6 +224,14 @@ router.patch("/enrollments/:id/approve", requireAuth, async (req, res): Promise<
     });
   }
 
+  logAdminAction({
+    actorId: req.userId!,
+    targetUserId: enrollment.user_id,
+    action: "enrollment_approved",
+    entityType: "enrollment",
+    entityId: id,
+  }).catch((err: unknown) => { console.error("[audit] logAdminAction fire-and-forget failed:", err); });
+
   res.json({
     id: enrollment.id,
     userId: enrollment.user_id,
@@ -267,6 +276,15 @@ router.patch("/enrollments/:id/reject", requireAuth, async (req, res): Promise<v
       console.error("[enrollments] Failed to send rejection email for enrollment", id, err);
     });
   }
+
+  logAdminAction({
+    actorId: req.userId!,
+    targetUserId: enrollment.user_id,
+    action: "enrollment_rejected",
+    entityType: "enrollment",
+    entityId: id,
+    reason: rejectionReason ?? null,
+  }).catch((err: unknown) => { console.error("[audit] logAdminAction fire-and-forget failed:", err); });
 
   res.json({ id: enrollment.id, rejected: true });
 });

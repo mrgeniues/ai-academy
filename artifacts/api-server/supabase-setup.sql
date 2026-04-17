@@ -220,3 +220,31 @@ CREATE TABLE IF NOT EXISTS site_settings (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE site_settings DISABLE ROW LEVEL SECURITY;
+
+-- ============================================================
+-- Admin actions audit log
+-- ============================================================
+CREATE TABLE IF NOT EXISTS admin_actions (
+  id SERIAL PRIMARY KEY,
+  actor_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  target_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  action TEXT NOT NULL CHECK (action IN ('user_approved','user_rejected','user_unblocked','enrollment_approved','enrollment_rejected')),
+  entity_type TEXT NOT NULL CHECK (entity_type IN ('user','enrollment')),
+  entity_id INTEGER,
+  reason TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE admin_actions DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS admin_actions_created_at_idx ON admin_actions (created_at DESC);
+-- Add constraints for existing tables (no-op if they already exist)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'admin_actions_action_check' AND conrelid = 'admin_actions'::regclass) THEN
+    ALTER TABLE admin_actions ADD CONSTRAINT admin_actions_action_check
+      CHECK (action IN ('user_approved','user_rejected','user_unblocked','enrollment_approved','enrollment_rejected'));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'admin_actions_entity_type_check' AND conrelid = 'admin_actions'::regclass) THEN
+    ALTER TABLE admin_actions ADD CONSTRAINT admin_actions_entity_type_check
+      CHECK (entity_type IN ('user','enrollment'));
+  END IF;
+END $$;

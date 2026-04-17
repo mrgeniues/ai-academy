@@ -4,6 +4,7 @@ import { formatUser } from "./auth";
 import { UpdateUserBody, UpdateUserRoleBody } from "@workspace/api-zod";
 import { supabase } from "../lib/supabase";
 import { sendUserApprovedEmail, sendUserRejectedEmail } from "../lib/email";
+import { logAdminAction } from "../lib/audit";
 
 const router: IRouter = Router();
 
@@ -246,6 +247,15 @@ router.patch("/users/:id/block", requireAdmin, async (req, res): Promise<void> =
     });
   }
 
+  logAdminAction({
+    actorId: req.userId!,
+    targetUserId: id,
+    action: blocked ? "user_rejected" : "user_unblocked",
+    entityType: "user",
+    entityId: id,
+    reason: blocked ? (rejectionReason ?? null) : null,
+  }).catch((err: unknown) => { console.error("[audit] logAdminAction fire-and-forget failed:", err); });
+
   res.json(formatUser(user));
 });
 
@@ -279,6 +289,14 @@ router.patch("/users/:id/approve", requireAdmin, async (req, res): Promise<void>
   sendUserApprovedEmail(user.email, user.name).catch((err) => {
     console.error("[users] Failed to send approval email for user", id, err);
   });
+
+  logAdminAction({
+    actorId: req.userId!,
+    targetUserId: id,
+    action: "user_approved",
+    entityType: "user",
+    entityId: id,
+  }).catch((err: unknown) => { console.error("[audit] logAdminAction fire-and-forget failed:", err); });
 
   res.json(formatUser(user));
 });
@@ -318,6 +336,13 @@ router.post("/users/bulk-action", requireAdmin, async (req, res): Promise<void> 
       sendUserApprovedEmail(u.email, u.name).catch((err) => {
         console.error("[users] Failed to send approval email for user", u.id, err);
       });
+      logAdminAction({
+        actorId: req.userId!,
+        targetUserId: u.id,
+        action: "user_approved",
+        entityType: "user",
+        entityId: u.id,
+      }).catch((err: unknown) => { console.error("[audit] logAdminAction fire-and-forget failed:", err); });
     }
 
     res.json({ updated: (updatedUsers ?? []).length });
@@ -337,6 +362,14 @@ router.post("/users/bulk-action", requireAdmin, async (req, res): Promise<void> 
       sendUserRejectedEmail(u.email, u.name, bulkRejectionReason).catch((err) => {
         console.error("[users] Failed to send rejection email for user", u.id, err);
       });
+      logAdminAction({
+        actorId: req.userId!,
+        targetUserId: u.id,
+        action: "user_rejected",
+        entityType: "user",
+        entityId: u.id,
+        reason: bulkRejectionReason ?? null,
+      }).catch((err: unknown) => { console.error("[audit] logAdminAction fire-and-forget failed:", err); });
     }
 
     res.json({ updated: (updatedUsers ?? []).length });

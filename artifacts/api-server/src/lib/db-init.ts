@@ -90,6 +90,16 @@ async function seedDemoData(): Promise<void> {
   logger.info("Demo data seeded successfully");
 }
 
+async function checkAuditTable(): Promise<void> {
+  const { error } = await supabase.from("admin_actions").select("id").limit(1);
+  if (error && (error.message.includes("admin_actions") || error.code === "42P01")) {
+    logger.warn(
+      "admin_actions table not found — audit logging is disabled. " +
+      "Run the latest SQL in artifacts/api-server/supabase-setup.sql to enable it."
+    );
+  }
+}
+
 export async function initializeDatabase(): Promise<void> {
   logger.info("Checking database connectivity...");
 
@@ -111,5 +121,6 @@ export async function initializeDatabase(): Promise<void> {
   }
 
   await seedDemoData();
+  await checkAuditTable();
   logger.info("Database ready ✓");
 }
