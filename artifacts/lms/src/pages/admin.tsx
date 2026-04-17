@@ -42,7 +42,19 @@ type UserRow = {
   isApproved?: boolean;
   lastLogin?: string | null;
   createdAt?: string;
+  lastAction?: { action: string; actorName: string; createdAt: string } | null;
 };
+
+function formatActionLabel(action: string): string {
+  switch (action) {
+    case "user_approved": return "Approved";
+    case "user_rejected": return "Blocked";
+    case "user_unblocked": return "Unblocked";
+    case "user_approval_undone": return "Approval undone";
+    case "user_rejection_undone": return "Block undone";
+    default: return action.replace(/_/g, " ");
+  }
+}
 
 type CourseWithMode = {
   id: number;
@@ -1214,6 +1226,15 @@ export default function AdminPage() {
                                 </span>
                               )}
                             </div>
+                            {u.lastAction && (
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`last-action-${u.id}`}>
+                                <Shield className="w-3 h-3 flex-shrink-0" />
+                                <span>
+                                  {formatActionLabel(u.lastAction.action)} by {u.lastAction.actorName}{" "}
+                                  {formatDistanceToNow(new Date(u.lastAction.createdAt), { addSuffix: true })}
+                                </span>
+                              </div>
+                            )}
                           </div>
 
                           {/* Controls */}

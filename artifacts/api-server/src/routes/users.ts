@@ -19,7 +19,63 @@ router.get("/users", requireAdmin, async (_req, res): Promise<void> => {
     return;
   }
 
-  res.json((users ?? []).map(formatUser));
+  const userList = users ?? [];
+
+  // Fetch the most recent admin action per user (user-targeted actions only)
+  let lastActionMap: Record<number, { action: string; actorName: string; createdAt: string }> = {};
+  try {
+    const userIds = userList.map(u => u.id);
+    if (userIds.length > 0) {
+      const { data: actions } = await supabase
+        .from("admin_actions")
+        .select("*")
+        .eq("entity_type", "user")
+        .in("target_user_id", userIds)
+        .order("created_at", { ascending: false });
+
+      if (actions && actions.length > 0) {
+        // Keep only the most recent action per target_user_id
+        const seenUserIds = new Set<number>();
+        const recentActions: typeof actions = [];
+        for (const a of actions) {
+          if (a.target_user_id && !seenUserIds.has(a.target_user_id)) {
+            seenUserIds.add(a.target_user_id);
+            recentActions.push(a);
+          }
+        }
+
+        // Fetch actor names
+        const actorIds = [...new Set(recentActions.map(a => a.actor_id).filter(Boolean))];
+        let actorMap: Record<number, string> = {};
+        if (actorIds.length > 0) {
+          const { data: actors } = await supabase
+            .from("users")
+            .select("id, name")
+            .in("id", actorIds);
+          for (const actor of actors ?? []) {
+            actorMap[actor.id] = actor.name;
+          }
+        }
+
+        for (const a of recentActions) {
+          if (a.target_user_id) {
+            lastActionMap[a.target_user_id] = {
+              action: a.action,
+              actorName: a.actor_id ? (actorMap[a.actor_id] ?? "Unknown") : "System",
+              createdAt: a.created_at,
+            };
+          }
+        }
+      }
+    }
+  } catch (_err) {
+    // admin_actions table may not exist yet — return users without lastAction
+  }
+
+  res.json(userList.map(u => ({
+    ...formatUser(u),
+    lastAction: lastActionMap[u.id] ?? null,
+  })));
 });
 
 router.get("/users/:id", requireAuth, async (req, res): Promise<void> => {
