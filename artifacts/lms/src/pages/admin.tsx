@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 
@@ -214,8 +215,32 @@ export default function AdminPage() {
     }
   };
 
+  const handleBulkUndo = async (userIds: number[], action: "approve" | "reject") => {
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch("/api/users/bulk-undo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ userIds, action }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Failed to undo action");
+      }
+      const data = await resp.json() as { updated: number };
+      queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+      toast({
+        title: `Undone — ${data.updated} user${data.updated !== 1 ? "s" : ""} moved back to pending`,
+      });
+      if (auditLogLoaded) void fetchAuditLog();
+    } catch (err) {
+      toast({ title: (err as Error).message, variant: "destructive" });
+    }
+  };
+
   const handleBulkAction = async (action: "approve" | "reject", reason?: string) => {
     if (selectedPendingIds.size === 0) return;
+    const affectedIds = Array.from(selectedPendingIds);
     setBulkActioning(true);
     setShowBulkRejectReason(false);
     setBulkRejectReason("");
@@ -224,19 +249,31 @@ export default function AdminPage() {
       const resp = await fetch("/api/users/bulk-action", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-        body: JSON.stringify({ userIds: Array.from(selectedPendingIds), action, ...(reason ? { reason } : {}) }),
+        body: JSON.stringify({ userIds: affectedIds, action, ...(reason ? { reason } : {}) }),
       });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({})) as { error?: string };
         throw new Error(err.error ?? `Failed to ${action} users`);
       }
-      const data = await resp.json() as { updated: number };
+      const data = await resp.json() as { updated: number; updatedIds?: number[] };
+      const undoIds = data.updatedIds ?? affectedIds;
       setSelectedPendingIds(new Set());
       queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+      const undoAction = (
+        <ToastAction
+          altText="Undo bulk action"
+          data-testid="bulk-undo-btn"
+          onClick={() => void handleBulkUndo(undoIds, action)}
+        >
+          Undo
+        </ToastAction>
+      );
       toast({
         title: action === "approve"
           ? `${data.updated} user${data.updated !== 1 ? "s" : ""} approved`
           : `${data.updated} user${data.updated !== 1 ? "s" : ""} rejected`,
+        duration: 5000,
+        action: undoAction,
       });
       if (auditLogLoaded) void fetchAuditLog();
     } catch (err) {

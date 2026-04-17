@@ -345,7 +345,7 @@ router.post("/users/bulk-action", requireAdmin, async (req, res): Promise<void> 
       }).catch((err: unknown) => { console.error("[audit] logAdminAction fire-and-forget failed:", err); });
     }
 
-    res.json({ updated: (updatedUsers ?? []).length });
+    res.json({ updated: (updatedUsers ?? []).length, updatedIds: (updatedUsers ?? []).map(u => u.id) });
   } else {
     const { data: updatedUsers, error } = await supabase
       .from("users")
@@ -369,6 +369,73 @@ router.post("/users/bulk-action", requireAdmin, async (req, res): Promise<void> 
         entityType: "user",
         entityId: u.id,
         reason: bulkRejectionReason ?? null,
+      }).catch((err: unknown) => { console.error("[audit] logAdminAction fire-and-forget failed:", err); });
+    }
+
+    res.json({ updated: (updatedUsers ?? []).length, updatedIds: (updatedUsers ?? []).map(u => u.id) });
+  }
+});
+
+router.post("/users/bulk-undo", requireAdmin, async (req, res): Promise<void> => {
+  const { userIds, action } = req.body as { userIds?: unknown; action?: unknown };
+
+  if (!Array.isArray(userIds) || userIds.length === 0) {
+    res.status(400).json({ error: "userIds must be a non-empty array" });
+    return;
+  }
+  if (action !== "approve" && action !== "reject") {
+    res.status(400).json({ error: "action must be 'approve' or 'reject'" });
+    return;
+  }
+
+  const ids = userIds.map(Number).filter(n => !isNaN(n));
+  if (ids.length === 0) {
+    res.status(400).json({ error: "No valid user IDs provided" });
+    return;
+  }
+
+  if (action === "approve") {
+    const { data: updatedUsers, error } = await supabase
+      .from("users")
+      .update({ is_approved: false })
+      .in("id", ids)
+      .select();
+
+    if (error) {
+      res.status(500).json({ error: error.message ?? "Failed to undo approval" });
+      return;
+    }
+
+    for (const u of updatedUsers ?? []) {
+      logAdminAction({
+        actorId: req.userId!,
+        targetUserId: u.id,
+        action: "user_approval_undone",
+        entityType: "user",
+        entityId: u.id,
+      }).catch((err: unknown) => { console.error("[audit] logAdminAction fire-and-forget failed:", err); });
+    }
+
+    res.json({ updated: (updatedUsers ?? []).length });
+  } else {
+    const { data: updatedUsers, error } = await supabase
+      .from("users")
+      .update({ is_blocked: false })
+      .in("id", ids)
+      .select();
+
+    if (error) {
+      res.status(500).json({ error: error.message ?? "Failed to undo rejection" });
+      return;
+    }
+
+    for (const u of updatedUsers ?? []) {
+      logAdminAction({
+        actorId: req.userId!,
+        targetUserId: u.id,
+        action: "user_rejection_undone",
+        entityType: "user",
+        entityId: u.id,
       }).catch((err: unknown) => { console.error("[audit] logAdminAction fire-and-forget failed:", err); });
     }
 
