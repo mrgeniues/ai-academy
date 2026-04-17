@@ -29165,9 +29165,9 @@ var require_jws = __commonJS({
 var require_decode = __commonJS({
   "../../node_modules/.pnpm/jsonwebtoken@9.0.3/node_modules/jsonwebtoken/decode.js"(exports, module) {
     var jws = require_jws();
-    module.exports = function(jwt2, options) {
+    module.exports = function(jwt3, options) {
       options = options || {};
-      var decoded = jws.decode(jwt2, options);
+      var decoded = jws.decode(jwt3, options);
       if (!decoded) {
         return null;
       }
@@ -37939,14 +37939,14 @@ var require_GoTrueAdminApi = __commonJS({
        *
        * @category Auth
        */
-      async signOut(jwt2, scope = types_1.SIGN_OUT_SCOPES[0]) {
+      async signOut(jwt3, scope = types_1.SIGN_OUT_SCOPES[0]) {
         if (types_1.SIGN_OUT_SCOPES.indexOf(scope) < 0) {
           throw new Error(`@supabase/auth-js: Parameter scope must be one of ${types_1.SIGN_OUT_SCOPES.join(", ")}`);
         }
         try {
           await (0, fetch_1._request)(this.fetch, "POST", `${this.url}/logout?scope=${scope}`, {
             headers: this.headers,
-            jwt: jwt2,
+            jwt: jwt3,
             noResolveJson: true
           });
           return { data: null, error: null };
@@ -42267,9 +42267,9 @@ var require_GoTrueClient = __commonJS({
        * const { data: { user } } = await supabase.auth.getUser(jwt)
        * ```
        */
-      async getUser(jwt2) {
-        if (jwt2) {
-          return await this._getUser(jwt2);
+      async getUser(jwt3) {
+        if (jwt3) {
+          return await this._getUser(jwt3);
         }
         await this.initializePromise;
         const result = await this._acquireLock(this.lockAcquireTimeout, async () => {
@@ -42280,12 +42280,12 @@ var require_GoTrueClient = __commonJS({
         }
         return result;
       }
-      async _getUser(jwt2) {
+      async _getUser(jwt3) {
         try {
-          if (jwt2) {
+          if (jwt3) {
             return await (0, fetch_1._request)(this.fetch, "GET", `${this.url}/user`, {
               headers: this.headers,
-              jwt: jwt2,
+              jwt: jwt3,
               xform: fetch_1._userResponse
             });
           }
@@ -44164,17 +44164,17 @@ var require_GoTrueClient = __commonJS({
       /**
        * {@see GoTrueMFAApi#getAuthenticatorAssuranceLevel}
        */
-      async _getAuthenticatorAssuranceLevel(jwt2) {
+      async _getAuthenticatorAssuranceLevel(jwt3) {
         var _a, _b, _c, _d;
-        if (jwt2) {
+        if (jwt3) {
           try {
-            const { payload: payload2 } = (0, helpers_1.decodeJWT)(jwt2);
+            const { payload: payload2 } = (0, helpers_1.decodeJWT)(jwt3);
             let currentLevel2 = null;
             if (payload2.aal) {
               currentLevel2 = payload2.aal;
             }
             let nextLevel2 = currentLevel2;
-            const { data: { user }, error: userError } = await this.getUser(jwt2);
+            const { data: { user }, error: userError } = await this.getUser(jwt3);
             if (userError) {
               return this._returnResult({ data: null, error: userError });
             }
@@ -44461,9 +44461,9 @@ var require_GoTrueClient = __commonJS({
        * }
        * ```
        */
-      async getClaims(jwt2, options = {}) {
+      async getClaims(jwt3, options = {}) {
         try {
-          let token = jwt2;
+          let token = jwt3;
           if (!token) {
             const { data, error } = await this.getSession();
             if (error || !data.session) {
@@ -70852,11 +70852,11 @@ function isValidIP(ip, version5) {
   }
   return false;
 }
-function isValidJWT(jwt2, alg) {
-  if (!jwtRegex.test(jwt2))
+function isValidJWT(jwt3, alg) {
+  if (!jwtRegex.test(jwt3))
     return false;
   try {
-    const [header] = jwt2.split(".");
+    const [header] = jwt3.split(".");
     if (!header)
       return false;
     const base64 = header.replace(/-/g, "+").replace(/_/g, "/").padEnd(header.length + (4 - header.length % 4) % 4, "=");
@@ -74323,7 +74323,7 @@ router.get("/healthz", (_req, res) => {
 var health_default = router;
 
 // src/routes/auth.ts
-var import_express2 = __toESM(require_express2(), 1);
+var import_express3 = __toESM(require_express2(), 1);
 
 // ../../node_modules/.pnpm/bcryptjs@3.0.3/node_modules/bcryptjs/index.js
 import nodeCrypto from "crypto";
@@ -76047,6 +76047,9 @@ var bcryptjs_default = {
   encodeBase64,
   decodeBase64
 };
+
+// src/routes/auth.ts
+var import_jsonwebtoken2 = __toESM(require_jsonwebtoken(), 1);
 
 // src/lib/auth.ts
 var import_jsonwebtoken = __toESM(require_jsonwebtoken(), 1);
@@ -84451,116 +84454,6 @@ async function requireAdmin(req, res, next) {
   });
 }
 
-// src/routes/auth.ts
-var router2 = (0, import_express2.Router)();
-async function trySetOnlineStatus(userId, isOnline) {
-  try {
-    await supabase.from("users").update({ is_online: isOnline, last_seen: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", userId);
-  } catch {
-  }
-}
-function formatUser(user) {
-  return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    role: (user.role ?? "member").toLowerCase(),
-    avatar: user.avatar ?? null,
-    bio: user.bio ?? null,
-    theme: user.theme ?? "light",
-    socialLinks: user.social_links ?? {},
-    lastLogin: user.last_login ?? null,
-    lastLogout: user.last_logout ?? null,
-    isBlocked: user.is_blocked ?? false,
-    isApproved: user.is_approved ?? false,
-    isOnline: user.is_online ?? false,
-    lastSeen: user.last_seen ?? null,
-    createdAt: user.created_at
-  };
-}
-router2.post("/auth/signup", async (req, res) => {
-  const parsed = SignupBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-  const { email, password, name } = parsed.data;
-  if (!email.toLowerCase().endsWith("@gmail.com")) {
-    res.status(400).json({ error: "Only Gmail accounts are allowed (@gmail.com)" });
-    return;
-  }
-  const { data: existing } = await supabase.from("users").select("id").eq("email", email).maybeSingle();
-  if (existing) {
-    res.status(400).json({ error: "Email already in use" });
-    return;
-  }
-  const passwordHash = await bcryptjs_default.hash(password, 10);
-  const { data: user, error } = await supabase.from("users").insert({ email, password_hash: passwordHash, name, role: "member", is_approved: false }).select().single();
-  if (error || !user) {
-    res.status(500).json({ error: "Failed to create user" });
-    return;
-  }
-  await supabase.from("users").update({ last_login: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", user.id);
-  void trySetOnlineStatus(user.id, true);
-  const token = signToken(user.id);
-  res.status(201).json({ user: formatUser(user), token });
-});
-router2.post("/auth/login", async (req, res) => {
-  const parsed = LoginBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-  const { email, password } = parsed.data;
-  const { data: user } = await supabase.from("users").select("*").eq("email", email).maybeSingle();
-  if (!user) {
-    res.status(401).json({ error: "Invalid email or password" });
-    return;
-  }
-  const valid = await bcryptjs_default.compare(password, user.password_hash);
-  if (!valid) {
-    res.status(401).json({ error: "Invalid email or password" });
-    return;
-  }
-  if (user.is_blocked) {
-    res.status(403).json({ error: "Your account has been blocked. Contact admin for help." });
-    return;
-  }
-  await supabase.from("users").update({ last_login: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", user.id);
-  void trySetOnlineStatus(user.id, true);
-  const token = signToken(user.id);
-  res.json({ user: formatUser(user), token });
-});
-router2.post("/auth/logout", requireAuth, async (req, res) => {
-  await supabase.from("users").update({ last_logout: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", req.userId);
-  void trySetOnlineStatus(req.userId, false);
-  res.json({ message: "Logged out successfully" });
-});
-router2.post("/auth/heartbeat", requireAuth, async (req, res) => {
-  void trySetOnlineStatus(req.userId, true);
-  res.json({ ok: true });
-});
-router2.post("/auth/offline", async (req, res) => {
-  const body = req.body;
-  if (body?.token) {
-    const payload = verifyToken(body.token);
-    if (payload?.userId) void trySetOnlineStatus(payload.userId, false);
-  }
-  res.json({ ok: true });
-});
-router2.get("/auth/me", requireAuth, async (req, res) => {
-  const { data: user } = await supabase.from("users").select("*").eq("id", req.userId).maybeSingle();
-  if (!user) {
-    res.status(401).json({ error: "User not found" });
-    return;
-  }
-  res.json(formatUser(user));
-});
-var auth_default = router2;
-
-// src/routes/users.ts
-var import_express4 = __toESM(require_express2(), 1);
-
 // ../../node_modules/.pnpm/postal-mime@2.7.4/node_modules/postal-mime/src/decode-strings.js
 var textEncoder = new TextEncoder();
 var base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -89509,8 +89402,8 @@ var Resend = class {
 };
 
 // src/routes/settings.ts
-var import_express3 = __toESM(require_express2(), 1);
-var router3 = (0, import_express3.Router)();
+var import_express2 = __toESM(require_express2(), 1);
+var router2 = (0, import_express2.Router)();
 async function getEmailFromSetting() {
   try {
     const { data, error } = await supabase.from("site_settings").select("value").eq("key", "email_from").maybeSingle();
@@ -89537,7 +89430,7 @@ async function writeEmailFromSetting(value) {
     }
   }
 }
-router3.get("/settings/email", requireAuth, async (req, res) => {
+router2.get("/settings/email", requireAuth, async (req, res) => {
   if (req.userRole !== "admin") {
     res.status(403).json({ error: "Admin access required" });
     return;
@@ -89550,7 +89443,7 @@ router3.get("/settings/email", requireAuth, async (req, res) => {
     envDefault
   });
 });
-router3.post("/settings/email", requireAuth, async (req, res) => {
+router2.post("/settings/email", requireAuth, async (req, res) => {
   if (req.userRole !== "admin") {
     res.status(403).json({ error: "Admin access required" });
     return;
@@ -89565,7 +89458,7 @@ router3.post("/settings/email", requireAuth, async (req, res) => {
     res.status(500).json({ error: "Failed to save setting" });
   }
 });
-router3.post("/settings/email/test", requireAuth, async (req, res) => {
+router2.post("/settings/email/test", requireAuth, async (req, res) => {
   if (req.userRole !== "admin") {
     res.status(403).json({ error: "Admin access required" });
     return;
@@ -89582,7 +89475,7 @@ router3.post("/settings/email/test", requireAuth, async (req, res) => {
   }
   res.json({ message: `Test email sent to ${userRow.email}` });
 });
-var settings_default = router3;
+var settings_default = router2;
 
 // src/lib/email.ts
 var apiKey = process.env.RESEND_API_KEY;
@@ -89742,6 +89635,45 @@ Sending from: ${fromEmail}`
     return { ok: false, error: err.message ?? "Unexpected error" };
   }
 }
+async function sendPasswordResetEmail(to, name, token) {
+  const client = getClient();
+  if (!client) {
+    console.warn("[email] Password reset email skipped \u2014 RESEND_API_KEY not set");
+    return;
+  }
+  const fromEmail = await resolveFromEmail();
+  const baseUrl2 = process.env.SITE_URL ?? "https://aiacadmy.online";
+  const resetLink = `${baseUrl2}/reset-password?token=${encodeURIComponent(token)}`;
+  try {
+    const { error } = await client.emails.send({
+      from: fromEmail,
+      to,
+      subject: "Reset your AI Academy 2.0 password",
+      html: `
+        <p>Hi ${name},</p>
+        <p>We received a request to reset your password. Click the link below to choose a new one:</p>
+        <p><a href="${resetLink}" style="display:inline-block;padding:10px 20px;background:#6d28d9;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;">Reset Password</a></p>
+        <p>Or copy this link into your browser:<br><a href="${resetLink}">${resetLink}</a></p>
+        <p>This link expires in <strong>1 hour</strong>. If you did not request a password reset, you can safely ignore this email.</p>
+      `,
+      text: `Hi ${name},
+
+We received a request to reset your password.
+
+Reset link (expires in 1 hour):
+${resetLink}
+
+If you did not request this, you can safely ignore this email.`
+    });
+    if (error) {
+      console.error("[email] Failed to send password reset email:", error);
+    } else {
+      console.info(`[email] Sent password reset email to ${to}`);
+    }
+  } catch (err) {
+    console.error("[email] Unexpected error sending password reset email:", err);
+  }
+}
 async function sendEnrollmentApprovedEmail(to, name, courseName) {
   const client = getClient();
   if (!client) return;
@@ -89771,6 +89703,198 @@ Happy learning!`
     console.error("[email] Unexpected error sending enrollment approved email:", err);
   }
 }
+
+// src/routes/auth.ts
+var RESET_SECRET = process.env.SESSION_SECRET ?? process.env.JWT_SECRET ?? "fallback-reset-secret";
+function signResetToken(userId, pwPrint) {
+  return import_jsonwebtoken2.default.sign({ userId, type: "password_reset", pwPrint }, RESET_SECRET, { expiresIn: "1h" });
+}
+function verifyResetToken(token) {
+  try {
+    const payload = import_jsonwebtoken2.default.verify(token, RESET_SECRET);
+    if (payload.type !== "password_reset") return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+var router3 = (0, import_express3.Router)();
+async function trySetOnlineStatus(userId, isOnline) {
+  try {
+    await supabase.from("users").update({ is_online: isOnline, last_seen: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", userId);
+  } catch {
+  }
+}
+function formatUser(user) {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: (user.role ?? "member").toLowerCase(),
+    avatar: user.avatar ?? null,
+    bio: user.bio ?? null,
+    theme: user.theme ?? "light",
+    socialLinks: user.social_links ?? {},
+    lastLogin: user.last_login ?? null,
+    lastLogout: user.last_logout ?? null,
+    isBlocked: user.is_blocked ?? false,
+    isApproved: user.is_approved ?? false,
+    isOnline: user.is_online ?? false,
+    lastSeen: user.last_seen ?? null,
+    createdAt: user.created_at
+  };
+}
+router3.post("/auth/signup", async (req, res) => {
+  const parsed = SignupBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { email, password, name } = parsed.data;
+  if (!email.toLowerCase().endsWith("@gmail.com")) {
+    res.status(400).json({ error: "Only Gmail accounts are allowed (@gmail.com)" });
+    return;
+  }
+  const { data: existing } = await supabase.from("users").select("id").eq("email", email).maybeSingle();
+  if (existing) {
+    res.status(400).json({ error: "Email already in use" });
+    return;
+  }
+  const passwordHash = await bcryptjs_default.hash(password, 10);
+  const { data: user, error } = await supabase.from("users").insert({ email, password_hash: passwordHash, name, role: "member", is_approved: false }).select().single();
+  if (error || !user) {
+    res.status(500).json({ error: "Failed to create user" });
+    return;
+  }
+  await supabase.from("users").update({ last_login: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", user.id);
+  void trySetOnlineStatus(user.id, true);
+  const token = signToken(user.id);
+  res.status(201).json({ user: formatUser(user), token });
+});
+router3.post("/auth/login", async (req, res) => {
+  const parsed = LoginBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { email, password } = parsed.data;
+  const { data: user } = await supabase.from("users").select("*").eq("email", email).maybeSingle();
+  if (!user) {
+    res.status(401).json({ error: "Invalid email or password" });
+    return;
+  }
+  const valid = await bcryptjs_default.compare(password, user.password_hash);
+  if (!valid) {
+    res.status(401).json({ error: "Invalid email or password" });
+    return;
+  }
+  if (user.is_blocked) {
+    res.status(403).json({ error: "Your account has been blocked. Contact admin for help." });
+    return;
+  }
+  await supabase.from("users").update({ last_login: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", user.id);
+  void trySetOnlineStatus(user.id, true);
+  const token = signToken(user.id);
+  res.json({ user: formatUser(user), token });
+});
+router3.post("/auth/logout", requireAuth, async (req, res) => {
+  await supabase.from("users").update({ last_logout: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", req.userId);
+  void trySetOnlineStatus(req.userId, false);
+  res.json({ message: "Logged out successfully" });
+});
+router3.post("/auth/heartbeat", requireAuth, async (req, res) => {
+  void trySetOnlineStatus(req.userId, true);
+  res.json({ ok: true });
+});
+router3.post("/auth/offline", async (req, res) => {
+  const body = req.body;
+  if (body?.token) {
+    const payload = verifyToken(body.token);
+    if (payload?.userId) void trySetOnlineStatus(payload.userId, false);
+  }
+  res.json({ ok: true });
+});
+router3.get("/auth/me", requireAuth, async (req, res) => {
+  const { data: user } = await supabase.from("users").select("*").eq("id", req.userId).maybeSingle();
+  if (!user) {
+    res.status(401).json({ error: "User not found" });
+    return;
+  }
+  res.json(formatUser(user));
+});
+router3.post("/auth/forgot-password", async (req, res) => {
+  const { email } = req.body;
+  if (!email || typeof email !== "string") {
+    res.status(400).json({ error: "Email is required" });
+    return;
+  }
+  const successMsg = { message: "If this email is registered, a reset link has been sent." };
+  const { data: user } = await supabase.from("users").select("id, email, name, password_hash").eq("email", email.toLowerCase().trim()).maybeSingle();
+  if (!user) {
+    res.json(successMsg);
+    return;
+  }
+  const u = user;
+  const pwPrint = u.password_hash.slice(0, 8);
+  const token = signResetToken(u.id, pwPrint);
+  await sendPasswordResetEmail(u.email, u.name, token);
+  res.json(successMsg);
+});
+router3.get("/auth/verify-reset-token", async (req, res) => {
+  const { token } = req.query;
+  if (!token) {
+    res.json({ valid: false, reason: "Token is missing" });
+    return;
+  }
+  const payload = verifyResetToken(token);
+  if (!payload) {
+    res.json({ valid: false, reason: "Invalid or expired reset link. Please request a new one." });
+    return;
+  }
+  const { data: user } = await supabase.from("users").select("password_hash").eq("id", payload.userId).maybeSingle();
+  if (!user || user.password_hash.slice(0, 8) !== payload.pwPrint) {
+    res.json({ valid: false, reason: "This reset link has already been used. Please request a new one." });
+    return;
+  }
+  res.json({ valid: true });
+});
+router3.post("/auth/reset-password", async (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password) {
+    res.status(400).json({ error: "Token and password are required" });
+    return;
+  }
+  if (password.length < 8) {
+    res.status(400).json({ error: "Password must be at least 8 characters" });
+    return;
+  }
+  const payload = verifyResetToken(token);
+  if (!payload) {
+    res.status(400).json({ error: "Invalid or expired reset link. Please request a new one." });
+    return;
+  }
+  const { data: user } = await supabase.from("users").select("id, password_hash").eq("id", payload.userId).maybeSingle();
+  if (!user) {
+    res.status(400).json({ error: "User not found." });
+    return;
+  }
+  const u = user;
+  if (u.password_hash.slice(0, 8) !== payload.pwPrint) {
+    res.status(400).json({ error: "This reset link has already been used. Please request a new one." });
+    return;
+  }
+  const passwordHash = await bcryptjs_default.hash(password, 10);
+  const { error: updateError } = await supabase.from("users").update({ password_hash: passwordHash, updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", u.id);
+  if (updateError) {
+    res.status(500).json({ error: "Failed to update password. Please try again." });
+    return;
+  }
+  res.json({ message: "Password updated successfully" });
+});
+var auth_default = router3;
+
+// src/routes/users.ts
+var import_express4 = __toESM(require_express2(), 1);
 
 // src/lib/audit.ts
 async function logAdminAction(opts) {
@@ -90755,6 +90879,85 @@ router7.patch("/enrollments/:id/reject", requireAuth, async (req, res) => {
     console.error("[audit] logAdminAction fire-and-forget failed:", err);
   });
   res.json({ id: enrollment.id, rejected: true });
+});
+router7.post("/enrollments/bulk-action", requireAuth, async (req, res) => {
+  if (req.userRole !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+  const { enrollmentIds, action, reason } = req.body;
+  if (!Array.isArray(enrollmentIds) || enrollmentIds.length === 0) {
+    res.status(400).json({ error: "enrollmentIds must be a non-empty array" });
+    return;
+  }
+  if (action !== "approve" && action !== "reject") {
+    res.status(400).json({ error: "action must be 'approve' or 'reject'" });
+    return;
+  }
+  const ids = enrollmentIds.map((id) => parseInt(String(id), 10)).filter((id) => !isNaN(id));
+  if (ids.length === 0) {
+    res.status(400).json({ error: "No valid enrollment ids provided" });
+    return;
+  }
+  const rejectionReason = typeof reason === "string" && reason.trim() ? reason.trim() : void 0;
+  let updated = 0;
+  if (action === "approve") {
+    const { data: enrollments, error } = await supabase.from("enrollments").update({ is_approved: true }).in("id", ids).select();
+    if (error) {
+      res.status(500).json({ error: "Failed to approve enrollments" });
+      return;
+    }
+    updated = enrollments?.length ?? 0;
+    await Promise.allSettled((enrollments ?? []).map(async (enrollment) => {
+      const [{ data: enrolledUser }, { data: enrolledCourse }] = await Promise.all([
+        supabase.from("users").select("email, name").eq("id", enrollment.user_id).maybeSingle(),
+        supabase.from("courses").select("title").eq("id", enrollment.course_id).maybeSingle()
+      ]);
+      if (enrolledUser && enrolledCourse) {
+        sendEnrollmentApprovedEmail(enrolledUser.email, enrolledUser.name, enrolledCourse.title).catch((err) => {
+          console.error("[enrollments] Failed to send approval email for enrollment", enrollment.id, err);
+        });
+      }
+      logAdminAction({
+        actorId: req.userId,
+        targetUserId: enrollment.user_id,
+        action: "enrollment_approved",
+        entityType: "enrollment",
+        entityId: enrollment.id
+      }).catch((err) => {
+        console.error("[audit] logAdminAction fire-and-forget failed:", err);
+      });
+    }));
+  } else {
+    const { data: enrollments, error } = await supabase.from("enrollments").delete().in("id", ids).select();
+    if (error) {
+      res.status(500).json({ error: "Failed to reject enrollments" });
+      return;
+    }
+    updated = enrollments?.length ?? 0;
+    await Promise.allSettled((enrollments ?? []).map(async (enrollment) => {
+      const [{ data: enrolledUser }, { data: enrolledCourse }] = await Promise.all([
+        supabase.from("users").select("email, name").eq("id", enrollment.user_id).maybeSingle(),
+        supabase.from("courses").select("title").eq("id", enrollment.course_id).maybeSingle()
+      ]);
+      if (enrolledUser && enrolledCourse) {
+        sendEnrollmentRejectedEmail(enrolledUser.email, enrolledUser.name, enrolledCourse.title, rejectionReason).catch((err) => {
+          console.error("[enrollments] Failed to send rejection email for enrollment", enrollment.id, err);
+        });
+      }
+      logAdminAction({
+        actorId: req.userId,
+        targetUserId: enrollment.user_id,
+        action: "enrollment_rejected",
+        entityType: "enrollment",
+        entityId: enrollment.id,
+        reason: rejectionReason ?? null
+      }).catch((err) => {
+        console.error("[audit] logAdminAction fire-and-forget failed:", err);
+      });
+    }));
+  }
+  res.json({ updated });
 });
 router7.patch("/enrollments/:courseId/progress", requireAuth, async (req, res) => {
   const rawId = Array.isArray(req.params.courseId) ? req.params.courseId[0] : req.params.courseId;
