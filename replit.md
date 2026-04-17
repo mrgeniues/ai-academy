@@ -108,6 +108,8 @@ Until these are added, the app degrades gracefully (offline status / badge hidde
 - `GET /dashboard/stats`, `GET /dashboard/activity`
 - `GET /notifications`, `GET /notifications/unread-count`
 - `PATCH /notifications/:id/read`, `PATCH /notifications/read-all`
+- `GET /settings/email`, `POST /settings/email`, `POST /settings/email/test` (admin-only email sender config)
+- `GET /settings/general`, `POST /settings/general` (admin-only: platform name, support email, default enrollment mode)
 
 ## Design
 

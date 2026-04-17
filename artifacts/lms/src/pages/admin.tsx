@@ -120,6 +120,13 @@ export default function AdminPage() {
   const [emailFromLoaded, setEmailFromLoaded] = useState(false);
   const [emailFromTesting, setEmailFromTesting] = useState(false);
 
+  // General / platform settings state
+  const [platformName, setPlatformName] = useState("");
+  const [supportEmail, setSupportEmail] = useState("");
+  const [defaultEnrollmentMode, setDefaultEnrollmentMode] = useState<"open" | "approval_required" | "">("");
+  const [generalSettingsLoaded, setGeneralSettingsLoaded] = useState(false);
+  const [generalSettingsSaving, setGeneralSettingsSaving] = useState(false);
+
   // All hooks must be called unconditionally (Rules of Hooks)
   const { data: users, isLoading: usersLoading } = useListUsers({
     query: { queryKey: getListUsersQueryKey(), refetchInterval: 30_000 }
@@ -424,6 +431,58 @@ export default function AdminPage() {
     }
   };
 
+  const loadGeneralSettings = useCallback(async () => {
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch("/api/settings/general", {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!resp.ok) return;
+      const data = await resp.json() as {
+        platformName: string | null;
+        supportEmail: string | null;
+        defaultEnrollmentMode: "open" | "approval_required" | null;
+      };
+      setPlatformName(data.platformName ?? "");
+      setSupportEmail(data.supportEmail ?? "");
+      setDefaultEnrollmentMode(data.defaultEnrollmentMode ?? "");
+      setGeneralSettingsLoaded(true);
+    } catch { /* silently ignore */ }
+  }, [token]);
+
+  const handleSaveGeneralSettings = async () => {
+    setGeneralSettingsSaving(true);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch("/api/settings/general", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({
+          platformName: platformName.trim() || null,
+          supportEmail: supportEmail.trim() || null,
+          defaultEnrollmentMode: defaultEnrollmentMode || null,
+        }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Failed to save settings");
+      }
+      const data = await resp.json() as {
+        platformName: string | null;
+        supportEmail: string | null;
+        defaultEnrollmentMode: "open" | "approval_required" | null;
+      };
+      setPlatformName(data.platformName ?? "");
+      setSupportEmail(data.supportEmail ?? "");
+      setDefaultEnrollmentMode(data.defaultEnrollmentMode ?? "");
+      toast({ title: "Platform settings saved" });
+    } catch (err) {
+      toast({ title: (err as Error).message, variant: "destructive" });
+    } finally {
+      setGeneralSettingsSaving(false);
+    }
+  };
+
   const fetchAuditLog = useCallback(async () => {
     setAuditLogLoading(true);
     try {
@@ -677,6 +736,7 @@ export default function AdminPage() {
               onClick={() => {
                 if (!maintLoaded) void loadMaintenanceSettings();
                 if (!emailFromLoaded) void loadEmailSettings();
+                if (!generalSettingsLoaded) void loadGeneralSettings();
               }}
             >
               <Wrench className="w-3.5 h-3.5 mr-1" />
@@ -1364,6 +1424,87 @@ export default function AdminPage() {
 
           {/* ── Maintenance tab ───────────────────────────────────────── */}
           <TabsContent value="maintenance" className="mt-4 space-y-4">
+            {/* Platform settings card */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                  Platform Settings
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {!generalSettingsLoaded ? (
+                  <div className="space-y-3">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="platform-name" className="text-sm">Platform Name</Label>
+                      <Input
+                        id="platform-name"
+                        type="text"
+                        placeholder="My LMS Platform"
+                        value={platformName}
+                        onChange={e => setPlatformName(e.target.value)}
+                        data-testid="input-platform-name"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        The name shown in emails and platform-wide headings. Leave blank to use the default.
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="support-email" className="text-sm">Support Contact Email</Label>
+                      <Input
+                        id="support-email"
+                        type="email"
+                        placeholder="support@yourschool.com"
+                        value={supportEmail}
+                        onChange={e => setSupportEmail(e.target.value)}
+                        data-testid="input-support-email"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Shown to users when they need help. Leave blank to omit the support contact from emails.
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="default-enrollment-mode" className="text-sm">Default Enrollment Mode for New Courses</Label>
+                      <Select
+                        value={defaultEnrollmentMode}
+                        onValueChange={v => setDefaultEnrollmentMode(v as "open" | "approval_required" | "")}
+                      >
+                        <SelectTrigger id="default-enrollment-mode" data-testid="select-default-enrollment-mode">
+                          <SelectValue placeholder="Use system default (open)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="open">Open — anyone can enroll immediately</SelectItem>
+                          <SelectItem value="approval_required">Approval Required — admin must approve each enrollment</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        New courses will start with this enrollment mode. Course creators can change it per-course.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        onClick={handleSaveGeneralSettings}
+                        disabled={generalSettingsSaving}
+                        data-testid="button-save-general-settings"
+                        className="w-full sm:w-auto"
+                      >
+                        {generalSettingsSaving ? "Saving…" : "Save Platform Settings"}
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Email settings card */}
             <Card>
               <CardHeader className="pb-2">

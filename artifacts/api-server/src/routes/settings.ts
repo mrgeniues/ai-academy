@@ -5,50 +5,56 @@ import { supabase } from "../lib/supabase";
 
 const router: IRouter = Router();
 
-type SiteSettings = {
-  emailFrom?: string | null;
-};
+// ── Generic helpers ──────────────────────────────────────────────────────────
 
-export async function getEmailFromSetting(): Promise<string | null> {
+async function getSetting(key: string): Promise<string | null> {
   try {
     const { data, error } = await supabase
       .from("site_settings")
       .select("value")
-      .eq("key", "email_from")
+      .eq("key", key)
       .maybeSingle();
 
     if (error) {
-      console.error("[settings] Failed to read email_from from DB:", error.message);
+      console.error(`[settings] Failed to read ${key} from DB:`, error.message);
       return null;
     }
 
     return data?.value ?? null;
   } catch (err) {
-    console.error("[settings] Unexpected error reading email_from:", err);
+    console.error(`[settings] Unexpected error reading ${key}:`, err);
     return null;
   }
 }
 
-async function writeEmailFromSetting(value: string | null): Promise<void> {
+async function writeSetting(key: string, value: string | null): Promise<void> {
   if (value === null) {
     const { error } = await supabase
       .from("site_settings")
       .delete()
-      .eq("key", "email_from");
+      .eq("key", key);
 
     if (error) {
-      throw new Error(`Failed to delete email_from setting: ${error.message}`);
+      throw new Error(`Failed to delete setting ${key}: ${error.message}`);
     }
   } else {
     const { error } = await supabase
       .from("site_settings")
-      .upsert({ key: "email_from", value, updated_at: new Date().toISOString() }, { onConflict: "key" });
+      .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
 
     if (error) {
-      throw new Error(`Failed to upsert email_from setting: ${error.message}`);
+      throw new Error(`Failed to upsert setting ${key}: ${error.message}`);
     }
   }
 }
+
+// ── Public helper exported for other routes ──────────────────────────────────
+
+export async function getEmailFromSetting(): Promise<string | null> {
+  return getSetting("email_from");
+}
+
+// ── Email settings ───────────────────────────────────────────────────────────
 
 // Admin: get email settings
 router.get("/settings/email", requireAuth, async (req, res): Promise<void> => {
@@ -57,7 +63,7 @@ router.get("/settings/email", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const value = await getEmailFromSetting();
+  const value = await getSetting("email_from");
   const envDefault = process.env.EMAIL_FROM ?? "LMS Platform <notifications@resend.dev>";
 
   res.json({
@@ -75,11 +81,10 @@ router.post("/settings/email", requireAuth, async (req, res): Promise<void> => {
   }
 
   const { emailFrom } = req.body as { emailFrom: string | null };
-
   const valueToStore = emailFrom && emailFrom.trim() ? emailFrom.trim() : null;
 
   try {
-    await writeEmailFromSetting(valueToStore);
+    await writeSetting("email_from", valueToStore);
     res.json({ emailFrom: valueToStore });
   } catch (err) {
     console.error("[settings] Failed to write settings to DB:", err);
@@ -113,6 +118,89 @@ router.post("/settings/email/test", requireAuth, async (req, res): Promise<void>
   }
 
   res.json({ message: `Test email sent to ${userRow.email as string}` });
+});
+
+// ── General / platform settings ──────────────────────────────────────────────
+
+const VALID_ENROLLMENT_MODES = ["open", "approval_required"] as const;
+type EnrollmentMode = (typeof VALID_ENROLLMENT_MODES)[number];
+
+// Admin: get general settings
+router.get("/settings/general", requireAuth, async (req, res): Promise<void> => {
+  if (req.userRole !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+
+  const [platformName, supportEmail, defaultEnrollmentMode] = await Promise.all([
+    getSetting("platform_name"),
+    getSetting("support_email"),
+    getSetting("default_enrollment_mode"),
+  ]);
+
+  res.json({
+    platformName: platformName ?? null,
+    supportEmail: supportEmail ?? null,
+    defaultEnrollmentMode: (defaultEnrollmentMode as EnrollmentMode | null) ?? null,
+  });
+});
+
+// Admin: save general settings
+router.post("/settings/general", requireAuth, async (req, res): Promise<void> => {
+  if (req.userRole !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+
+  const {
+    platformName,
+    supportEmail,
+    defaultEnrollmentMode,
+  } = req.body as {
+    platformName?: string | null;
+    supportEmail?: string | null;
+    defaultEnrollmentMode?: string | null;
+  };
+
+  if (
+    defaultEnrollmentMode !== undefined &&
+    defaultEnrollmentMode !== null &&
+    !VALID_ENROLLMENT_MODES.includes(defaultEnrollmentMode as EnrollmentMode)
+  ) {
+    res.status(400).json({ error: "Invalid defaultEnrollmentMode value" });
+    return;
+  }
+
+  try {
+    const writes: Promise<void>[] = [];
+
+    if (platformName !== undefined) {
+      writes.push(writeSetting("platform_name", platformName?.trim() || null));
+    }
+    if (supportEmail !== undefined) {
+      writes.push(writeSetting("support_email", supportEmail?.trim() || null));
+    }
+    if (defaultEnrollmentMode !== undefined) {
+      writes.push(writeSetting("default_enrollment_mode", defaultEnrollmentMode ?? null));
+    }
+
+    await Promise.all(writes);
+
+    const [savedPlatformName, savedSupportEmail, savedDefaultEnrollmentMode] = await Promise.all([
+      getSetting("platform_name"),
+      getSetting("support_email"),
+      getSetting("default_enrollment_mode"),
+    ]);
+
+    res.json({
+      platformName: savedPlatformName ?? null,
+      supportEmail: savedSupportEmail ?? null,
+      defaultEnrollmentMode: (savedDefaultEnrollmentMode as EnrollmentMode | null) ?? null,
+    });
+  } catch (err) {
+    console.error("[settings] Failed to write general settings:", err);
+    res.status(500).json({ error: "Failed to save settings" });
+  }
 });
 
 export default router;
