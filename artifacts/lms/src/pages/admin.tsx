@@ -57,6 +57,10 @@ export default function AdminPage() {
   const [rejectingEnrollmentId, setRejectingEnrollmentId] = useState<number | null>(null);
   const [pendingRejectEnrollmentId, setPendingRejectEnrollmentId] = useState<number | null>(null);
   const [rejectEnrollmentReason, setRejectEnrollmentReason] = useState("");
+  const [selectedEnrollmentIds, setSelectedEnrollmentIds] = useState<Set<number>>(new Set());
+  const [bulkEnrollmentActioning, setBulkEnrollmentActioning] = useState(false);
+  const [showBulkEnrollmentRejectReason, setShowBulkEnrollmentRejectReason] = useState(false);
+  const [bulkEnrollmentRejectReason, setBulkEnrollmentRejectReason] = useState("");
   const [pendingBlockUserId, setPendingBlockUserId] = useState<number | null>(null);
   const [blockUserReason, setBlockUserReason] = useState("");
   const [showBulkRejectReason, setShowBulkRejectReason] = useState(false);
@@ -388,6 +392,38 @@ export default function AdminPage() {
     } catch { /* silently ignore */ }
     finally { setAuditLogLoading(false); }
   }, [token]);
+
+  const handleBulkEnrollmentAction = async (action: "approve" | "reject", reason?: string) => {
+    if (selectedEnrollmentIds.size === 0) return;
+    setBulkEnrollmentActioning(true);
+    setShowBulkEnrollmentRejectReason(false);
+    setBulkEnrollmentRejectReason("");
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch("/api/enrollments/bulk-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ enrollmentIds: Array.from(selectedEnrollmentIds), action, ...(reason ? { reason } : {}) }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? `Failed to ${action} enrollments`);
+      }
+      const data = await resp.json() as { updated: number };
+      setSelectedEnrollmentIds(new Set());
+      await fetchPendingEnrollments();
+      toast({
+        title: action === "approve"
+          ? `${data.updated} enrollment${data.updated !== 1 ? "s" : ""} approved`
+          : `${data.updated} enrollment${data.updated !== 1 ? "s" : ""} rejected`,
+      });
+      if (auditLogLoaded) void fetchAuditLog();
+    } catch (err) {
+      toast({ title: (err as Error).message, variant: "destructive" });
+    } finally {
+      setBulkEnrollmentActioning(false);
+    }
+  };
 
   const loadMaintenanceSettings = useCallback(async () => {
     try {
@@ -767,10 +803,78 @@ export default function AdminPage() {
           <TabsContent value="course-approval" className="mt-4">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  Pending Course Enrollments
-                  <Badge variant="secondary" className="text-xs font-normal">{pendingEnrollments.length}</Badge>
-                </CardTitle>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    Pending Course Enrollments
+                    <Badge variant="secondary" className="text-xs font-normal">{pendingEnrollments.length}</Badge>
+                  </CardTitle>
+                  {selectedEnrollmentIds.size > 0 && (
+                    <div className="flex flex-col gap-2" data-testid="bulk-enrollment-action-toolbar">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">{selectedEnrollmentIds.size} selected</span>
+                        <Button
+                          size="sm"
+                          className="h-7 gap-1 text-xs"
+                          onClick={() => handleBulkEnrollmentAction("approve")}
+                          disabled={bulkEnrollmentActioning}
+                          data-testid="bulk-enrollment-approve-btn"
+                        >
+                          {bulkEnrollmentActioning ? (
+                            <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <><CheckCircle className="w-3 h-3" /> Approve selected</>
+                          )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="h-7 gap-1 text-xs"
+                          onClick={() => setShowBulkEnrollmentRejectReason(v => !v)}
+                          disabled={bulkEnrollmentActioning}
+                          data-testid="bulk-enrollment-reject-btn"
+                        >
+                          {bulkEnrollmentActioning ? (
+                            <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <><XCircle className="w-3 h-3" /> Reject selected</>
+                          )}
+                        </Button>
+                      </div>
+                      {showBulkEnrollmentRejectReason && (
+                        <div className="space-y-2" data-testid="bulk-enrollment-reject-reason-form">
+                          <Textarea
+                            placeholder="Optional: reason for rejection (included in all notification emails)"
+                            className="text-xs min-h-[60px] resize-none"
+                            value={bulkEnrollmentRejectReason}
+                            onChange={e => setBulkEnrollmentRejectReason(e.target.value)}
+                            data-testid="bulk-enrollment-reject-reason-input"
+                            autoFocus
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              className="h-7 text-xs gap-1"
+                              onClick={() => handleBulkEnrollmentAction("reject", bulkEnrollmentRejectReason || undefined)}
+                              disabled={bulkEnrollmentActioning}
+                              data-testid="bulk-enrollment-reject-confirm-btn"
+                            >
+                              <XCircle className="w-3 h-3" /> Confirm Reject
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs"
+                              onClick={() => { setShowBulkEnrollmentRejectReason(false); setBulkEnrollmentRejectReason(""); }}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 {pendingEnrollmentsLoading ? (
@@ -782,9 +886,36 @@ export default function AdminPage() {
                   </div>
                 ) : (
                   <div className="divide-y divide-border">
+                    {/* Select all row */}
+                    <div className="flex items-center gap-3 pb-3">
+                      <Checkbox
+                        data-testid="select-all-enrollments"
+                        checked={selectedEnrollmentIds.size === pendingEnrollments.length && pendingEnrollments.length > 0}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedEnrollmentIds(new Set(pendingEnrollments.map(e => e.id)));
+                          } else {
+                            setSelectedEnrollmentIds(new Set());
+                          }
+                        }}
+                      />
+                      <span className="text-xs text-muted-foreground">Select all</span>
+                    </div>
                     {pendingEnrollments.map(enrollment => (
                       <div key={enrollment.id} className="py-4 border-b border-border last:border-0" data-testid={`enrollment-row-${enrollment.id}`}>
                         <div className="flex items-center gap-3">
+                          <Checkbox
+                            data-testid={`select-enrollment-${enrollment.id}`}
+                            checked={selectedEnrollmentIds.has(enrollment.id)}
+                            onCheckedChange={(checked) => {
+                              setSelectedEnrollmentIds(prev => {
+                                const next = new Set(prev);
+                                if (checked) next.add(enrollment.id);
+                                else next.delete(enrollment.id);
+                                return next;
+                              });
+                            }}
+                          />
                           <Avatar className="w-10 h-10 flex-shrink-0">
                             <AvatarImage src={enrollment.user.avatar ?? undefined} />
                             <AvatarFallback className="text-xs bg-muted font-semibold">

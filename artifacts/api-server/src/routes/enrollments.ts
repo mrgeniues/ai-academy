@@ -289,6 +289,115 @@ router.patch("/enrollments/:id/reject", requireAuth, async (req, res): Promise<v
   res.json({ id: enrollment.id, rejected: true });
 });
 
+// Admin: bulk approve or reject enrollment requests
+router.post("/enrollments/bulk-action", requireAuth, async (req, res): Promise<void> => {
+  if (req.userRole !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+
+  const { enrollmentIds, action, reason } = req.body as {
+    enrollmentIds: unknown;
+    action: unknown;
+    reason?: unknown;
+  };
+
+  if (!Array.isArray(enrollmentIds) || enrollmentIds.length === 0) {
+    res.status(400).json({ error: "enrollmentIds must be a non-empty array" });
+    return;
+  }
+
+  if (action !== "approve" && action !== "reject") {
+    res.status(400).json({ error: "action must be 'approve' or 'reject'" });
+    return;
+  }
+
+  const ids = (enrollmentIds as unknown[]).map(id => parseInt(String(id), 10)).filter(id => !isNaN(id));
+  if (ids.length === 0) {
+    res.status(400).json({ error: "No valid enrollment ids provided" });
+    return;
+  }
+
+  const rejectionReason = typeof reason === "string" && reason.trim() ? reason.trim() : undefined;
+  let updated = 0;
+
+  if (action === "approve") {
+    const { data: enrollments, error } = await supabase
+      .from("enrollments")
+      .update({ is_approved: true })
+      .in("id", ids)
+      .select();
+
+    if (error) {
+      res.status(500).json({ error: "Failed to approve enrollments" });
+      return;
+    }
+
+    updated = enrollments?.length ?? 0;
+
+    // Send approval emails and log audit actions
+    await Promise.allSettled((enrollments ?? []).map(async (enrollment) => {
+      const [{ data: enrolledUser }, { data: enrolledCourse }] = await Promise.all([
+        supabase.from("users").select("email, name").eq("id", enrollment.user_id).maybeSingle(),
+        supabase.from("courses").select("title").eq("id", enrollment.course_id).maybeSingle(),
+      ]);
+
+      if (enrolledUser && enrolledCourse) {
+        sendEnrollmentApprovedEmail(enrolledUser.email, enrolledUser.name, enrolledCourse.title).catch((err) => {
+          console.error("[enrollments] Failed to send approval email for enrollment", enrollment.id, err);
+        });
+      }
+
+      logAdminAction({
+        actorId: req.userId!,
+        targetUserId: enrollment.user_id,
+        action: "enrollment_approved",
+        entityType: "enrollment",
+        entityId: enrollment.id,
+      }).catch((err: unknown) => { console.error("[audit] logAdminAction fire-and-forget failed:", err); });
+    }));
+  } else {
+    // Reject: delete the enrollment records
+    const { data: enrollments, error } = await supabase
+      .from("enrollments")
+      .delete()
+      .in("id", ids)
+      .select();
+
+    if (error) {
+      res.status(500).json({ error: "Failed to reject enrollments" });
+      return;
+    }
+
+    updated = enrollments?.length ?? 0;
+
+    // Send rejection emails and log audit actions
+    await Promise.allSettled((enrollments ?? []).map(async (enrollment) => {
+      const [{ data: enrolledUser }, { data: enrolledCourse }] = await Promise.all([
+        supabase.from("users").select("email, name").eq("id", enrollment.user_id).maybeSingle(),
+        supabase.from("courses").select("title").eq("id", enrollment.course_id).maybeSingle(),
+      ]);
+
+      if (enrolledUser && enrolledCourse) {
+        sendEnrollmentRejectedEmail(enrolledUser.email, enrolledUser.name, enrolledCourse.title, rejectionReason).catch((err) => {
+          console.error("[enrollments] Failed to send rejection email for enrollment", enrollment.id, err);
+        });
+      }
+
+      logAdminAction({
+        actorId: req.userId!,
+        targetUserId: enrollment.user_id,
+        action: "enrollment_rejected",
+        entityType: "enrollment",
+        entityId: enrollment.id,
+        reason: rejectionReason ?? null,
+      }).catch((err: unknown) => { console.error("[audit] logAdminAction fire-and-forget failed:", err); });
+    }));
+  }
+
+  res.json({ updated });
+});
+
 router.patch("/enrollments/:courseId/progress", requireAuth, async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.courseId) ? req.params.courseId[0] : req.params.courseId;
   const courseId = parseInt(rawId, 10);
