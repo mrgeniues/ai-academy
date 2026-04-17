@@ -7,7 +7,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
-import { GraduationCap, Eye, EyeOff, ArrowLeft, CheckCircle } from "lucide-react";
+import { GraduationCap, Eye, EyeOff, ArrowLeft, CheckCircle, XCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -29,8 +29,9 @@ export default function LoginPage() {
   const loginMutation = useLogin();
   const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
-  const [view, setView] = useState<"login" | "forgot" | "sent">("login");
+  const [view, setView] = useState<"login" | "forgot" | "sent" | "blocked">("login");
   const [isSending, setIsSending] = useState(false);
+  const [blockedReason, setBlockedReason] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isLoading && user) {
@@ -53,7 +54,12 @@ export default function LoginPage() {
       const response = await loginMutation.mutateAsync({ data });
       login(response.token);
     } catch (err: unknown) {
-      const error = err as { data?: { error?: string }; message?: string };
+      const error = err as { data?: { error?: string; blocked?: boolean; rejectionReason?: string | null }; message?: string; status?: number };
+      if (error?.data?.blocked) {
+        setBlockedReason(error.data.rejectionReason ?? null);
+        setView("blocked");
+        return;
+      }
       toast({
         title: "Login failed",
         description: error?.data?.error || error?.message || "Invalid email or password",
@@ -278,6 +284,34 @@ export default function LoginPage() {
                 className="text-sm text-primary hover:underline"
               >
                 Back to login
+              </button>
+            </div>
+          )}
+
+          {/* ── BLOCKED / REJECTED VIEW ── */}
+          {view === "blocked" && (
+            <div>
+              <div className="w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-5">
+                <XCircle className="w-7 h-7 text-red-600 dark:text-red-400" />
+              </div>
+              <h1 className="text-2xl font-bold mb-2 text-center">Account not approved</h1>
+
+              {blockedReason ? (
+                <div className="mt-4 p-4 rounded-lg bg-muted border border-border text-sm">
+                  <p className="font-medium text-foreground mb-1">Reason from admin:</p>
+                  <p className="text-muted-foreground leading-relaxed">{blockedReason}</p>
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-sm text-center mt-3 leading-relaxed">
+                  Your account request was not approved. Please contact support if you believe this is a mistake.
+                </p>
+              )}
+
+              <button
+                onClick={() => setView("login")}
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mt-6 mx-auto"
+              >
+                <ArrowLeft className="w-4 h-4" /> Back to login
               </button>
             </div>
           )}

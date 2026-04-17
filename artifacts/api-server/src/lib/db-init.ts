@@ -100,6 +100,16 @@ async function checkAuditTable(): Promise<void> {
   }
 }
 
+async function checkRejectionTables(): Promise<void> {
+  const { error } = await supabase.from("rejected_enrollments").select("id").limit(1);
+  if (error && (error.code === "42P01" || error.message.includes("rejected_enrollments"))) {
+    logger.warn(
+      "rejected_enrollments table not found — enrollment rejection reasons will not be stored in-app. " +
+      "Run the latest SQL in artifacts/api-server/supabase-setup.sql to enable it."
+    );
+  }
+}
+
 export async function initializeDatabase(): Promise<void> {
   logger.info("Checking database connectivity...");
 
@@ -122,5 +132,6 @@ export async function initializeDatabase(): Promise<void> {
 
   await seedDemoData();
   await checkAuditTable();
+  await checkRejectionTables();
   logger.info("Database ready ✓");
 }

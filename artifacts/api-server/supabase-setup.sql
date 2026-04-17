@@ -321,3 +321,18 @@ BEGIN
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
   END IF;
 END $$;
+
+-- ============================================================
+-- Rejection reason columns (show reason in-app, not just email)
+-- ============================================================
+ALTER TABLE users ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+
+CREATE TABLE IF NOT EXISTS rejected_enrollments (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  reason TEXT,
+  rejected_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE rejected_enrollments DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS rejected_enrollments_user_course_idx ON rejected_enrollments(user_id, course_id);

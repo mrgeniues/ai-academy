@@ -55,6 +55,7 @@ type DbUser = {
   is_approved: boolean | null;
   is_online: boolean | null;
   last_seen: string | null;
+  rejection_reason: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -75,6 +76,7 @@ export function formatUser(user: DbUser) {
     isApproved: user.is_approved ?? false,
     isOnline: user.is_online ?? false,
     lastSeen: user.last_seen ?? null,
+    rejectionReason: (user as Record<string, unknown>).rejection_reason as string | null ?? null,
     createdAt: user.created_at,
   };
 }
@@ -154,7 +156,12 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   }
 
   if ((user as DbUser).is_blocked) {
-    res.status(403).json({ error: "Your account has been blocked. Contact admin for help." });
+    const rejectionReason = (user as DbUser).rejection_reason ?? null;
+    res.status(403).json({
+      error: "Your account has not been approved.",
+      blocked: true,
+      rejectionReason,
+    });
     return;
   }
 

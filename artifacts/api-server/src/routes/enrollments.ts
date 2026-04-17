@@ -240,6 +240,38 @@ router.patch("/enrollments/:id/approve", requireAuth, async (req, res): Promise<
   });
 });
 
+// Student: get rejection reason for a specific course (if their enrollment was rejected)
+router.get("/enrollments/rejection-reason", requireAuth, async (req, res): Promise<void> => {
+  const rawCourseId = Array.isArray(req.query.courseId) ? req.query.courseId[0] : req.query.courseId;
+  const courseId = parseInt(rawCourseId as string, 10);
+  if (isNaN(courseId)) { res.status(400).json({ error: "Invalid courseId" }); return; }
+
+  const { data, error } = await supabase
+    .from("rejected_enrollments")
+    .select("reason, rejected_at")
+    .eq("user_id", req.userId!)
+    .eq("course_id", courseId)
+    .order("rejected_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === "42P01" || error.message.includes("rejected_enrollments")) {
+      res.json({ found: false });
+      return;
+    }
+    res.status(500).json({ error: error.message });
+    return;
+  }
+
+  if (!data) {
+    res.json({ found: false });
+    return;
+  }
+
+  res.json({ found: true, reason: (data as Record<string, unknown>).reason as string | null ?? null, rejectedAt: (data as Record<string, unknown>).rejected_at });
+});
+
 // Admin: reject an enrollment
 router.patch("/enrollments/:id/reject", requireAuth, async (req, res): Promise<void> => {
   if (req.userRole !== "admin") {
@@ -264,6 +296,16 @@ router.patch("/enrollments/:id/reject", requireAuth, async (req, res): Promise<v
   if (error || !enrollment) {
     res.status(404).json({ error: "Enrollment not found" });
     return;
+  }
+
+  // Store rejection reason so students can see it in the app (awaited to guarantee persistence)
+  const { error: rejErr } = await supabase.from("rejected_enrollments").insert({
+    user_id: enrollment.user_id,
+    course_id: enrollment.course_id,
+    reason: rejectionReason ?? null,
+  });
+  if (rejErr && rejErr.code !== "42P01" && !rejErr.message.includes("rejected_enrollments")) {
+    console.error("[enrollments] Failed to store rejection reason:", rejErr.message);
   }
 
   const [{ data: enrolledUser }, { data: enrolledCourse }] = await Promise.all([
@@ -370,6 +412,19 @@ router.post("/enrollments/bulk-action", requireAuth, async (req, res): Promise<v
     }
 
     updated = enrollments?.length ?? 0;
+
+    // Store rejection reasons so students can see them in the app (awaited to guarantee persistence)
+    if (enrollments && enrollments.length > 0) {
+      const rejectionRows = enrollments.map(e => ({
+        user_id: e.user_id,
+        course_id: e.course_id,
+        reason: rejectionReason ?? null,
+      }));
+      const { error: bulkRejErr } = await supabase.from("rejected_enrollments").insert(rejectionRows);
+      if (bulkRejErr && bulkRejErr.code !== "42P01" && !bulkRejErr.message.includes("rejected_enrollments")) {
+        console.error("[enrollments] Failed to store bulk rejection reasons:", bulkRejErr.message);
+      }
+    }
 
     // Send rejection emails and log audit actions
     await Promise.allSettled((enrollments ?? []).map(async (enrollment) => {

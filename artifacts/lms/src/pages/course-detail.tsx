@@ -14,9 +14,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { RichTextDisplay } from "@/components/rich-text-display";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { BookOpen, Users, PlayCircle, CheckCircle, Circle, FileText, Plus, ArrowLeft, Trash2, Lock, MessageCircle, Globe, ExternalLink, Clock, Pencil, Zap } from "lucide-react";
+import { BookOpen, Users, PlayCircle, CheckCircle, Circle, FileText, Plus, ArrowLeft, Trash2, Lock, MessageCircle, Globe, ExternalLink, Clock, Pencil, Zap, XCircle } from "lucide-react";
 import { Link } from "wouter";
 
 
@@ -84,6 +84,22 @@ export default function CourseDetailPage() {
   const isAdmin = user?.role === "admin";
   const isPrivate = course?.visibility === "private";
   const canAccess = !isPrivate || isAdmin;
+
+  const isEnrolled = course?.isEnrolled ?? false;
+  const { data: rejectionData } = useQuery<{ found: boolean; reason: string | null; rejectedAt?: string }>({
+    queryKey: ["enrollment-rejection-reason", courseId],
+    enabled: !!courseId && !isAdmin && !isEnrolled && !!token,
+    queryFn: async () => {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+      const res = await fetch(`${base}/api/enrollments/rejection-reason?courseId=${courseId}`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!res.ok) return { found: false, reason: null };
+      return res.json() as Promise<{ found: boolean; reason: string | null; rejectedAt?: string }>;
+    },
+    staleTime: 30 * 1000,
+  });
 
   const handleEnroll = async () => {
     try {
@@ -338,8 +354,27 @@ export default function CourseDetailPage() {
               </div>
             )}
 
+            {/* Enrollment rejected banner */}
+            {!course.isEnrolled && !isAdmin && rejectionData?.found && (
+              <div className="flex flex-col gap-1.5 px-3 py-2.5 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm max-w-sm">
+                <div className="flex items-center gap-2 text-red-700 dark:text-red-400 font-medium">
+                  <XCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>Enrollment request was not approved</span>
+                </div>
+                {rejectionData.reason ? (
+                  <p className="text-red-600 dark:text-red-300 text-xs leading-relaxed pl-6">
+                    {rejectionData.reason}
+                  </p>
+                ) : (
+                  <p className="text-red-600 dark:text-red-300 text-xs leading-relaxed pl-6">
+                    No reason was provided. Please contact an admin for more information.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Enrollment mode indicator — shown to non-admin unenrolled students on public courses */}
-            {!course.isEnrolled && canAccess && !isAdmin && (
+            {!course.isEnrolled && canAccess && !isAdmin && !rejectionData?.found && (
               course.enrollmentMode === "open" ? (
                 <div className="inline-flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400">
                   <Zap className="w-4 h-4" />

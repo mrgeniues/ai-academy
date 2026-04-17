@@ -230,12 +230,32 @@ router.patch("/users/:id/block", requireAdmin, async (req, res): Promise<void> =
   }
   const rejectionReason = typeof reason === "string" && reason.trim() ? reason.trim() : undefined;
 
+  const blockUpdate: Record<string, unknown> = { is_blocked: blocked };
+  if (blocked) {
+    blockUpdate.rejection_reason = rejectionReason ?? null;
+  } else {
+    blockUpdate.rejection_reason = null;
+  }
+
   let { data: user, error } = await supabase
     .from("users")
-    .update({ is_blocked: blocked })
+    .update(blockUpdate)
     .eq("id", id)
     .select()
     .maybeSingle();
+
+  // Graceful fallback: rejection_reason column may not exist yet — retry without it
+  if (error?.message?.includes("rejection_reason")) {
+    const retryUpdate: Record<string, unknown> = { is_blocked: blocked };
+    const retry = await supabase
+      .from("users")
+      .update(retryUpdate)
+      .eq("id", id)
+      .select()
+      .maybeSingle();
+    user = retry.data;
+    error = retry.error;
+  }
 
   // Graceful fallback: if column doesn't exist yet, tell the admin to run migration
   if (error?.message?.includes("is_blocked")) {
@@ -356,11 +376,26 @@ router.post("/users/bulk-action", requireAdmin, async (req, res): Promise<void> 
 
     res.json({ updated: (updatedUsers ?? []).length, updatedIds: (updatedUsers ?? []).map(u => u.id) });
   } else {
-    const { data: updatedUsers, error } = await supabase
+    const bulkBlockUpdate: Record<string, unknown> = {
+      is_blocked: true,
+      rejection_reason: bulkRejectionReason ?? null,
+    };
+    let { data: updatedUsers, error } = await supabase
       .from("users")
-      .update({ is_blocked: true })
+      .update(bulkBlockUpdate)
       .in("id", ids)
       .select();
+
+    // Graceful fallback: rejection_reason column may not exist yet
+    if (error?.message?.includes("rejection_reason")) {
+      const retry = await supabase
+        .from("users")
+        .update({ is_blocked: true })
+        .in("id", ids)
+        .select();
+      updatedUsers = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       res.status(500).json({ error: error.message ?? "Failed to reject users" });
@@ -427,11 +462,23 @@ router.post("/users/bulk-undo", requireAdmin, async (req, res): Promise<void> =>
 
     res.json({ updated: (updatedUsers ?? []).length });
   } else {
-    const { data: updatedUsers, error } = await supabase
+    const undoRejectUpdate: Record<string, unknown> = { is_blocked: false, rejection_reason: null };
+    let { data: updatedUsers, error } = await supabase
       .from("users")
-      .update({ is_blocked: false })
+      .update(undoRejectUpdate)
       .in("id", ids)
       .select();
+
+    // Graceful fallback: rejection_reason column may not exist yet
+    if (error?.message?.includes("rejection_reason")) {
+      const retry = await supabase
+        .from("users")
+        .update({ is_blocked: false })
+        .in("id", ids)
+        .select();
+      updatedUsers = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       res.status(500).json({ error: error.message ?? "Failed to undo rejection" });
