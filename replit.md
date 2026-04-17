@@ -28,6 +28,13 @@ The frontend proxies `/api/*` requests to `http://localhost:8080` via Vite dev p
 - JWT-based, stored in `localStorage` as `lms_token`
 - Token is injected as `Authorization: Bearer <token>` header via `setAuthTokenGetter` in the API client
 - Three roles: `member`, `creator`, `admin`
+- **Password Reset**: Stateless JWT-based flow (no extra DB table needed)
+  - `POST /api/auth/forgot-password` — generates a signed reset JWT (1h TTL), emails link via Resend
+  - `GET /api/auth/verify-reset-token?token=xxx` — validates token + fingerprint
+  - `POST /api/auth/reset-password` — validates token, hashes new password, saves to `users.password_hash`
+  - Reset token encodes a bcrypt hash fingerprint; it auto-invalidates the moment the password changes
+  - Signed with `SESSION_SECRET` (NOT Supabase Auth — all users live in the custom `users` table)
+  - Email reset link points to `SITE_URL/reset-password?token=xxx` (set `SITE_URL` env var in production)
 
 ## Database Setup
 

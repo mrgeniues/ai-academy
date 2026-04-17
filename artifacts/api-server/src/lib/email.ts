@@ -165,6 +165,46 @@ export async function sendTestEmail(to: string, name: string): Promise<{ ok: boo
   }
 }
 
+export async function sendPasswordResetEmail(
+  to: string,
+  name: string,
+  token: string
+): Promise<void> {
+  const client = getClient();
+  if (!client) {
+    console.warn("[email] Password reset email skipped — RESEND_API_KEY not set");
+    return;
+  }
+
+  const fromEmail = await resolveFromEmail();
+  const baseUrl = process.env.SITE_URL ?? "https://aiacadmy.online";
+  const resetLink = `${baseUrl}/reset-password?token=${encodeURIComponent(token)}`;
+
+  try {
+    const { error } = await client.emails.send({
+      from: fromEmail,
+      to,
+      subject: "Reset your AI Academy 2.0 password",
+      html: `
+        <p>Hi ${name},</p>
+        <p>We received a request to reset your password. Click the link below to choose a new one:</p>
+        <p><a href="${resetLink}" style="display:inline-block;padding:10px 20px;background:#6d28d9;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;">Reset Password</a></p>
+        <p>Or copy this link into your browser:<br><a href="${resetLink}">${resetLink}</a></p>
+        <p>This link expires in <strong>1 hour</strong>. If you did not request a password reset, you can safely ignore this email.</p>
+      `,
+      text: `Hi ${name},\n\nWe received a request to reset your password.\n\nReset link (expires in 1 hour):\n${resetLink}\n\nIf you did not request this, you can safely ignore this email.`,
+    });
+
+    if (error) {
+      console.error("[email] Failed to send password reset email:", error);
+    } else {
+      console.info(`[email] Sent password reset email to ${to}`);
+    }
+  } catch (err) {
+    console.error("[email] Unexpected error sending password reset email:", err);
+  }
+}
+
 export async function sendEnrollmentApprovedEmail(
   to: string,
   name: string,

@@ -2,11 +2,10 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { supabase } from "@/lib/supabase-client";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { GraduationCap, Eye, EyeOff, CheckCircle } from "lucide-react";
+import { GraduationCap, Eye, EyeOff, CheckCircle, Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 
@@ -27,7 +26,11 @@ export default function ResetPasswordPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [done, setDone] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [hasSession, setHasSession] = useState<boolean | null>(null);
+  const [tokenChecked, setTokenChecked] = useState(false);
+  const [tokenValid, setTokenValid] = useState(false);
+  const [tokenError, setTokenError] = useState("Invalid reset link. Please request a new one.");
+
+  const token = new URLSearchParams(window.location.search).get("token");
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -35,16 +38,39 @@ export default function ResetPasswordPage() {
   });
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setHasSession(!!data.session);
-    });
-  }, []);
+    if (!token) {
+      setTokenError("No reset token found. Please request a new password reset link.");
+      setTokenValid(false);
+      setTokenChecked(true);
+      return;
+    }
+
+    fetch(`/api/auth/verify-reset-token?token=${encodeURIComponent(token)}`)
+      .then(r => r.json())
+      .then((data: { valid: boolean; reason?: string }) => {
+        setTokenValid(data.valid);
+        if (!data.valid) setTokenError(data.reason ?? "Invalid reset link. Please request a new one.");
+      })
+      .catch(() => {
+        setTokenValid(false);
+        setTokenError("Could not verify reset link. Please try again.");
+      })
+      .finally(() => setTokenChecked(true));
+  }, [token]);
 
   const onSubmit = async (data: FormData) => {
+    if (!token) return;
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password: data.password });
-      if (error) throw error;
+      const resp = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, password: data.password }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error || "Failed to update password. Please request a new reset link.");
+      }
       setDone(true);
       setTimeout(() => setLocation("/login"), 3000);
     } catch (err: unknown) {
@@ -84,7 +110,16 @@ export default function ResetPasswordPage() {
             <span className="font-bold text-lg">AI Academy 2.0</span>
           </div>
 
-          {done ? (
+          {/* Checking token */}
+          {!tokenChecked && (
+            <div className="text-center">
+              <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
+              <p className="text-muted-foreground text-sm">Verifying reset link...</p>
+            </div>
+          )}
+
+          {/* Success */}
+          {tokenChecked && done && (
             <div className="text-center">
               <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
                 <CheckCircle className="w-8 h-8 text-green-600" />
@@ -94,17 +129,21 @@ export default function ResetPasswordPage() {
                 Your password has been updated successfully. Redirecting to login...
               </p>
             </div>
-          ) : hasSession === false ? (
+          )}
+
+          {/* Invalid / expired token */}
+          {tokenChecked && !tokenValid && !done && (
             <div className="text-center">
-              <h1 className="text-2xl font-bold mb-2">Link expired</h1>
-              <p className="text-muted-foreground text-sm mb-6">
-                This reset link is invalid or has expired. Please request a new one.
-              </p>
+              <h1 className="text-2xl font-bold mb-2">Link invalid or expired</h1>
+              <p className="text-muted-foreground text-sm mb-6">{tokenError}</p>
               <Button className="w-full" onClick={() => setLocation("/login")}>
                 Back to Login
               </Button>
             </div>
-          ) : (
+          )}
+
+          {/* Reset form */}
+          {tokenChecked && tokenValid && !done && (
             <>
               <h1 className="text-2xl font-bold mb-1">Set new password</h1>
               <p className="text-muted-foreground text-sm mb-8">Enter your new password below.</p>

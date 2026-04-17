@@ -3,7 +3,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useLogin } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
-import { supabase } from "@/lib/supabase-client";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -66,9 +65,15 @@ export default function LoginPage() {
   const onForgotSubmit = async (data: ForgotData) => {
     setIsSending(true);
     try {
-      const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/reset-password`;
-      const { error } = await supabase.auth.resetPasswordForEmail(data.email, { redirectTo });
-      if (error) throw error;
+      const resp = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: data.email }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error || "Failed to send reset email");
+      }
       setView("sent");
     } catch (err: unknown) {
       const e = err as { message?: string };

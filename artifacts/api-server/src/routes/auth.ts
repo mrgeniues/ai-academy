@@ -1,8 +1,32 @@
 import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import { signToken, requireAuth, verifyToken } from "../lib/auth";
 import { SignupBody, LoginBody } from "@workspace/api-zod";
 import { supabase } from "../lib/supabase";
+import { sendPasswordResetEmail } from "../lib/email";
+
+const RESET_SECRET = process.env.SESSION_SECRET ?? process.env.JWT_SECRET ?? "fallback-reset-secret";
+
+type ResetTokenPayload = {
+  userId: number;
+  type: "password_reset";
+  pwPrint: string;
+};
+
+function signResetToken(userId: number, pwPrint: string): string {
+  return jwt.sign({ userId, type: "password_reset", pwPrint } satisfies ResetTokenPayload, RESET_SECRET, { expiresIn: "1h" });
+}
+
+function verifyResetToken(token: string): ResetTokenPayload | null {
+  try {
+    const payload = jwt.verify(token, RESET_SECRET) as ResetTokenPayload;
+    if (payload.type !== "password_reset") return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
 
 const router: IRouter = Router();
 
@@ -181,6 +205,118 @@ router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
   }
 
   res.json(formatUser(user as DbUser));
+});
+
+// ── Password reset (stateless JWT-based — no extra table needed) ───────────
+
+router.post("/auth/forgot-password", async (req, res): Promise<void> => {
+  const { email } = req.body as { email?: string };
+  if (!email || typeof email !== "string") {
+    res.status(400).json({ error: "Email is required" });
+    return;
+  }
+
+  // Always return the same message to prevent email enumeration
+  const successMsg = { message: "If this email is registered, a reset link has been sent." };
+
+  const { data: user } = await supabase
+    .from("users")
+    .select("id, email, name, password_hash")
+    .eq("email", email.toLowerCase().trim())
+    .maybeSingle();
+
+  if (!user) {
+    res.json(successMsg);
+    return;
+  }
+
+  const u = user as { id: number; email: string; name: string; password_hash: string };
+  // Use first 8 chars of current hash as a fingerprint — token auto-invalidates after password change
+  const pwPrint = u.password_hash.slice(0, 8);
+  const token = signResetToken(u.id, pwPrint);
+
+  await sendPasswordResetEmail(u.email, u.name, token);
+
+  res.json(successMsg);
+});
+
+router.get("/auth/verify-reset-token", async (req, res): Promise<void> => {
+  const { token } = req.query as { token?: string };
+  if (!token) {
+    res.json({ valid: false, reason: "Token is missing" });
+    return;
+  }
+
+  const payload = verifyResetToken(token);
+  if (!payload) {
+    res.json({ valid: false, reason: "Invalid or expired reset link. Please request a new one." });
+    return;
+  }
+
+  // Verify fingerprint still matches (i.e. password hasn't been changed since token was issued)
+  const { data: user } = await supabase
+    .from("users")
+    .select("password_hash")
+    .eq("id", payload.userId)
+    .maybeSingle();
+
+  if (!user || (user as { password_hash: string }).password_hash.slice(0, 8) !== payload.pwPrint) {
+    res.json({ valid: false, reason: "This reset link has already been used. Please request a new one." });
+    return;
+  }
+
+  res.json({ valid: true });
+});
+
+router.post("/auth/reset-password", async (req, res): Promise<void> => {
+  const { token, password } = req.body as { token?: string; password?: string };
+
+  if (!token || !password) {
+    res.status(400).json({ error: "Token and password are required" });
+    return;
+  }
+
+  if (password.length < 8) {
+    res.status(400).json({ error: "Password must be at least 8 characters" });
+    return;
+  }
+
+  const payload = verifyResetToken(token);
+  if (!payload) {
+    res.status(400).json({ error: "Invalid or expired reset link. Please request a new one." });
+    return;
+  }
+
+  const { data: user } = await supabase
+    .from("users")
+    .select("id, password_hash")
+    .eq("id", payload.userId)
+    .maybeSingle();
+
+  if (!user) {
+    res.status(400).json({ error: "User not found." });
+    return;
+  }
+
+  const u = user as { id: number; password_hash: string };
+  if (u.password_hash.slice(0, 8) !== payload.pwPrint) {
+    res.status(400).json({ error: "This reset link has already been used. Please request a new one." });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  const { error: updateError } = await supabase
+    .from("users")
+    .update({ password_hash: passwordHash, updated_at: new Date().toISOString() })
+    .eq("id", u.id);
+
+  if (updateError) {
+    res.status(500).json({ error: "Failed to update password. Please try again." });
+    return;
+  }
+
+  res.json({ message: "Password updated successfully" });
 });
 
 export default router;
