@@ -89461,6 +89461,37 @@ router2.post("/settings/email", requireAuth, async (req, res) => {
     res.status(500).json({ error: "Failed to save setting" });
   }
 });
+router2.get("/settings/email/test/preview", requireAuth, async (req, res) => {
+  if (req.userRole !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+  const { data: userRow, error: userErr } = await supabase.from("users").select("email, name").eq("id", req.userId).single();
+  if (userErr || !userRow) {
+    res.status(500).json({ error: "Could not look up your account details" });
+    return;
+  }
+  const fromEmail = await (async () => {
+    try {
+      const stored = await getEmailFromSetting();
+      if (stored) return stored;
+    } catch {
+    }
+    return process.env.EMAIL_FROM ?? "LMS Platform <notifications@resend.dev>";
+  })();
+  const name = userRow.name;
+  res.json({
+    subject: "Test email from LMS Platform",
+    from: fromEmail,
+    to: userRow.email,
+    html: `
+      <p>Hi ${name},</p>
+      <p>This is a test email from your LMS Platform to verify that email delivery is working correctly.</p>
+      <p>If you received this, your email configuration is set up properly.</p>
+      <p><strong>Sending from:</strong> ${fromEmail}</p>
+    `
+  });
+});
 router2.post("/settings/email/test", requireAuth, async (req, res) => {
   if (req.userRole !== "admin") {
     res.status(403).json({ error: "Admin access required" });
