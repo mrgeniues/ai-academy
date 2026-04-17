@@ -59,11 +59,14 @@ export async function sendUserApprovedEmail(to: string, name: string): Promise<v
   }
 }
 
-export async function sendUserRejectedEmail(to: string, name: string): Promise<void> {
+export async function sendUserRejectedEmail(to: string, name: string, reason?: string): Promise<void> {
   const client = getClient();
   if (!client) return;
 
   const fromEmail = await resolveFromEmail();
+
+  const reasonHtml = reason ? `<p><strong>Reason:</strong> ${reason}</p>` : "";
+  const reasonText = reason ? `\n\nReason: ${reason}` : "";
 
   try {
     const { error } = await client.emails.send({
@@ -73,9 +76,10 @@ export async function sendUserRejectedEmail(to: string, name: string): Promise<v
       html: `
         <p>Hi ${name},</p>
         <p>Unfortunately, your account application has not been approved at this time.</p>
+        ${reasonHtml}
         <p>If you believe this is a mistake, please contact the platform administrator for more information.</p>
       `,
-      text: `Hi ${name},\n\nUnfortunately, your account application has not been approved at this time.\n\nIf you believe this is a mistake, please contact the platform administrator for more information.`,
+      text: `Hi ${name},\n\nUnfortunately, your account application has not been approved at this time.${reasonText}\n\nIf you believe this is a mistake, please contact the platform administrator for more information.`,
     });
 
     if (error) {
@@ -91,12 +95,16 @@ export async function sendUserRejectedEmail(to: string, name: string): Promise<v
 export async function sendEnrollmentRejectedEmail(
   to: string,
   name: string,
-  courseName: string
+  courseName: string,
+  reason?: string
 ): Promise<void> {
   const client = getClient();
   if (!client) return;
 
   const fromEmail = await resolveFromEmail();
+
+  const reasonHtml = reason ? `<p><strong>Reason:</strong> ${reason}</p>` : "";
+  const reasonText = reason ? `\n\nReason: ${reason}` : "";
 
   try {
     const { error } = await client.emails.send({
@@ -106,9 +114,10 @@ export async function sendEnrollmentRejectedEmail(
       html: `
         <p>Hi ${name},</p>
         <p>Unfortunately, your enrollment request for <strong>${courseName}</strong> has not been approved at this time.</p>
+        ${reasonHtml}
         <p>If you believe this is a mistake, please contact the platform administrator for more information.</p>
       `,
-      text: `Hi ${name},\n\nUnfortunately, your enrollment request for "${courseName}" has not been approved at this time.\n\nIf you believe this is a mistake, please contact the platform administrator for more information.`,
+      text: `Hi ${name},\n\nUnfortunately, your enrollment request for "${courseName}" has not been approved at this time.${reasonText}\n\nIf you believe this is a mistake, please contact the platform administrator for more information.`,
     });
 
     if (error) {

@@ -242,6 +242,9 @@ router.patch("/enrollments/:id/reject", requireAuth, async (req, res): Promise<v
   const id = parseInt(rawId, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid enrollment id" }); return; }
 
+  const { reason } = req.body as { reason?: string };
+  const rejectionReason = typeof reason === "string" && reason.trim() ? reason.trim() : undefined;
+
   const { data: enrollment, error } = await supabase
     .from("enrollments")
     .delete()
@@ -260,7 +263,7 @@ router.patch("/enrollments/:id/reject", requireAuth, async (req, res): Promise<v
   ]);
 
   if (enrolledUser && enrolledCourse) {
-    sendEnrollmentRejectedEmail(enrolledUser.email, enrolledUser.name, enrolledCourse.title).catch((err) => {
+    sendEnrollmentRejectedEmail(enrolledUser.email, enrolledUser.name, enrolledCourse.title, rejectionReason).catch((err) => {
       console.error("[enrollments] Failed to send rejection email for enrollment", id, err);
     });
   }

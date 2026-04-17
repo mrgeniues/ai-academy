@@ -213,11 +213,12 @@ router.patch("/users/:id/block", requireAdmin, async (req, res): Promise<void> =
     return;
   }
 
-  const { blocked } = req.body as { blocked?: boolean };
+  const { blocked, reason } = req.body as { blocked?: boolean; reason?: string };
   if (typeof blocked !== "boolean") {
     res.status(400).json({ error: "blocked field (boolean) is required" });
     return;
   }
+  const rejectionReason = typeof reason === "string" && reason.trim() ? reason.trim() : undefined;
 
   let { data: user, error } = await supabase
     .from("users")
@@ -240,7 +241,7 @@ router.patch("/users/:id/block", requireAdmin, async (req, res): Promise<void> =
   }
 
   if (blocked) {
-    sendUserRejectedEmail(user.email, user.name).catch((err) => {
+    sendUserRejectedEmail(user.email, user.name, rejectionReason).catch((err) => {
       console.error("[users] Failed to send rejection email for user", id, err);
     });
   }
@@ -283,7 +284,8 @@ router.patch("/users/:id/approve", requireAdmin, async (req, res): Promise<void>
 });
 
 router.post("/users/bulk-action", requireAdmin, async (req, res): Promise<void> => {
-  const { userIds, action } = req.body as { userIds?: unknown; action?: unknown };
+  const { userIds, action, reason } = req.body as { userIds?: unknown; action?: unknown; reason?: string };
+  const bulkRejectionReason = typeof reason === "string" && reason.trim() ? reason.trim() : undefined;
 
   if (!Array.isArray(userIds) || userIds.length === 0) {
     res.status(400).json({ error: "userIds must be a non-empty array" });
@@ -332,7 +334,7 @@ router.post("/users/bulk-action", requireAdmin, async (req, res): Promise<void> 
     }
 
     for (const u of updatedUsers ?? []) {
-      sendUserRejectedEmail(u.email, u.name).catch((err) => {
+      sendUserRejectedEmail(u.email, u.name, bulkRejectionReason).catch((err) => {
         console.error("[users] Failed to send rejection email for user", u.id, err);
       });
     }

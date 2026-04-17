@@ -55,6 +55,12 @@ export default function AdminPage() {
   const [pendingEnrollmentsLoading, setPendingEnrollmentsLoading] = useState(true);
   const [approvingEnrollmentId, setApprovingEnrollmentId] = useState<number | null>(null);
   const [rejectingEnrollmentId, setRejectingEnrollmentId] = useState<number | null>(null);
+  const [pendingRejectEnrollmentId, setPendingRejectEnrollmentId] = useState<number | null>(null);
+  const [rejectEnrollmentReason, setRejectEnrollmentReason] = useState("");
+  const [pendingBlockUserId, setPendingBlockUserId] = useState<number | null>(null);
+  const [blockUserReason, setBlockUserReason] = useState("");
+  const [showBulkRejectReason, setShowBulkRejectReason] = useState(false);
+  const [bulkRejectReason, setBulkRejectReason] = useState("");
 
   // Tool requests state
   type PendingToolRequest = {
@@ -121,15 +127,17 @@ export default function AdminPage() {
     }
   };
 
-  const handleToggleBlock = async (u: UserRow) => {
+  const handleToggleBlock = async (u: UserRow, reason?: string) => {
     const newBlocked = !u.isBlocked;
     setBlockingId(u.id);
+    setPendingBlockUserId(null);
+    setBlockUserReason("");
     try {
       const authToken = token ?? localStorage.getItem("lms_token");
       const resp = await fetch(`/api/users/${u.id}/block`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-        body: JSON.stringify({ blocked: newBlocked }),
+        body: JSON.stringify({ blocked: newBlocked, ...(reason ? { reason } : {}) }),
       });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({})) as { error?: string };
@@ -185,15 +193,17 @@ export default function AdminPage() {
     }
   };
 
-  const handleBulkAction = async (action: "approve" | "reject") => {
+  const handleBulkAction = async (action: "approve" | "reject", reason?: string) => {
     if (selectedPendingIds.size === 0) return;
     setBulkActioning(true);
+    setShowBulkRejectReason(false);
+    setBulkRejectReason("");
     try {
       const authToken = token ?? localStorage.getItem("lms_token");
       const resp = await fetch("/api/users/bulk-action", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-        body: JSON.stringify({ userIds: Array.from(selectedPendingIds), action }),
+        body: JSON.stringify({ userIds: Array.from(selectedPendingIds), action, ...(reason ? { reason } : {}) }),
       });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({})) as { error?: string };
@@ -407,13 +417,16 @@ export default function AdminPage() {
     }
   };
 
-  const handleRejectEnrollment = async (enrollment: PendingEnrollment) => {
+  const handleRejectEnrollment = async (enrollment: PendingEnrollment, reason?: string) => {
     setRejectingEnrollmentId(enrollment.id);
+    setPendingRejectEnrollmentId(null);
+    setRejectEnrollmentReason("");
     try {
       const authToken = token ?? localStorage.getItem("lms_token");
       const resp = await fetch(`/api/enrollments/${enrollment.id}/reject`, {
         method: "PATCH",
-        headers: { Authorization: `Bearer ${authToken}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify(reason ? { reason } : {}),
       });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({})) as { error?: string };
@@ -565,35 +578,69 @@ export default function AdminPage() {
                     <Badge variant="secondary" className="text-xs font-normal">{pendingUsers.length}</Badge>
                   </CardTitle>
                   {selectedPendingIds.size > 0 && (
-                    <div className="flex items-center gap-2" data-testid="bulk-action-toolbar">
-                      <span className="text-xs text-muted-foreground">{selectedPendingIds.size} selected</span>
-                      <Button
-                        size="sm"
-                        className="h-7 gap-1 text-xs"
-                        onClick={() => handleBulkAction("approve")}
-                        disabled={bulkActioning}
-                        data-testid="bulk-approve-btn"
-                      >
-                        {bulkActioning ? (
-                          <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <><CheckCircle className="w-3 h-3" /> Approve selected</>
-                        )}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        className="h-7 gap-1 text-xs"
-                        onClick={() => handleBulkAction("reject")}
-                        disabled={bulkActioning}
-                        data-testid="bulk-reject-btn"
-                      >
-                        {bulkActioning ? (
-                          <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <><XCircle className="w-3 h-3" /> Reject selected</>
-                        )}
-                      </Button>
+                    <div className="flex flex-col gap-2" data-testid="bulk-action-toolbar">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">{selectedPendingIds.size} selected</span>
+                        <Button
+                          size="sm"
+                          className="h-7 gap-1 text-xs"
+                          onClick={() => handleBulkAction("approve")}
+                          disabled={bulkActioning}
+                          data-testid="bulk-approve-btn"
+                        >
+                          {bulkActioning ? (
+                            <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <><CheckCircle className="w-3 h-3" /> Approve selected</>
+                          )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="h-7 gap-1 text-xs"
+                          onClick={() => setShowBulkRejectReason(v => !v)}
+                          disabled={bulkActioning}
+                          data-testid="bulk-reject-btn"
+                        >
+                          {bulkActioning ? (
+                            <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <><XCircle className="w-3 h-3" /> Reject selected</>
+                          )}
+                        </Button>
+                      </div>
+                      {showBulkRejectReason && (
+                        <div className="space-y-2" data-testid="bulk-reject-reason-form">
+                          <Textarea
+                            placeholder="Optional: reason for rejection (included in all notification emails)"
+                            className="text-xs min-h-[60px] resize-none"
+                            value={bulkRejectReason}
+                            onChange={e => setBulkRejectReason(e.target.value)}
+                            data-testid="bulk-reject-reason-input"
+                            autoFocus
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              className="h-7 text-xs gap-1"
+                              onClick={() => handleBulkAction("reject", bulkRejectReason || undefined)}
+                              disabled={bulkActioning}
+                              data-testid="bulk-reject-confirm-btn"
+                            >
+                              <XCircle className="w-3 h-3" /> Confirm Reject
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs"
+                              onClick={() => { setShowBulkRejectReason(false); setBulkRejectReason(""); }}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -692,51 +739,92 @@ export default function AdminPage() {
                 ) : (
                   <div className="divide-y divide-border">
                     {pendingEnrollments.map(enrollment => (
-                      <div key={enrollment.id} className="flex items-center gap-3 py-4" data-testid={`enrollment-row-${enrollment.id}`}>
-                        <Avatar className="w-10 h-10 flex-shrink-0">
-                          <AvatarImage src={enrollment.user.avatar ?? undefined} />
-                          <AvatarFallback className="text-xs bg-muted font-semibold">
-                            {enrollment.user.name.slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold truncate">{enrollment.user.name}</p>
-                          <p className="text-xs text-muted-foreground truncate">wants to join: <span className="font-medium text-foreground">{enrollment.course.title}</span></p>
-                          {enrollment.createdAt && (
-                            <p className="text-xs text-muted-foreground">
-                              {formatDistanceToNow(new Date(enrollment.createdAt), { addSuffix: true })}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <Button
-                            size="sm"
-                            className="h-8 gap-1 text-xs"
-                            onClick={() => handleApproveEnrollment(enrollment)}
-                            disabled={approvingEnrollmentId === enrollment.id || rejectingEnrollmentId === enrollment.id}
-                            data-testid={`approve-enrollment-${enrollment.id}`}
-                          >
-                            {approvingEnrollmentId === enrollment.id ? (
-                              <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <><CheckCircle className="w-3 h-3" /> Approve</>
+                      <div key={enrollment.id} className="py-4 border-b border-border last:border-0" data-testid={`enrollment-row-${enrollment.id}`}>
+                        <div className="flex items-center gap-3">
+                          <Avatar className="w-10 h-10 flex-shrink-0">
+                            <AvatarImage src={enrollment.user.avatar ?? undefined} />
+                            <AvatarFallback className="text-xs bg-muted font-semibold">
+                              {enrollment.user.name.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold truncate">{enrollment.user.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">wants to join: <span className="font-medium text-foreground">{enrollment.course.title}</span></p>
+                            {enrollment.createdAt && (
+                              <p className="text-xs text-muted-foreground">
+                                {formatDistanceToNow(new Date(enrollment.createdAt), { addSuffix: true })}
+                              </p>
                             )}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            className="h-8 gap-1 text-xs"
-                            onClick={() => handleRejectEnrollment(enrollment)}
-                            disabled={approvingEnrollmentId === enrollment.id || rejectingEnrollmentId === enrollment.id}
-                            data-testid={`reject-enrollment-${enrollment.id}`}
-                          >
-                            {rejectingEnrollmentId === enrollment.id ? (
-                              <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <><XCircle className="w-3 h-3" /> Reject</>
-                            )}
-                          </Button>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <Button
+                              size="sm"
+                              className="h-8 gap-1 text-xs"
+                              onClick={() => handleApproveEnrollment(enrollment)}
+                              disabled={approvingEnrollmentId === enrollment.id || rejectingEnrollmentId === enrollment.id}
+                              data-testid={`approve-enrollment-${enrollment.id}`}
+                            >
+                              {approvingEnrollmentId === enrollment.id ? (
+                                <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <><CheckCircle className="w-3 h-3" /> Approve</>
+                              )}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              className="h-8 gap-1 text-xs"
+                              onClick={() => {
+                                if (pendingRejectEnrollmentId === enrollment.id) {
+                                  setPendingRejectEnrollmentId(null);
+                                  setRejectEnrollmentReason("");
+                                } else {
+                                  setPendingRejectEnrollmentId(enrollment.id);
+                                  setRejectEnrollmentReason("");
+                                }
+                              }}
+                              disabled={approvingEnrollmentId === enrollment.id || rejectingEnrollmentId === enrollment.id}
+                              data-testid={`reject-enrollment-${enrollment.id}`}
+                            >
+                              {rejectingEnrollmentId === enrollment.id ? (
+                                <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <><XCircle className="w-3 h-3" /> Reject</>
+                              )}
+                            </Button>
+                          </div>
                         </div>
+                        {pendingRejectEnrollmentId === enrollment.id && (
+                          <div className="mt-3 ml-13 space-y-2 pl-[52px]" data-testid={`reject-reason-form-${enrollment.id}`}>
+                            <Textarea
+                              placeholder="Optional: provide a reason for rejection (included in notification email)"
+                              className="text-xs min-h-[60px] resize-none"
+                              value={rejectEnrollmentReason}
+                              onChange={e => setRejectEnrollmentReason(e.target.value)}
+                              data-testid={`reject-reason-input-${enrollment.id}`}
+                              autoFocus
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="h-7 text-xs gap-1"
+                                onClick={() => handleRejectEnrollment(enrollment, rejectEnrollmentReason || undefined)}
+                                data-testid={`reject-reason-confirm-${enrollment.id}`}
+                              >
+                                <XCircle className="w-3 h-3" /> Confirm Reject
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-xs"
+                                onClick={() => { setPendingRejectEnrollmentId(null); setRejectEnrollmentReason(""); }}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -768,8 +856,9 @@ export default function AdminPage() {
                         <div
                           key={u.id}
                           data-testid={`user-row-${u.id}`}
-                          className={`flex items-start gap-3 py-4 ${isBlocked ? "opacity-60" : ""}`}
+                          className={`py-4 ${isBlocked ? "opacity-60" : ""}`}
                         >
+                          <div className="flex items-start gap-3">
                           {/* Avatar */}
                           <div className="relative flex-shrink-0">
                             <Avatar className="w-10 h-10">
@@ -841,7 +930,17 @@ export default function AdminPage() {
                                 size="sm"
                                 variant={isBlocked ? "outline" : "destructive"}
                                 className={`h-8 gap-1 text-xs ${isBlocked ? "border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20" : ""}`}
-                                onClick={() => handleToggleBlock(u)}
+                                onClick={() => {
+                                  if (isBlocked) {
+                                    handleToggleBlock(u);
+                                  } else if (pendingBlockUserId === u.id) {
+                                    setPendingBlockUserId(null);
+                                    setBlockUserReason("");
+                                  } else {
+                                    setPendingBlockUserId(u.id);
+                                    setBlockUserReason("");
+                                  }
+                                }}
                                 disabled={isProcessing}
                               >
                                 {isProcessing ? (
@@ -854,6 +953,38 @@ export default function AdminPage() {
                               </Button>
                             )}
                           </div>
+                          </div>
+                          {pendingBlockUserId === u.id && !isBlocked && (
+                            <div className="mt-3 pl-[52px] space-y-2" data-testid={`block-reason-form-${u.id}`}>
+                              <Textarea
+                                placeholder="Optional: provide a reason for blocking this user (included in notification email)"
+                                className="text-xs min-h-[60px] resize-none"
+                                value={blockUserReason}
+                                onChange={e => setBlockUserReason(e.target.value)}
+                                data-testid={`block-reason-input-${u.id}`}
+                                autoFocus
+                              />
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  className="h-7 text-xs gap-1"
+                                  onClick={() => handleToggleBlock(u, blockUserReason || undefined)}
+                                  data-testid={`block-reason-confirm-${u.id}`}
+                                >
+                                  <Ban className="w-3 h-3" /> Confirm Block
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 text-xs"
+                                  onClick={() => { setPendingBlockUserId(null); setBlockUserReason(""); }}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
