@@ -1,0 +1,100 @@
+You are a senior Next.js and Supabase developer.
+
+Implement a COMPLETE and WORKING "Forgot Password / Reset Password" system.
+
+IMPORTANT:
+
+* Do NOT modify UI unnecessarily
+* Do NOT change existing features
+* ONLY implement password reset functionality
+
+=====================================
+GOAL:
+
+1. User clicks "Forgot Password"
+2. User enters email
+3. Email is sent via Supabase
+4. User clicks link
+5. User lands on reset-password page
+6. User sets new password
+7. Password updates successfully
+
+=====================================
+STEP 1: FORGOT PASSWORD FUNCTION
+
+Add this function where the "Forgot Password" button exists:
+
+Use Supabase:
+
+await supabase.auth.resetPasswordForEmail(email, {
+redirectTo: "https://aiacadmy.online/reset-password",
+});
+
+Handle success and error properly.
+
+=====================================
+STEP 2: UI CONNECTION
+
+Ensure:
+
+* Email input exists
+* Button triggers reset function
+
+=====================================
+STEP 3: CREATE RESET PASSWORD PAGE
+
+Create route:
+
+/reset-password
+
+On this page:
+
+* Detect session from Supabase
+* Allow user to enter new password
+* Confirm password field
+
+=====================================
+STEP 4: UPDATE PASSWORD
+
+Use:
+
+await supabase.auth.updateUser({
+password: newPassword,
+});
+
+=====================================
+STEP 5: SUCCESS HANDLING
+
+* Show success message
+* Redirect to login page
+
+=====================================
+STEP 6: ERROR HANDLING
+
+* Invalid token
+* Expired link
+* Weak password
+
+=====================================
+STEP 7: SECURITY
+
+* Ensure reset only works with valid session
+* Do NOT allow direct access without token
+
+=====================================
+STRICT RULES:
+
+* Do NOT change layout
+* Do NOT remove features
+* Do NOT add extra systems
+* Only implement reset password flow
+
+=====================================
+OUTPUT:
+
+* Forgot password function added
+* Reset page created
+* Password update working
+* Full flow tested
+
+Ensure everything works without bugs.
