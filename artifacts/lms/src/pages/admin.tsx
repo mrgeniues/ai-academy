@@ -43,6 +43,16 @@ type UserRow = {
   createdAt?: string;
 };
 
+type CourseWithMode = {
+  id: number;
+  title: string;
+  description?: string | null;
+  thumbnail?: string | null;
+  lessonCount: number;
+  enrollmentCount: number;
+  enrollmentMode?: "open" | "approval_required";
+};
+
 export default function AdminPage() {
   const { user, token } = useAuth();
   const [, setLocation] = useLocation();
@@ -1217,7 +1227,7 @@ export default function AdminPage() {
                   <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
                 ) : (
                   <div className="space-y-2">
-                    {courses?.map(course => (
+                    {(courses as CourseWithMode[] | undefined)?.map(course => (
                       <div key={course.id} data-testid={`course-row-${course.id}`} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
                         {course.thumbnail && (
                           <img src={course.thumbnail} alt="" className="w-10 h-8 object-cover rounded flex-shrink-0" />
@@ -1226,6 +1236,23 @@ export default function AdminPage() {
                           <p className="text-sm font-medium truncate">{course.title}</p>
                           <p className="text-xs text-muted-foreground">{course.lessonCount} lessons · {course.enrollmentCount} enrolled</p>
                         </div>
+                        {course.enrollmentMode === "open" ? (
+                          <Badge
+                            data-testid={`enrollment-mode-badge-${course.id}`}
+                            className="flex-shrink-0 bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
+                            variant="outline"
+                          >
+                            Open
+                          </Badge>
+                        ) : (
+                          <Badge
+                            data-testid={`enrollment-mode-badge-${course.id}`}
+                            className="flex-shrink-0 bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800"
+                            variant="outline"
+                          >
+                            Approval Required
+                          </Badge>
+                        )}
                         <Button
                           data-testid={`button-delete-course-${course.id}`}
                           variant="ghost"
