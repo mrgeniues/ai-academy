@@ -89404,38 +89404,41 @@ var Resend = class {
 // src/routes/settings.ts
 var import_express2 = __toESM(require_express2(), 1);
 var router2 = (0, import_express2.Router)();
-async function getEmailFromSetting() {
+async function getSetting(key) {
   try {
-    const { data, error } = await supabase.from("site_settings").select("value").eq("key", "email_from").maybeSingle();
+    const { data, error } = await supabase.from("site_settings").select("value").eq("key", key).maybeSingle();
     if (error) {
-      console.error("[settings] Failed to read email_from from DB:", error.message);
+      console.error(`[settings] Failed to read ${key} from DB:`, error.message);
       return null;
     }
     return data?.value ?? null;
   } catch (err) {
-    console.error("[settings] Unexpected error reading email_from:", err);
+    console.error(`[settings] Unexpected error reading ${key}:`, err);
     return null;
   }
 }
-async function writeEmailFromSetting(value) {
+async function writeSetting(key, value) {
   if (value === null) {
-    const { error } = await supabase.from("site_settings").delete().eq("key", "email_from");
+    const { error } = await supabase.from("site_settings").delete().eq("key", key);
     if (error) {
-      throw new Error(`Failed to delete email_from setting: ${error.message}`);
+      throw new Error(`Failed to delete setting ${key}: ${error.message}`);
     }
   } else {
-    const { error } = await supabase.from("site_settings").upsert({ key: "email_from", value, updated_at: (/* @__PURE__ */ new Date()).toISOString() }, { onConflict: "key" });
+    const { error } = await supabase.from("site_settings").upsert({ key, value, updated_at: (/* @__PURE__ */ new Date()).toISOString() }, { onConflict: "key" });
     if (error) {
-      throw new Error(`Failed to upsert email_from setting: ${error.message}`);
+      throw new Error(`Failed to upsert setting ${key}: ${error.message}`);
     }
   }
+}
+async function getEmailFromSetting() {
+  return getSetting("email_from");
 }
 router2.get("/settings/email", requireAuth, async (req, res) => {
   if (req.userRole !== "admin") {
     res.status(403).json({ error: "Admin access required" });
     return;
   }
-  const value = await getEmailFromSetting();
+  const value = await getSetting("email_from");
   const envDefault = process.env.EMAIL_FROM ?? "LMS Platform <notifications@resend.dev>";
   res.json({
     emailFrom: value ?? null,
@@ -89451,7 +89454,7 @@ router2.post("/settings/email", requireAuth, async (req, res) => {
   const { emailFrom } = req.body;
   const valueToStore = emailFrom && emailFrom.trim() ? emailFrom.trim() : null;
   try {
-    await writeEmailFromSetting(valueToStore);
+    await writeSetting("email_from", valueToStore);
     res.json({ emailFrom: valueToStore });
   } catch (err) {
     console.error("[settings] Failed to write settings to DB:", err);
@@ -89474,6 +89477,64 @@ router2.post("/settings/email/test", requireAuth, async (req, res) => {
     return;
   }
   res.json({ message: `Test email sent to ${userRow.email}` });
+});
+var VALID_ENROLLMENT_MODES = ["open", "approval_required"];
+router2.get("/settings/general", requireAuth, async (req, res) => {
+  if (req.userRole !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+  const [platformName, supportEmail, defaultEnrollmentMode] = await Promise.all([
+    getSetting("platform_name"),
+    getSetting("support_email"),
+    getSetting("default_enrollment_mode")
+  ]);
+  res.json({
+    platformName: platformName ?? null,
+    supportEmail: supportEmail ?? null,
+    defaultEnrollmentMode: defaultEnrollmentMode ?? null
+  });
+});
+router2.post("/settings/general", requireAuth, async (req, res) => {
+  if (req.userRole !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+  const {
+    platformName,
+    supportEmail,
+    defaultEnrollmentMode
+  } = req.body;
+  if (defaultEnrollmentMode !== void 0 && defaultEnrollmentMode !== null && !VALID_ENROLLMENT_MODES.includes(defaultEnrollmentMode)) {
+    res.status(400).json({ error: "Invalid defaultEnrollmentMode value" });
+    return;
+  }
+  try {
+    const writes = [];
+    if (platformName !== void 0) {
+      writes.push(writeSetting("platform_name", platformName?.trim() || null));
+    }
+    if (supportEmail !== void 0) {
+      writes.push(writeSetting("support_email", supportEmail?.trim() || null));
+    }
+    if (defaultEnrollmentMode !== void 0) {
+      writes.push(writeSetting("default_enrollment_mode", defaultEnrollmentMode ?? null));
+    }
+    await Promise.all(writes);
+    const [savedPlatformName, savedSupportEmail, savedDefaultEnrollmentMode] = await Promise.all([
+      getSetting("platform_name"),
+      getSetting("support_email"),
+      getSetting("default_enrollment_mode")
+    ]);
+    res.json({
+      platformName: savedPlatformName ?? null,
+      supportEmail: savedSupportEmail ?? null,
+      defaultEnrollmentMode: savedDefaultEnrollmentMode ?? null
+    });
+  } catch (err) {
+    console.error("[settings] Failed to write general settings:", err);
+    res.status(500).json({ error: "Failed to save settings" });
+  }
 });
 var settings_default = router2;
 
@@ -89939,14 +90000,17 @@ router4.get("/users/:id", requireAuth, async (req, res) => {
   let isFollowing = false;
   let followersCount = 0;
   let followingCount = 0;
-  const [followerRes, followersCountRes, followingCountRes] = await Promise.all([
-    req.userId && req.userId !== id ? supabase.from("followers").select("id").eq("follower_id", req.userId).eq("following_id", id).maybeSingle() : Promise.resolve({ data: null, error: null }),
-    supabase.from("followers").select("*", { count: "exact", head: true }).eq("following_id", id),
-    supabase.from("followers").select("*", { count: "exact", head: true }).eq("follower_id", id)
-  ]);
-  if (!followerRes.error) isFollowing = !!followerRes.data;
-  if (!followersCountRes.error) followersCount = followersCountRes.count ?? 0;
-  if (!followingCountRes.error) followingCount = followingCountRes.count ?? 0;
+  try {
+    const [followerRes, followersCountRes, followingCountRes] = await Promise.all([
+      req.userId && req.userId !== id ? supabase.from("followers").select("id").eq("follower_id", req.userId).eq("following_id", id).maybeSingle() : Promise.resolve({ data: null, error: null }),
+      supabase.from("followers").select("*", { count: "exact", head: true }).eq("following_id", id),
+      supabase.from("followers").select("*", { count: "exact", head: true }).eq("follower_id", id)
+    ]);
+    if (!followerRes.error) isFollowing = !!followerRes.data;
+    if (!followersCountRes.error) followersCount = followersCountRes.count ?? 0;
+    if (!followingCountRes.error) followingCount = followingCountRes.count ?? 0;
+  } catch (_err) {
+  }
   res.json({ ...formatUser(user), isFollowing, followersCount, followingCount });
 });
 router4.post("/users/:id/follow", requireAuth, async (req, res) => {
@@ -89964,6 +90028,10 @@ router4.post("/users/:id/follow", requireAuth, async (req, res) => {
   if (error) {
     if (error.code === "23505") {
       res.json({ isFollowing: true });
+      return;
+    }
+    if (error.code === "PGRST205" || error.message?.includes("followers")) {
+      res.status(503).json({ error: "Follow feature not available \u2014 run the SQL setup in Supabase first" });
       return;
     }
     console.error("[POST /follow] error:", error.message, error.code);
@@ -90180,7 +90248,7 @@ router4.post("/users/bulk-action", requireAdmin, async (req, res) => {
         console.error("[audit] logAdminAction fire-and-forget failed:", err);
       });
     }
-    res.json({ updated: (updatedUsers ?? []).length });
+    res.json({ updated: (updatedUsers ?? []).length, updatedIds: (updatedUsers ?? []).map((u) => u.id) });
   } else {
     const { data: updatedUsers, error } = await supabase.from("users").update({ is_blocked: true }).in("id", ids).select();
     if (error) {
@@ -90198,6 +90266,59 @@ router4.post("/users/bulk-action", requireAdmin, async (req, res) => {
         entityType: "user",
         entityId: u.id,
         reason: bulkRejectionReason ?? null
+      }).catch((err) => {
+        console.error("[audit] logAdminAction fire-and-forget failed:", err);
+      });
+    }
+    res.json({ updated: (updatedUsers ?? []).length, updatedIds: (updatedUsers ?? []).map((u) => u.id) });
+  }
+});
+router4.post("/users/bulk-undo", requireAdmin, async (req, res) => {
+  const { userIds, action } = req.body;
+  if (!Array.isArray(userIds) || userIds.length === 0) {
+    res.status(400).json({ error: "userIds must be a non-empty array" });
+    return;
+  }
+  if (action !== "approve" && action !== "reject") {
+    res.status(400).json({ error: "action must be 'approve' or 'reject'" });
+    return;
+  }
+  const ids = userIds.map(Number).filter((n) => !isNaN(n));
+  if (ids.length === 0) {
+    res.status(400).json({ error: "No valid user IDs provided" });
+    return;
+  }
+  if (action === "approve") {
+    const { data: updatedUsers, error } = await supabase.from("users").update({ is_approved: false }).in("id", ids).select();
+    if (error) {
+      res.status(500).json({ error: error.message ?? "Failed to undo approval" });
+      return;
+    }
+    for (const u of updatedUsers ?? []) {
+      logAdminAction({
+        actorId: req.userId,
+        targetUserId: u.id,
+        action: "user_approval_undone",
+        entityType: "user",
+        entityId: u.id
+      }).catch((err) => {
+        console.error("[audit] logAdminAction fire-and-forget failed:", err);
+      });
+    }
+    res.json({ updated: (updatedUsers ?? []).length });
+  } else {
+    const { data: updatedUsers, error } = await supabase.from("users").update({ is_blocked: false }).in("id", ids).select();
+    if (error) {
+      res.status(500).json({ error: error.message ?? "Failed to undo rejection" });
+      return;
+    }
+    for (const u of updatedUsers ?? []) {
+      logAdminAction({
+        actorId: req.userId,
+        targetUserId: u.id,
+        action: "user_rejection_undone",
+        entityType: "user",
+        entityId: u.id
       }).catch((err) => {
         console.error("[audit] logAdminAction fire-and-forget failed:", err);
       });
@@ -90455,6 +90576,11 @@ router5.patch("/courses/:id", requireAuth, async (req, res) => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const { data: existingCourse } = await supabase.from("courses").select("enrollment_mode").eq("id", id).maybeSingle();
+  if (!existingCourse) {
+    res.status(404).json({ error: "Course not found" });
+    return;
+  }
   const updates = {};
   if (parsed.data.title !== void 0) updates.title = parsed.data.title;
   if (parsed.data.description !== void 0) updates.description = parsed.data.description;
@@ -90463,9 +90589,19 @@ router5.patch("/courses/:id", requireAuth, async (req, res) => {
   if (parsed.data.visibility !== void 0) updates.visibility = parsed.data.visibility;
   if (parsed.data.enrollmentMode !== void 0) updates.enrollment_mode = parsed.data.enrollmentMode;
   const { error: updateError } = await supabase.from("courses").update(updates).eq("id", id);
+  let updateSucceeded = !updateError;
   if (updateError && updateError.message.includes("enrollment_mode")) {
     const { enrollment_mode: _omit, ...fallbackUpdates } = updates;
-    await supabase.from("courses").update(fallbackUpdates).eq("id", id);
+    const { error: fallbackError } = await supabase.from("courses").update(fallbackUpdates).eq("id", id);
+    updateSucceeded = !fallbackError;
+  }
+  const previousMode = existingCourse.enrollment_mode ?? "approval_required";
+  const switchingToOpen = parsed.data.enrollmentMode === "open" && previousMode !== "open";
+  if (updateSucceeded && switchingToOpen) {
+    const { error: approveError } = await supabase.from("enrollments").update({ is_approved: true }).eq("course_id", id).eq("is_approved", false);
+    if (approveError) {
+      console.error("[PATCH /courses/:id] Failed to auto-approve pending enrollments:", approveError.message);
+    }
   }
   const [{ data: updated }, { count: lc }, { count: ec }] = await Promise.all([
     supabase.from("courses").select("*").eq("id", id).maybeSingle(),
@@ -91004,6 +91140,56 @@ var CreateCommentSchema = external_exports.object({
   fileType: external_exports.string().optional().nullable(),
   parentId: external_exports.number().int().positive().optional().nullable()
 });
+function extractMissingColumn(msg) {
+  const m = msg.match(/Could not find the '(\w+)' column/);
+  return m ? m[1] : null;
+}
+async function insertWithRetry(table, payload, selectClause, maxRetries = 8) {
+  let current = { ...payload };
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const { data, error } = await supabase.from(table).insert(current).select(selectClause).single();
+    if (!error) return { data, error: null };
+    if (error.code === "PGRST204" && error.message) {
+      const col = extractMissingColumn(error.message);
+      if (col && col in current) {
+        console.warn(`[insertWithRetry] Stripping unknown column '${col}' from ${table} and retrying...`);
+        const next = { ...current };
+        delete next[col];
+        current = next;
+        continue;
+      }
+    }
+    return { data: null, error };
+  }
+  return { data: null, error: new Error("Max retries exceeded") };
+}
+function encodeFileAsVideoUrl(fileUrl, fileType) {
+  return JSON.stringify({ u: fileUrl, t: fileType ?? "" });
+}
+function decodeFileFromVideoUrl(videoUrl) {
+  if (!videoUrl || typeof videoUrl !== "string") return null;
+  try {
+    const parsed = JSON.parse(videoUrl);
+    if (parsed && typeof parsed.u === "string" && parsed.u.startsWith("http")) {
+      return { fileUrl: parsed.u, fileType: parsed.t || null };
+    }
+  } catch {
+  }
+  return null;
+}
+function extractMediaFields(row) {
+  const imageUrl = row.image_url ?? null;
+  const nativeFileUrl = row.file_url ?? null;
+  const nativeFileType = row.file_type ?? null;
+  if (nativeFileUrl) {
+    return { imageUrl, fileUrl: nativeFileUrl, fileType: nativeFileType };
+  }
+  const decoded = decodeFileFromVideoUrl(row.video_url);
+  if (decoded) {
+    return { imageUrl, fileUrl: decoded.fileUrl, fileType: decoded.fileType };
+  }
+  return { imageUrl, fileUrl: null, fileType: null };
+}
 router8.get("/posts", requireAuth, async (req, res) => {
   const userId = req.userId;
   const isVipFilter = req.query.vip === "true";
@@ -91043,20 +91229,23 @@ router8.get("/posts", requireAuth, async (req, res) => {
   for (const c of commentCounts ?? []) {
     commentCountMap.set(c.post_id, (commentCountMap.get(c.post_id) ?? 0) + 1);
   }
-  const enriched = (posts ?? []).map((post2) => ({
-    id: post2.id,
-    userId: post2.user_id,
-    content: post2.content,
-    imageUrl: post2.image_url ?? null,
-    fileUrl: post2.file_url ?? null,
-    fileType: post2.file_type ?? null,
-    isVip: post2.is_vip ?? false,
-    likeCount: likeCountMap.get(post2.id) ?? 0,
-    commentCount: commentCountMap.get(post2.id) ?? 0,
-    isLiked: myLikeSet.has(post2.id),
-    createdAt: post2.created_at,
-    author: formatUser(post2.author)
-  }));
+  const enriched = (posts ?? []).map((post2) => {
+    const media = extractMediaFields(post2);
+    return {
+      id: post2.id,
+      userId: post2.user_id,
+      content: post2.content,
+      imageUrl: media.imageUrl,
+      fileUrl: media.fileUrl,
+      fileType: media.fileType,
+      isVip: post2.is_vip ?? false,
+      likeCount: likeCountMap.get(post2.id) ?? 0,
+      commentCount: commentCountMap.get(post2.id) ?? 0,
+      isLiked: myLikeSet.has(post2.id),
+      createdAt: post2.created_at,
+      author: formatUser(post2.author)
+    };
+  });
   res.json(enriched);
 });
 router8.post("/posts", requireAuth, async (req, res) => {
@@ -91076,15 +91265,12 @@ router8.post("/posts", requireAuth, async (req, res) => {
     is_vip: isVip ?? false
   };
   if (imageUrl) insertPayload.image_url = imageUrl;
-  if (fileUrl) insertPayload.file_url = fileUrl;
-  if (fileType) insertPayload.file_type = fileType;
-  let { data: post2, error } = await supabase.from("posts").insert(insertPayload).select("*, author:users(*)").single();
-  if (error && (error.message?.includes("is_vip") || error.code === "42703" || error.code === "PGRST204")) {
-    const { is_vip: _dropped, ...payloadWithoutVip } = insertPayload;
-    const retry = await supabase.from("posts").insert(payloadWithoutVip).select("*, author:users(*)").single();
-    post2 = retry.data;
-    error = retry.error;
+  if (fileUrl) {
+    insertPayload.file_url = fileUrl;
+    if (fileType) insertPayload.file_type = fileType;
+    insertPayload.video_url = encodeFileAsVideoUrl(fileUrl, fileType);
   }
+  const { data: post2, error } = await insertWithRetry("posts", insertPayload, "*, author:users(*)");
   if (error || !post2) {
     console.error("[POST /posts] Supabase error:", error);
     res.status(500).json({ error: "Failed to create post" });
@@ -91101,13 +91287,14 @@ router8.post("/posts", requireAuth, async (req, res) => {
     isVip: vipPost,
     excludeUserId: req.userId
   }).catch((err) => console.error("[broadcastNotification] Failed:", err));
+  const postMedia = extractMediaFields(post2);
   res.status(201).json({
     id: post2.id,
     userId: post2.user_id,
     content: post2.content,
-    imageUrl: post2.image_url ?? null,
-    fileUrl: post2.file_url ?? null,
-    fileType: post2.file_type ?? null,
+    imageUrl: postMedia.imageUrl,
+    fileUrl: postMedia.fileUrl,
+    fileType: postMedia.fileType,
     isVip: post2.is_vip ?? false,
     likeCount: 0,
     commentCount: 0,
@@ -91175,20 +91362,24 @@ router8.get("/posts/:postId/comments", requireAuth, async (req, res) => {
     } catch {
     }
   }
-  res.json((comments ?? []).map((comment) => ({
-    id: comment.id,
-    postId: comment.post_id,
-    userId: comment.user_id,
-    comment: comment.comment,
-    imageUrl: comment.image_url ?? null,
-    fileUrl: comment.file_url ?? null,
-    fileType: comment.file_type ?? null,
-    parentId: comment.parent_id ?? null,
-    likesCount: likesCountMap.get(comment.id) ?? 0,
-    isLiked: isLikedSet.has(comment.id),
-    createdAt: comment.created_at,
-    author: formatUser(comment.author)
-  })));
+  res.json((comments ?? []).map((comment) => {
+    const cm = comment;
+    const media = extractMediaFields(cm);
+    return {
+      id: comment.id,
+      postId: comment.post_id,
+      userId: comment.user_id,
+      comment: comment.comment,
+      imageUrl: media.imageUrl,
+      fileUrl: media.fileUrl,
+      fileType: media.fileType,
+      parentId: cm.parent_id ?? null,
+      likesCount: likesCountMap.get(comment.id) ?? 0,
+      isLiked: isLikedSet.has(comment.id),
+      createdAt: comment.created_at,
+      author: formatUser(comment.author)
+    };
+  }));
 });
 router8.post("/posts/:postId/comments", requireAuth, async (req, res) => {
   const rawId = Array.isArray(req.params.postId) ? req.params.postId[0] : req.params.postId;
@@ -91209,10 +91400,13 @@ router8.post("/posts/:postId/comments", requireAuth, async (req, res) => {
     comment
   };
   if (imageUrl) insertPayload.image_url = imageUrl;
-  if (fileUrl) insertPayload.file_url = fileUrl;
-  if (fileType) insertPayload.file_type = fileType;
+  if (fileUrl) {
+    insertPayload.file_url = fileUrl;
+    if (fileType) insertPayload.file_type = fileType;
+    insertPayload.video_url = encodeFileAsVideoUrl(fileUrl, fileType);
+  }
   if (parentId) insertPayload.parent_id = parentId;
-  const { data: newComment, error } = await supabase.from("comments").insert(insertPayload).select("*, author:users(*)").single();
+  const { data: newComment, error } = await insertWithRetry("comments", insertPayload, "*, author:users(*)");
   if (error || !newComment) {
     console.error("[POST /posts/:postId/comments] Supabase error:", error);
     res.status(500).json({ error: "Failed to create comment" });
@@ -91226,14 +91420,15 @@ router8.post("/posts/:postId/comments", requireAuth, async (req, res) => {
     isVip: false,
     excludeUserId: req.userId
   }).catch((err) => console.error("[broadcastNotification] Failed:", err));
+  const commentMedia = extractMediaFields(newComment);
   res.status(201).json({
     id: newComment.id,
     postId: newComment.post_id,
     userId: newComment.user_id,
     comment: newComment.comment,
-    imageUrl: newComment.image_url ?? null,
-    fileUrl: newComment.file_url ?? null,
-    fileType: newComment.file_type ?? null,
+    imageUrl: commentMedia.imageUrl,
+    fileUrl: commentMedia.fileUrl,
+    fileType: commentMedia.fileType,
     parentId: newComment.parent_id ?? null,
     likesCount: 0,
     isLiked: false,
@@ -91562,11 +91757,32 @@ var upload_default = router11;
 var import_express12 = __toESM(require_express2(), 1);
 var router12 = (0, import_express12.Router)();
 var typingState = /* @__PURE__ */ new Map();
+function decodeVideoUrlAsFile(videoUrl) {
+  if (!videoUrl || typeof videoUrl !== "string") return null;
+  try {
+    const parsed = JSON.parse(videoUrl);
+    if (parsed && typeof parsed.u === "string" && parsed.u.startsWith("http")) {
+      return { file_url: parsed.u, file_type: parsed.t || null };
+    }
+  } catch {
+  }
+  return null;
+}
+function normaliseMsg(msg) {
+  if (msg.file_url) return msg;
+  const decoded = decodeVideoUrlAsFile(msg.video_url);
+  if (decoded) {
+    return { ...msg, file_url: decoded.file_url, file_type: decoded.file_type };
+  }
+  return msg;
+}
 function mediaPreview(msg) {
   const text = msg.message ?? "";
   if (text) return text;
   if (msg.image_url) return "\u{1F4F7} Image";
   if (msg.file_url) return "\u{1F4C4} Document";
+  const decoded = decodeVideoUrlAsFile(msg.video_url);
+  if (decoded) return "\u{1F4C4} Document";
   return "";
 }
 router12.post("/messages/typing/:userId", requireAuth, async (req, res) => {
@@ -91683,7 +91899,7 @@ router12.get("/messages/:userId", requireAuth, async (req, res) => {
     res.status(500).json({ error: error.message });
     return;
   }
-  res.json(messages ?? []);
+  res.json((messages ?? []).map((m) => normaliseMsg(m)));
 });
 router12.post("/messages/:userId", requireAuth, async (req, res) => {
   const rawId = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
@@ -91709,33 +91925,40 @@ router12.post("/messages/:userId", requireAuth, async (req, res) => {
     is_read: false
   };
   if (image_url) insertData.image_url = image_url;
-  if (file_url) insertData.file_url = file_url;
-  if (file_type) insertData.file_type = file_type;
-  const { data, error } = await supabase.from("messages").insert(insertData).select().single();
-  if (error) {
-    if (error.code === "PGRST204" || error.message?.includes("is_read")) {
-      const fallbackData = {
-        sender_id: req.userId,
-        receiver_id: receiverId,
-        message: text
-      };
-      if (image_url) fallbackData.image_url = image_url;
-      if (file_url) fallbackData.file_url = file_url;
-      if (file_type) fallbackData.file_type = file_type;
-      const { data: fallback, error: fallbackError } = await supabase.from("messages").insert(fallbackData).select().single();
-      if (fallbackError) {
-        console.error("[POST /messages] fallback error:", fallbackError.message);
-        res.status(500).json({ error: fallbackError.message });
-        return;
-      }
-      res.status(201).json(fallback);
-      return;
+  if (file_url) {
+    insertData.file_url = file_url;
+    if (file_type) insertData.file_type = file_type;
+    insertData.video_url = JSON.stringify({ u: file_url, t: file_type ?? "" });
+  }
+  let current = { ...insertData };
+  let msgData = null;
+  let msgError = null;
+  for (let attempt = 0; attempt <= 6; attempt++) {
+    const result = await supabase.from("messages").insert(current).select().single();
+    if (!result.error) {
+      msgData = result.data;
+      break;
     }
-    console.error("[POST /messages] error:", error.message, error.code);
-    res.status(500).json({ error: error.message });
+    msgError = result.error;
+    if (result.error.code === "PGRST204" && result.error.message) {
+      const m = result.error.message.match(/Could not find the '(\w+)' column/);
+      const col = m?.[1];
+      if (col && col in current) {
+        console.warn(`[POST /messages] Stripping unknown column '${col}' and retrying...`);
+        const next = { ...current };
+        delete next[col];
+        current = next;
+        continue;
+      }
+    }
+    break;
+  }
+  if (!msgData) {
+    console.error("[POST /messages] error:", msgError?.message, msgError?.code);
+    res.status(500).json({ error: msgError?.message ?? "Failed to send message" });
     return;
   }
-  res.status(201).json(data);
+  res.status(201).json(normaliseMsg(msgData));
 });
 var messages_default = router12;
 
