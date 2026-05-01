@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { EVENTS } from "@/lib/events";
 
 const POLL_INTERVAL = 30000;
 
@@ -35,6 +36,12 @@ export function usePendingApprovals(token: string | null, isAdmin: boolean): num
     const id = setInterval(fetchCount, POLL_INTERVAL);
     return () => clearInterval(id);
   }, [token, isAdmin, fetchCount]);
+
+  useEffect(() => {
+    const handler = () => fetchCount();
+    window.addEventListener(EVENTS.PENDING_APPROVALS_REFRESH, handler);
+    return () => window.removeEventListener(EVENTS.PENDING_APPROVALS_REFRESH, handler);
+  }, [fetchCount]);
 
   return count;
 }

@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
+import { EVENTS } from "@/lib/events";
 
 type PendingEnrollment = {
   id: number;
@@ -200,6 +201,7 @@ export default function AdminPage() {
         throw new Error(err.error ?? "Failed to update block status");
       }
       queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+      window.dispatchEvent(new Event(EVENTS.PENDING_APPROVALS_REFRESH));
       toast({ title: newBlocked ? `${u.name} has been blocked` : `${u.name} has been unblocked` });
       if (auditLogLoaded) void fetchAuditLog();
     } catch (err) {
@@ -242,6 +244,7 @@ export default function AdminPage() {
         throw new Error(err.error ?? "Failed to approve user");
       }
       queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+      window.dispatchEvent(new Event(EVENTS.PENDING_APPROVALS_REFRESH));
       toast({ title: `${u.name} has been approved` });
       if (auditLogLoaded) void fetchAuditLog();
     } catch (err) {
@@ -265,6 +268,7 @@ export default function AdminPage() {
       }
       const data = await resp.json() as { updated: number };
       queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+      window.dispatchEvent(new Event(EVENTS.PENDING_APPROVALS_REFRESH));
       toast({
         title: `Undone — ${data.updated} user${data.updated !== 1 ? "s" : ""} moved back to pending`,
       });
@@ -295,6 +299,7 @@ export default function AdminPage() {
       const undoIds = data.updatedIds ?? affectedIds;
       setSelectedPendingIds(new Set());
       queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+      window.dispatchEvent(new Event(EVENTS.PENDING_APPROVALS_REFRESH));
       const undoAction = (
         <ToastAction
           altText="Undo bulk action"
@@ -381,6 +386,7 @@ export default function AdminPage() {
         throw new Error(err.error ?? "Failed to approve");
       }
       await fetchPendingToolRequests();
+      window.dispatchEvent(new Event(EVENTS.PENDING_APPROVALS_REFRESH));
       toast({ title: `${request.user.name} approved for "${request.tool.title}"` });
     } catch (err) {
       toast({ title: (err as Error).message, variant: "destructive" });
@@ -559,6 +565,7 @@ export default function AdminPage() {
       const data = await resp.json() as { updated: number };
       setSelectedEnrollmentIds(new Set());
       await fetchPendingEnrollments();
+      window.dispatchEvent(new Event(EVENTS.PENDING_APPROVALS_REFRESH));
       toast({
         title: action === "approve"
           ? `${data.updated} enrollment${data.updated !== 1 ? "s" : ""} approved`
@@ -626,6 +633,7 @@ export default function AdminPage() {
         throw new Error(err.error ?? "Failed to approve enrollment");
       }
       await fetchPendingEnrollments();
+      window.dispatchEvent(new Event(EVENTS.PENDING_APPROVALS_REFRESH));
       toast({ title: `${enrollment.user.name} approved for "${enrollment.course.title}"` });
       if (auditLogLoaded) void fetchAuditLog();
     } catch (err) {
@@ -651,6 +659,7 @@ export default function AdminPage() {
         throw new Error(err.error ?? "Failed to reject enrollment");
       }
       await fetchPendingEnrollments();
+      window.dispatchEvent(new Event(EVENTS.PENDING_APPROVALS_REFRESH));
       toast({ title: `Enrollment request from ${enrollment.user.name} rejected` });
       if (auditLogLoaded) void fetchAuditLog();
     } catch (err) {
