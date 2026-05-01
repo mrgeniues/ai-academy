@@ -90,13 +90,27 @@ async function seedDemoData(): Promise<void> {
   logger.info("Demo data seeded successfully");
 }
 
-async function checkAuditTable(): Promise<void> {
-  const { error } = await supabase.from("admin_actions").select("id").limit(1);
-  if (error && (error.message.includes("admin_actions") || error.code === "42P01")) {
-    logger.warn(
-      "admin_actions table not found — audit logging is disabled. " +
-      "Run the latest SQL in artifacts/api-server/supabase-setup.sql to enable it."
-    );
+async function ensureAuditTable(): Promise<void> {
+  try {
+    const { pool } = await import("@workspace/db");
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS admin_actions (
+        id SERIAL PRIMARY KEY,
+        actor_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        target_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        action TEXT NOT NULL CHECK (action IN ('user_approved','user_rejected','user_unblocked','enrollment_approved','enrollment_rejected')),
+        entity_type TEXT NOT NULL CHECK (entity_type IN ('user','enrollment')),
+        entity_id INTEGER,
+        reason TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      ALTER TABLE admin_actions DISABLE ROW LEVEL SECURITY;
+      CREATE INDEX IF NOT EXISTS admin_actions_created_at_idx ON admin_actions (created_at DESC);
+    `);
+    logger.info("admin_actions table ready ✓");
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn({ err: message }, "Failed to auto-create admin_actions table — audit logging may be unavailable");
   }
 }
 
@@ -131,7 +145,7 @@ export async function initializeDatabase(): Promise<void> {
   }
 
   await seedDemoData();
-  await checkAuditTable();
+  await ensureAuditTable();
   await checkRejectionTables();
   logger.info("Database ready ✓");
 }
