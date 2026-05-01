@@ -86,6 +86,7 @@ export default function AdminPage() {
   const [bulkEnrollmentActioning, setBulkEnrollmentActioning] = useState(false);
   const [showBulkEnrollmentRejectReason, setShowBulkEnrollmentRejectReason] = useState(false);
   const [bulkEnrollmentRejectReason, setBulkEnrollmentRejectReason] = useState("");
+  const [showBulkEnrollmentApproveConfirm, setShowBulkEnrollmentApproveConfirm] = useState(false);
   const [pendingBlockUserId, setPendingBlockUserId] = useState<number | null>(null);
   const [blockUserReason, setBlockUserReason] = useState("");
   const [showBulkRejectReason, setShowBulkRejectReason] = useState(false);
@@ -972,7 +973,7 @@ export default function AdminPage() {
                         <Button
                           size="sm"
                           className="h-7 gap-1 text-xs"
-                          onClick={() => handleBulkEnrollmentAction("approve")}
+                          onClick={() => setShowBulkEnrollmentApproveConfirm(true)}
                           disabled={bulkEnrollmentActioning}
                           data-testid="bulk-enrollment-approve-btn"
                         >
@@ -1908,6 +1909,37 @@ export default function AdminPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <Dialog open={showBulkEnrollmentApproveConfirm} onOpenChange={setShowBulkEnrollmentApproveConfirm}>
+        <DialogContent className="max-w-sm" data-testid="bulk-enrollment-approve-confirm-dialog">
+          <DialogHeader>
+            <DialogTitle>Approve {selectedEnrollmentIds.size} enrollment{selectedEnrollmentIds.size !== 1 ? "s" : ""}?</DialogTitle>
+            <DialogDescription>
+              This will approve {selectedEnrollmentIds.size} pending enrollment request{selectedEnrollmentIds.size !== 1 ? "s" : ""} and notify the students.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowBulkEnrollmentApproveConfirm(false)}
+              disabled={bulkEnrollmentActioning}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => { setShowBulkEnrollmentApproveConfirm(false); void handleBulkEnrollmentAction("approve"); }}
+              disabled={bulkEnrollmentActioning}
+              data-testid="bulk-enrollment-approve-confirm-btn"
+            >
+              {bulkEnrollmentActioning ? (
+                <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <><CheckCircle className="w-4 h-4 mr-1" /> Approve</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={testEmailPreviewOpen} onOpenChange={setTestEmailPreviewOpen}>
         <DialogContent className="max-w-2xl">
