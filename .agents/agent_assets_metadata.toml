@@ -48,3 +48,9 @@ id = "o6tUnt9RiX0KSipaTyaO-"
 uri = "file://hostinger-env-FILL-IN.txt"
 type = "text"
 title = "STEP 2 — Your .env file (fill in, rename to .env, upload)"
+
+[[outputs]]
+id = "ZHsBFwQQp7Wk8u9YXFxGT"
+uri = "file://ai-academy-database-migration.txt"
+type = "text"
+title = "AI Academy 2.0 — Full Database Migration SQL"
