@@ -16,6 +16,7 @@ import { initGlobalClickSound } from "@/lib/sound";
 import { cn } from "@/lib/utils";
 import { useUnreadCount } from "@/hooks/use-unread-count";
 import { usePendingApprovals } from "@/hooks/use-pending-approvals";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -47,6 +48,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
   const unreadCount = useUnreadCount(token);
   const pendingApprovals = usePendingApprovals(token, user?.role === "admin");
+  const pendingTooltip = [
+    pendingApprovals.users > 0 ? `${pendingApprovals.users} pending user approval${pendingApprovals.users !== 1 ? "s" : ""}` : null,
+    pendingApprovals.enrollments > 0 ? `${pendingApprovals.enrollments} pending enrollment${pendingApprovals.enrollments !== 1 ? "s" : ""}` : null,
+  ].filter(Boolean).join(", ");
 
   useEffect(() => {
     const cleanup = initGlobalClickSound();
@@ -137,13 +142,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
           >
             <Shield className="w-4 h-4 flex-shrink-0" />
             <span className="flex-1">Admin</span>
-            {pendingApprovals > 0 && (
-              <span className={cn(
-                "ml-auto min-w-[1.25rem] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center leading-none",
-                location === "/admin" ? "bg-white/25 text-white" : "bg-red-500 text-white"
-              )}>
-                {pendingApprovals > 99 ? "99+" : pendingApprovals}
-              </span>
+            {pendingApprovals.total > 0 && (
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className={cn(
+                      "ml-auto min-w-[1.25rem] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center leading-none",
+                      location === "/admin" ? "bg-white/25 text-white" : "bg-red-500 text-white"
+                    )}>
+                      {pendingApprovals.total > 99 ? "99+" : pendingApprovals.total}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    {pendingTooltip}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
           </Link>
         )}
