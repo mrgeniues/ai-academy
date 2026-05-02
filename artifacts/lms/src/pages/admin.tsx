@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trash2, Users, BookOpen, MessageSquare, TrendingUp, Shield, Ban, CheckCircle, Clock, Calendar, GraduationCap, Wrench, XCircle, ScrollText, Database } from "lucide-react";
+import { Trash2, Users, BookOpen, MessageSquare, TrendingUp, Shield, Ban, CheckCircle, Clock, Calendar, GraduationCap, Wrench, XCircle, ScrollText, Database, Users2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -120,6 +120,20 @@ export default function AdminPage() {
   const [auditLogActionFilter, setAuditLogActionFilter] = useState("all");
   const [auditLogStartDate, setAuditLogStartDate] = useState("");
   const [auditLogEndDate, setAuditLogEndDate] = useState("");
+
+  // Community requests state
+  type PendingCommunity = {
+    id: number;
+    name: string;
+    description: string | null;
+    status: string;
+    created_at: string;
+    owner_id: number;
+    users: { id: number; name: string; email: string } | null;
+  };
+  const [pendingCommunities, setPendingCommunities] = useState<PendingCommunity[]>([]);
+  const [communitiesLoading, setCommunitiesLoading] = useState(true);
+  const [actioningCommunityId, setActioningCommunityId] = useState<number | null>(null);
 
   // Tool requests state
   type PendingToolRequest = {
@@ -418,6 +432,44 @@ export default function AdminPage() {
       return () => clearInterval(interval);
     }
   }, [user, fetchPendingToolRequests]);
+
+  const fetchPendingCommunities = useCallback(async () => {
+    setCommunitiesLoading(true);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch("/api/communities/pending", { headers: { Authorization: `Bearer ${authToken}` } });
+      if (resp.ok) setPendingCommunities(await resp.json() as PendingCommunity[]);
+    } catch { /* silently ignore */ }
+    finally { setCommunitiesLoading(false); }
+  }, [token]);
+
+  useEffect(() => {
+    if (user?.role === "admin") {
+      void fetchPendingCommunities();
+    }
+  }, [user, fetchPendingCommunities]);
+
+  const handleCommunityAction = async (community: PendingCommunity, status: "approved" | "rejected") => {
+    setActioningCommunityId(community.id);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch(`/api/communities/${community.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ status }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json() as { error?: string };
+        throw new Error(err.error ?? "Failed to update");
+      }
+      toast({ title: status === "approved" ? `"${community.name}" approved` : `"${community.name}" rejected` });
+      setPendingCommunities(prev => prev.filter(c => c.id !== community.id));
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Error", variant: "destructive" });
+    } finally {
+      setActioningCommunityId(null);
+    }
+  };
 
   const handleApproveToolRequest = async (request: PendingToolRequest) => {
     setApprovingToolRequestId(request.id);
@@ -895,7 +947,7 @@ export default function AdminPage() {
 
         {/* Management tabs */}
         <Tabs defaultValue="pending">
-          <TabsList className="grid grid-cols-8 w-full max-w-4xl">
+          <TabsList className="grid grid-cols-9 w-full max-w-4xl">
             <TabsTrigger value="pending" data-testid="tab-pending">
               Approvals
               {pendingUsers.length > 0 && (
@@ -906,6 +958,13 @@ export default function AdminPage() {
               Courses
               {pendingEnrollments.length > 0 && (
                 <Badge variant="destructive" className="ml-1.5 text-xs px-1.5 py-0 h-4">{pendingEnrollments.length}</Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="communities" data-testid="tab-communities">
+              <Users2 className="w-3.5 h-3.5 mr-1" />
+              Comm.
+              {pendingCommunities.length > 0 && (
+                <Badge variant="destructive" className="ml-1.5 text-xs px-1.5 py-0 h-4">{pendingCommunities.length}</Badge>
               )}
             </TabsTrigger>
             <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
@@ -1315,6 +1374,89 @@ export default function AdminPage() {
           </TabsContent>
 
           {/* ── Users tab ─────────────────────────────────────────────── */}
+          {/* ── Community Requests tab ──────────────────────────────── */}
+          <TabsContent value="communities" className="mt-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Users2 className="w-4 h-4" />
+                  Community Requests
+                  {pendingCommunities.length > 0 && (
+                    <Badge variant="destructive" className="text-xs">{pendingCommunities.length} pending</Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {communitiesLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
+                  </div>
+                ) : pendingCommunities.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <CheckCircle className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                    <p className="font-medium">No pending community requests</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {pendingCommunities.map(community => (
+                      <div
+                        key={community.id}
+                        className="flex items-start justify-between gap-4 p-4 rounded-lg border bg-card hover:bg-accent/30 transition-colors"
+                        data-testid={`community-request-${community.id}`}
+                      >
+                        <div className="flex items-start gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <Users2 className="w-4 h-4 text-primary" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm truncate">{community.name}</p>
+                            {community.description && (
+                              <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{community.description}</p>
+                            )}
+                            <div className="flex items-center gap-3 mt-1 flex-wrap">
+                              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Shield className="w-3 h-3" />
+                                {community.users?.name ?? "Unknown"} &middot; {community.users?.email}
+                              </span>
+                              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {formatDistanceToNow(new Date(community.created_at), { addSuffix: true })}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 flex-shrink-0">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-green-600 border-green-200 hover:bg-green-50 hover:border-green-300 dark:hover:bg-green-950/30"
+                            disabled={actioningCommunityId === community.id}
+                            onClick={() => void handleCommunityAction(community, "approved")}
+                            data-testid={`button-approve-community-${community.id}`}
+                          >
+                            <CheckCircle className="w-3.5 h-3.5 mr-1" />
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-destructive border-destructive/20 hover:bg-destructive/5 hover:border-destructive/30"
+                            disabled={actioningCommunityId === community.id}
+                            onClick={() => void handleCommunityAction(community, "rejected")}
+                            data-testid={`button-reject-community-${community.id}`}
+                          >
+                            <XCircle className="w-3.5 h-3.5 mr-1" />
+                            Reject
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="users" className="mt-4">
             <Card>
               <CardHeader className="pb-2">

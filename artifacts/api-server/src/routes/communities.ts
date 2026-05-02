@@ -57,6 +57,62 @@ router.get("/communities/mine", requireAuth, async (req, res): Promise<void> => 
   res.json(data ?? []);
 });
 
+// GET /api/communities/pending — admin: list all pending communities with owner info
+router.get("/communities/pending", requireAuth, async (req, res): Promise<void> => {
+  const { data: me, error: meErr } = await supabase
+    .from("users").select("role").eq("id", req.userId!).single();
+  if (meErr || me?.role !== "admin") {
+    res.status(403).json({ error: "Admin only" });
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("communities")
+    .select("id, name, description, status, created_at, owner_id, users!communities_owner_id_fkey(id, name, email)")
+    .eq("status", "pending")
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    req.log.error({ error }, "Failed to fetch pending communities");
+    res.status(500).json({ error: error.message });
+    return;
+  }
+
+  res.json(data ?? []);
+});
+
+// PATCH /api/communities/:id/status — admin: approve or reject a community
+router.patch("/communities/:id/status", requireAuth, async (req, res): Promise<void> => {
+  const { data: me, error: meErr } = await supabase
+    .from("users").select("role").eq("id", req.userId!).single();
+  if (meErr || me?.role !== "admin") {
+    res.status(403).json({ error: "Admin only" });
+    return;
+  }
+
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const StatusSchema = z.object({ status: z.enum(["approved", "rejected"]) });
+  const parsed = StatusSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "status must be 'approved' or 'rejected'" }); return; }
+
+  const { data, error } = await supabase
+    .from("communities")
+    .update({ status: parsed.data.status })
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    req.log.error({ error }, "Failed to update community status");
+    res.status(500).json({ error: error.message });
+    return;
+  }
+
+  res.json(data);
+});
+
 // GET /api/communities — list all approved communities
 router.get("/communities", requireAuth, async (req, res): Promise<void> => {
   const { data, error } = await supabase
