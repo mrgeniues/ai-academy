@@ -66,7 +66,7 @@ export default function SignupPage() {
           <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
             <GraduationCap className="w-5 h-5 text-white" />
           </div>
-          <span className="font-bold text-xl text-white">AI Academy 2.0</span>
+          <span className="font-bold text-xl text-white">AI Academy 3.0</span>
         </div>
 
         <div>
@@ -101,7 +101,7 @@ export default function SignupPage() {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
-            <span className="font-bold text-lg">AI Academy 2.0</span>
+            <span className="font-bold text-lg">AI Academy 3.0</span>
           </div>
 
           <h1 className="text-2xl font-bold mb-1">Create your account</h1>

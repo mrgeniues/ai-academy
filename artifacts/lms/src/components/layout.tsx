@@ -84,7 +84,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
             <GraduationCap className="w-4 h-4 text-white" />
           </div>
-          <span className="font-bold text-sm text-sidebar-foreground tracking-tight whitespace-nowrap">AI Academy 2.0</span>
+          <span className="font-bold text-sm text-sidebar-foreground tracking-tight whitespace-nowrap">AI Academy 3.0</span>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           {!isMobile && <NotificationBell align="left" />}
@@ -245,7 +245,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </button>
           <div className="flex items-center gap-2 flex-1">
             <GraduationCap className="w-5 h-5 text-primary" />
-            <span className="font-bold text-base">AI Academy 2.0</span>
+            <span className="font-bold text-base">AI Academy 3.0</span>
           </div>
           {isMobile && <NotificationBell />}
         </header>

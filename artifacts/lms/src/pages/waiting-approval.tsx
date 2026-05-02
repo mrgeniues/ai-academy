@@ -39,7 +39,7 @@ export default function WaitingApprovalPage() {
           <GraduationCap className="w-9 h-9 text-white" />
         </div>
 
-        <h1 className="text-2xl font-bold mb-2">AI Academy 2.0</h1>
+        <h1 className="text-2xl font-bold mb-2">AI Academy 3.0</h1>
 
         {isBlocked ? (
           <div className="mt-8 p-6 rounded-2xl border border-destructive/30 bg-destructive/5">
