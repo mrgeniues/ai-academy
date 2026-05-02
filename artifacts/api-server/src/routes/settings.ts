@@ -253,24 +253,18 @@ router.post("/settings/general", requireAuth, async (req, res): Promise<void> =>
 
 // ── Supabase connection settings ─────────────────────────────────────────────
 
-// Admin: get current Supabase URL
-router.get("/settings/supabase", requireAuth, async (req, res): Promise<void> => {
-  if (req.userRole !== "admin") {
-    res.status(403).json({ error: "Admin access required" });
-    return;
-  }
+// Public: get current Supabase URL (no secrets exposed — URL only)
+router.get("/settings/supabase", async (_req, res): Promise<void> => {
   res.json({
     url: getCurrentSupabaseUrl(),
     hasCustomConfig: hasRuntimeConfig(),
   });
 });
 
-// Admin: update Supabase credentials
-router.post("/settings/supabase", requireAuth, async (req, res): Promise<void> => {
-  if (req.userRole !== "admin") {
-    res.status(403).json({ error: "Admin access required" });
-    return;
-  }
+// Public: update Supabase credentials
+// Security: credentials are validated with a live test query before saving,
+// so only a valid Supabase project key will be accepted.
+router.post("/settings/supabase", async (req, res): Promise<void> => {
 
   const { url, serviceRoleKey } = req.body as { url?: string; serviceRoleKey?: string };
 

@@ -6,8 +6,10 @@ import { useAuth } from "@/lib/auth";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Link, useLocation } from "wouter";
-import { GraduationCap, Eye, EyeOff, ArrowLeft, CheckCircle, XCircle } from "lucide-react";
+import { GraduationCap, Eye, EyeOff, ArrowLeft, CheckCircle, XCircle, Database } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -33,11 +35,27 @@ export default function LoginPage() {
   const [isSending, setIsSending] = useState(false);
   const [blockedReason, setBlockedReason] = useState<string | null>(null);
 
+  // Supabase configuration dialog state
+  const [dbDialogOpen, setDbDialogOpen] = useState(false);
+  const [dbUrl, setDbUrl] = useState("");
+  const [dbServiceKey, setDbServiceKey] = useState("");
+  const [dbSaving, setDbSaving] = useState(false);
+  const [dbCurrentUrl, setDbCurrentUrl] = useState("");
+
   useEffect(() => {
     if (!isLoading && user) {
       setLocation("/dashboard");
     }
   }, [user, isLoading, setLocation]);
+
+  useEffect(() => {
+    fetch("/api/settings/supabase")
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { url?: string } | null) => {
+        if (data?.url) setDbCurrentUrl(data.url);
+      })
+      .catch(() => {});
+  }, []);
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -90,6 +108,40 @@ export default function LoginPage() {
       });
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleOpenDbDialog = () => {
+    setDbUrl(dbCurrentUrl);
+    setDbServiceKey("");
+    setDbDialogOpen(true);
+  };
+
+  const handleSaveDbConfig = async () => {
+    setDbSaving(true);
+    try {
+      const resp = await fetch("/api/settings/supabase", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: dbUrl, serviceRoleKey: dbServiceKey }),
+      });
+      const data = await resp.json() as { url?: string; error?: string };
+      if (!resp.ok) throw new Error(data.error ?? "Failed to save");
+      setDbCurrentUrl(data.url ?? dbUrl);
+      setDbServiceKey("");
+      setDbDialogOpen(false);
+      toast({
+        title: "Database connected",
+        description: "The server is now connected to your Supabase project. You can sign in now.",
+      });
+    } catch (err) {
+      toast({
+        title: "Connection failed",
+        description: (err as Error).message,
+        variant: "destructive",
+      });
+    } finally {
+      setDbSaving(false);
     }
   };
 
@@ -227,6 +279,24 @@ export default function LoginPage() {
                   Sign up
                 </Link>
               </p>
+
+              {/* Database configuration link */}
+              <div className="mt-8 pt-6 border-t border-border">
+                <button
+                  type="button"
+                  onClick={handleOpenDbDialog}
+                  className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground mx-auto transition-colors"
+                  data-testid="button-open-db-config"
+                >
+                  <Database className="w-3.5 h-3.5" />
+                  Configure database connection
+                  {dbCurrentUrl && (
+                    <span className="font-mono text-xs truncate max-w-[140px] text-muted-foreground/70">
+                      ({dbCurrentUrl.replace("https://", "").split(".")[0]}…)
+                    </span>
+                  )}
+                </button>
+              </div>
             </>
           )}
 
@@ -317,6 +387,77 @@ export default function LoginPage() {
           )}
         </div>
       </div>
+
+      {/* ── SUPABASE CONFIGURATION DIALOG ── */}
+      <Dialog open={dbDialogOpen} onOpenChange={setDbDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Database className="w-4 h-4" /> Database Configuration
+            </DialogTitle>
+            <DialogDescription>
+              Connect to your Supabase project. The connection is tested before saving — your current setup is not changed until the test passes.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-1">
+            <div className="space-y-1.5">
+              <Label htmlFor="db-url">Project URL</Label>
+              <Input
+                id="db-url"
+                type="url"
+                placeholder="https://xxxxxxxxxxxxxxxxxxxx.supabase.co"
+                value={dbUrl}
+                onChange={e => setDbUrl(e.target.value)}
+                disabled={dbSaving}
+                data-testid="input-db-url"
+              />
+              <p className="text-xs text-muted-foreground">
+                Supabase Dashboard → Settings → API → <strong>Project URL</strong>
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="db-key">Service Role Key</Label>
+              <Input
+                id="db-key"
+                type="password"
+                placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9…"
+                value={dbServiceKey}
+                onChange={e => setDbServiceKey(e.target.value)}
+                disabled={dbSaving}
+                data-testid="input-db-service-key"
+              />
+              <p className="text-xs text-muted-foreground">
+                Supabase Dashboard → Settings → API → <strong>service_role</strong> secret key
+              </p>
+            </div>
+
+            <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-3 py-2.5 text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
+              <strong>Where to find these?</strong> Open your Supabase project → click <strong>Settings</strong> (gear icon) → <strong>API</strong>. Copy the <em>Project URL</em> and the <em>service_role</em> key (under "Project API keys").
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDbDialogOpen(false)}
+              disabled={dbSaving}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void handleSaveDbConfig()}
+              disabled={dbSaving || !dbUrl.trim() || !dbServiceKey.trim()}
+              data-testid="button-save-db-config"
+            >
+              {dbSaving ? (
+                <><span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin mr-2" />Testing…</>
+              ) : "Save & Connect"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
