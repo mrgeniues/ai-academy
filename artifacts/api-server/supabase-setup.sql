@@ -325,6 +325,22 @@ CREATE TABLE IF NOT EXISTS password_resets (
 ALTER TABLE password_resets DISABLE ROW LEVEL SECURITY;
 
 
+-- ────────────────────────────────────────────────────────────────
+-- COMMUNITIES
+-- ────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS communities (
+  id          SERIAL PRIMARY KEY,
+  name        TEXT NOT NULL,
+  description TEXT,
+  owner_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status      TEXT NOT NULL DEFAULT 'pending',   -- 'pending' | 'approved' | 'rejected'
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE communities DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS communities_owner_id_idx ON communities(owner_id);
+CREATE INDEX IF NOT EXISTS communities_status_idx ON communities(status);
+
+
 -- ================================================================
 -- STORAGE BUCKET
 -- Create the "media" bucket for file/image/video uploads.

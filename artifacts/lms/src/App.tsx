@@ -21,6 +21,7 @@ import MaintenancePage from "@/pages/maintenance";
 import AiToolsPage from "@/pages/ai-tools";
 import PostDetailPage from "@/pages/post-detail";
 import ToolDetailPage from "@/pages/tool-detail";
+import CreateCommunityPage from "@/pages/create-community";
 import NotFound from "@/pages/not-found";
 import { WhatsAppButton } from "@/components/whatsapp-button";
 import { useEffect, useRef } from "react";
@@ -174,6 +175,9 @@ function Router() {
         </Route>
         <Route path="/tool/:id">
           <ProtectedRoute component={ToolDetailPage} />
+        </Route>
+        <Route path="/create-community">
+          <ProtectedRoute component={CreateCommunityPage} />
         </Route>
         <Route component={NotFound} />
       </Switch>

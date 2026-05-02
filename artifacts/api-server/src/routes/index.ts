@@ -14,6 +14,7 @@ import maintenanceRouter from "./maintenance";
 import toolsRouter from "./tools";
 import settingsRouter from "./settings";
 import adminActionsRouter from "./admin-actions";
+import communitiesRouter from "./communities";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(maintenanceRouter);
 router.use(toolsRouter);
 router.use(settingsRouter);
 router.use(adminActionsRouter);
+router.use(communitiesRouter);
 
 export default router;
