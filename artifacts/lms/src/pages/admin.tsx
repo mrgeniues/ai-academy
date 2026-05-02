@@ -168,6 +168,8 @@ export default function AdminPage() {
   const [generalSettingsLoaded, setGeneralSettingsLoaded] = useState(false);
   const [generalSettingsSaving, setGeneralSettingsSaving] = useState(false);
 
+  const [togglingEnrollmentModeId, setTogglingEnrollmentModeId] = useState<number | null>(null);
+
   // Supabase configuration state
   const [supabaseDialogOpen, setSupabaseDialogOpen] = useState(false);
   const [supabaseCurrentUrl, setSupabaseCurrentUrl] = useState("");
@@ -247,6 +249,33 @@ export default function AdminPage() {
       toast({ title: "Course deleted" });
     } catch {
       toast({ title: "Failed to delete course", variant: "destructive" });
+    }
+  };
+
+  const handleToggleEnrollmentMode = async (course: CourseWithMode) => {
+    const newMode = course.enrollmentMode === "open" ? "approval_required" : "open";
+    setTogglingEnrollmentModeId(course.id);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch(`/api/courses/${course.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ enrollmentMode: newMode }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Failed to update enrollment mode");
+      }
+      queryClient.invalidateQueries({ queryKey: getListCoursesQueryKey() });
+      toast({
+        title: newMode === "open"
+          ? `"${course.title}" set to Open enrollment`
+          : `"${course.title}" set to Approval Required`,
+      });
+    } catch (err) {
+      toast({ title: (err as Error).message, variant: "destructive" });
+    } finally {
+      setTogglingEnrollmentModeId(null);
     }
   };
 
@@ -1468,23 +1497,31 @@ export default function AdminPage() {
                           <p className="text-sm font-medium truncate">{course.title}</p>
                           <p className="text-xs text-muted-foreground">{course.lessonCount} lessons · {course.enrollmentCount} enrolled</p>
                         </div>
-                        {course.enrollmentMode === "open" ? (
-                          <Badge
-                            data-testid={`enrollment-mode-badge-${course.id}`}
-                            className="flex-shrink-0 bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
-                            variant="outline"
-                          >
-                            Open
-                          </Badge>
-                        ) : (
-                          <Badge
-                            data-testid={`enrollment-mode-badge-${course.id}`}
-                            className="flex-shrink-0 bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800"
-                            variant="outline"
-                          >
-                            Approval Required
-                          </Badge>
-                        )}
+                        <button
+                          data-testid={`toggle-enrollment-mode-${course.id}`}
+                          onClick={() => void handleToggleEnrollmentMode(course)}
+                          disabled={togglingEnrollmentModeId === course.id}
+                          title={course.enrollmentMode === "open" ? "Switch to Approval Required" : "Switch to Open"}
+                          className="flex-shrink-0 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {course.enrollmentMode === "open" ? (
+                            <Badge
+                              data-testid={`enrollment-mode-badge-${course.id}`}
+                              className="cursor-pointer bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800 dark:hover:bg-emerald-900/60 transition-colors"
+                              variant="outline"
+                            >
+                              Open
+                            </Badge>
+                          ) : (
+                            <Badge
+                              data-testid={`enrollment-mode-badge-${course.id}`}
+                              className="cursor-pointer bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800 dark:hover:bg-amber-900/60 transition-colors"
+                              variant="outline"
+                            >
+                              Approval Required
+                            </Badge>
+                          )}
+                        </button>
                         <Button
                           data-testid={`button-delete-course-${course.id}`}
                           variant="ghost"
