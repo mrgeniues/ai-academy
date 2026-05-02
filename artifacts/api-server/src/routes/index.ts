@@ -15,6 +15,7 @@ import toolsRouter from "./tools";
 import settingsRouter from "./settings";
 import adminActionsRouter from "./admin-actions";
 import communitiesRouter from "./communities";
+import communityPanelRouter from "./community-panel";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use(toolsRouter);
 router.use(settingsRouter);
 router.use(adminActionsRouter);
 router.use(communitiesRouter);
+router.use(communityPanelRouter);
 
 export default router;

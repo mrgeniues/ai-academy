@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/lib/auth";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Layout } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Heart, MessageCircle, Trash2, Send, ChevronDown, ChevronUp,
   Smile, ImageIcon, Paperclip, X, Loader2, Link2, ExternalLink,
-  FileText, Download
+  FileText, Download, Users2, ArrowRight, Plus
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -668,6 +668,8 @@ function PostCard({ post, token, onDelete }: { post: Post; token: string | null;
   );
 }
 
+type CommunityItem = { id: number; name: string; description: string | null; owner_id: number };
+
 export default function CommunityPage() {
   const { user, token } = useAuth();
   const { toast } = useToast();
@@ -679,6 +681,7 @@ export default function CommunityPage() {
   const [uploading, setUploading] = useState(false);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [communities, setCommunities] = useState<CommunityItem[]>([]);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -695,6 +698,14 @@ export default function CommunityPage() {
   };
 
   useEffect(() => { fetchPosts(); }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API}/communities`, { headers: authHeaders(token) })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => { if (Array.isArray(d)) setCommunities(d); })
+      .catch(() => {});
+  }, [token]);
 
   const handleCreatePost = async () => {
     const trimmedLink = linkUrl.trim();
@@ -748,10 +759,46 @@ export default function CommunityPage() {
   return (
     <Layout>
       <div className="p-6 max-w-3xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">Community</h1>
-          <p className="text-muted-foreground text-sm mt-1">Share your thoughts and connect with fellow learners</p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">Community</h1>
+            <p className="text-muted-foreground text-sm mt-1">Share your thoughts and connect with fellow learners</p>
+          </div>
+          <Link href="/create-community">
+            <Button size="sm" variant="outline" className="flex-shrink-0 gap-1.5">
+              <Plus className="w-3.5 h-3.5" />Create Community
+            </Button>
+          </Link>
         </div>
+
+        {/* Communities directory strip */}
+        {communities.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground uppercase tracking-wide">
+                <Users2 className="w-3.5 h-3.5" />Communities
+              </h2>
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
+              {communities.map(c => (
+                <Link key={c.id} href={`/community/${c.id}`}>
+                  <div className="flex-shrink-0 w-48 rounded-xl border bg-card hover:bg-accent/40 hover:border-primary/30 transition-all cursor-pointer p-3 group">
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center mb-2">
+                      <Users2 className="w-4 h-4 text-primary" />
+                    </div>
+                    <p className="text-sm font-semibold leading-tight line-clamp-1">{c.name}</p>
+                    {c.description && (
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">{c.description}</p>
+                    )}
+                    <div className="flex items-center gap-1 mt-2 text-xs text-primary font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span>Enter</span><ArrowRight className="w-3 h-3" />
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Create post */}
         <Card>

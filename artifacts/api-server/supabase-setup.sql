@@ -326,6 +326,70 @@ ALTER TABLE password_resets DISABLE ROW LEVEL SECURITY;
 
 
 -- ────────────────────────────────────────────────────────────────
+-- COMMUNITY MEMBERS
+-- ────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS community_members (
+  id           SERIAL PRIMARY KEY,
+  community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status       TEXT NOT NULL DEFAULT 'pending',   -- 'pending' | 'approved' | 'rejected'
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(community_id, user_id)
+);
+ALTER TABLE community_members DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS community_members_community_id_idx ON community_members(community_id);
+
+-- ────────────────────────────────────────────────────────────────
+-- COMMUNITY POSTS
+-- ────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS community_posts (
+  id           SERIAL PRIMARY KEY,
+  community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  content      TEXT NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE community_posts DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS community_posts_community_id_idx ON community_posts(community_id);
+
+-- ────────────────────────────────────────────────────────────────
+-- COMMUNITY COURSES
+-- ────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS community_courses (
+  id           SERIAL PRIMARY KEY,
+  community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  course_id    INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(community_id, course_id)
+);
+ALTER TABLE community_courses DISABLE ROW LEVEL SECURITY;
+
+-- ────────────────────────────────────────────────────────────────
+-- COMMUNITY TOOLS
+-- ────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS community_tools (
+  id           SERIAL PRIMARY KEY,
+  community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  tool_id      INTEGER NOT NULL REFERENCES tools(id) ON DELETE CASCADE,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(community_id, tool_id)
+);
+ALTER TABLE community_tools DISABLE ROW LEVEL SECURITY;
+
+-- ────────────────────────────────────────────────────────────────
+-- COMMUNITY MESSAGES (group chat)
+-- ────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS community_messages (
+  id           SERIAL PRIMARY KEY,
+  community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  sender_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  content      TEXT NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE community_messages DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS community_messages_community_id_idx ON community_messages(community_id);
+
+-- ────────────────────────────────────────────────────────────────
 -- COMMUNITIES
 -- ────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS communities (
