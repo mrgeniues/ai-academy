@@ -1,7 +1,14 @@
+import { createClient } from "@supabase/supabase-js";
 import { Router, type IRouter } from "express";
 import { requireAuth } from "../lib/auth";
 import { sendTestEmail } from "../lib/email";
-import { supabase } from "../lib/supabase";
+import {
+  supabase,
+  reinitializeSupabase,
+  saveSupabaseConfig,
+  getCurrentSupabaseUrl,
+  hasRuntimeConfig,
+} from "../lib/supabase";
 
 const router: IRouter = Router();
 
@@ -242,6 +249,62 @@ router.post("/settings/general", requireAuth, async (req, res): Promise<void> =>
     console.error("[settings] Failed to write general settings:", err);
     res.status(500).json({ error: "Failed to save settings" });
   }
+});
+
+// ── Supabase connection settings ─────────────────────────────────────────────
+
+// Admin: get current Supabase URL
+router.get("/settings/supabase", requireAuth, async (req, res): Promise<void> => {
+  if (req.userRole !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+  res.json({
+    url: getCurrentSupabaseUrl(),
+    hasCustomConfig: hasRuntimeConfig(),
+  });
+});
+
+// Admin: update Supabase credentials
+router.post("/settings/supabase", requireAuth, async (req, res): Promise<void> => {
+  if (req.userRole !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+
+  const { url, serviceRoleKey } = req.body as { url?: string; serviceRoleKey?: string };
+
+  if (!url || !url.trim()) {
+    res.status(400).json({ error: "Supabase URL is required" });
+    return;
+  }
+  if (!serviceRoleKey || !serviceRoleKey.trim()) {
+    res.status(400).json({ error: "Service Role Key is required" });
+    return;
+  }
+
+  const cleanUrl = url.trim().replace(/\/$/, "");
+  const cleanKey = serviceRoleKey.trim();
+
+  // Validate by making a lightweight test query against the new credentials
+  try {
+    const testClient = createClient(cleanUrl, cleanKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { error } = await testClient.from("users").select("id").limit(1);
+    if (error && error.code !== "PGRST116") {
+      res.status(400).json({ error: `Connection test failed: ${error.message}` });
+      return;
+    }
+  } catch (e) {
+    res.status(400).json({ error: `Could not connect: ${(e as Error).message}` });
+    return;
+  }
+
+  saveSupabaseConfig(cleanUrl, cleanKey);
+  reinitializeSupabase(cleanUrl, cleanKey);
+
+  res.json({ success: true, url: cleanUrl });
 });
 
 export default router;

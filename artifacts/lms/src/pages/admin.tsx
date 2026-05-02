@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trash2, Users, BookOpen, MessageSquare, TrendingUp, Shield, Ban, CheckCircle, Clock, Calendar, GraduationCap, Wrench, XCircle, ScrollText } from "lucide-react";
+import { Trash2, Users, BookOpen, MessageSquare, TrendingUp, Shield, Ban, CheckCircle, Clock, Calendar, GraduationCap, Wrench, XCircle, ScrollText, Database } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -167,6 +167,14 @@ export default function AdminPage() {
   const [defaultEnrollmentMode, setDefaultEnrollmentMode] = useState<"open" | "approval_required" | "">("");
   const [generalSettingsLoaded, setGeneralSettingsLoaded] = useState(false);
   const [generalSettingsSaving, setGeneralSettingsSaving] = useState(false);
+
+  // Supabase configuration state
+  const [supabaseDialogOpen, setSupabaseDialogOpen] = useState(false);
+  const [supabaseCurrentUrl, setSupabaseCurrentUrl] = useState("");
+  const [supabaseUrl, setSupabaseUrl] = useState("");
+  const [supabaseServiceKey, setSupabaseServiceKey] = useState("");
+  const [supabaseSaving, setSupabaseSaving] = useState(false);
+  const [supabaseConfigLoaded, setSupabaseConfigLoaded] = useState(false);
 
   // All hooks must be called unconditionally (Rules of Hooks)
   const { data: users, isLoading: usersLoading } = useListUsers({
@@ -597,6 +605,48 @@ export default function AdminPage() {
     }
   };
 
+  const loadSupabaseConfig = useCallback(async () => {
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch("/api/settings/supabase", {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!resp.ok) return;
+      const data = await resp.json() as { url: string; hasCustomConfig: boolean };
+      setSupabaseCurrentUrl(data.url ?? "");
+      setSupabaseUrl(data.url ?? "");
+      setSupabaseConfigLoaded(true);
+    } catch { /* silently ignore */ }
+  }, [token]);
+
+  const handleOpenSupabaseDialog = useCallback(async () => {
+    if (!supabaseConfigLoaded) await loadSupabaseConfig();
+    setSupabaseServiceKey("");
+    setSupabaseDialogOpen(true);
+  }, [supabaseConfigLoaded, loadSupabaseConfig]);
+
+  const handleSaveSupabaseConfig = async () => {
+    setSupabaseSaving(true);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch("/api/settings/supabase", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ url: supabaseUrl, serviceRoleKey: supabaseServiceKey }),
+      });
+      const data = await resp.json() as { url?: string; error?: string };
+      if (!resp.ok) throw new Error(data.error ?? "Failed to save");
+      setSupabaseCurrentUrl(data.url ?? supabaseUrl);
+      setSupabaseServiceKey("");
+      setSupabaseDialogOpen(false);
+      toast({ title: "Supabase credentials updated", description: "The server is now connected to the new project." });
+    } catch (err) {
+      toast({ title: "Connection failed", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setSupabaseSaving(false);
+    }
+  };
+
   const loadMaintenanceSettings = useCallback(async () => {
     try {
       const resp = await fetch("/api/maintenance");
@@ -805,6 +855,7 @@ export default function AdminPage() {
                 if (!maintLoaded) void loadMaintenanceSettings();
                 if (!emailFromLoaded) void loadEmailSettings();
                 if (!generalSettingsLoaded) void loadGeneralSettings();
+                if (!supabaseConfigLoaded) void loadSupabaseConfig();
               }}
             >
               <Wrench className="w-3.5 h-3.5 mr-1" />
@@ -1501,6 +1552,39 @@ export default function AdminPage() {
 
           {/* ── Maintenance tab ───────────────────────────────────────── */}
           <TabsContent value="maintenance" className="mt-4 space-y-4">
+
+            {/* Supabase Database Connection card */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Database className="w-4 h-4" />
+                  Database Connection
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Configure the Supabase project this platform reads and writes data from. Changes take effect immediately without restarting.
+                </p>
+                <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/40">
+                  <Database className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-muted-foreground font-medium mb-0.5">Current Project URL</p>
+                    <code className="text-sm font-mono truncate block">
+                      {supabaseConfigLoaded ? (supabaseCurrentUrl || "—") : "Loading…"}
+                    </code>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void handleOpenSupabaseDialog()}
+                    data-testid="button-configure-supabase"
+                  >
+                    Change
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Platform settings card */}
             <Card>
               <CardHeader className="pb-2">
@@ -1953,6 +2037,73 @@ export default function AdminPage() {
               ) : (
                 <><CheckCircle className="w-4 h-4 mr-1" /> Approve</>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Supabase Configuration Dialog */}
+      <Dialog open={supabaseDialogOpen} onOpenChange={setSupabaseDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Database className="w-4 h-4" /> Supabase Configuration
+            </DialogTitle>
+            <DialogDescription>
+              Enter your Supabase project URL and Service Role Key. The connection is tested before saving. Your current data is not affected until you confirm.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <div className="space-y-1.5">
+              <Label htmlFor="sb-url" className="text-sm">Project URL</Label>
+              <Input
+                id="sb-url"
+                type="url"
+                placeholder="https://xxxxxxxxxxxxxxxxxxxx.supabase.co"
+                value={supabaseUrl}
+                onChange={e => setSupabaseUrl(e.target.value)}
+                disabled={supabaseSaving}
+                data-testid="input-supabase-url"
+              />
+              <p className="text-xs text-muted-foreground">
+                Supabase Dashboard → Settings → API → <strong>Project URL</strong>
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="sb-key" className="text-sm">Service Role Key</Label>
+              <Input
+                id="sb-key"
+                type="password"
+                placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9…"
+                value={supabaseServiceKey}
+                onChange={e => setSupabaseServiceKey(e.target.value)}
+                disabled={supabaseSaving}
+                data-testid="input-supabase-service-key"
+              />
+              <p className="text-xs text-muted-foreground">
+                Supabase Dashboard → Settings → API → <strong>service_role</strong> secret key. Never share this publicly.
+              </p>
+            </div>
+            <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+              The connection will be tested before saving. If the test fails the current credentials are kept.
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSupabaseDialogOpen(false)}
+              disabled={supabaseSaving}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void handleSaveSupabaseConfig()}
+              disabled={supabaseSaving || !supabaseUrl.trim() || !supabaseServiceKey.trim()}
+              data-testid="button-save-supabase"
+            >
+              {supabaseSaving ? (
+                <><span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin mr-2" />Testing connection…</>
+              ) : "Save & Connect"}
             </Button>
           </DialogFooter>
         </DialogContent>
