@@ -116,7 +116,7 @@ router.get("/enrollments/pending", requireAuth, async (req, res): Promise<void> 
       courseId: enrollment.course_id,
       createdAt: enrollment.created_at,
       user: { id: user.id, name: user.name, email: user.email, avatar: user.avatar ?? null },
-      course: { id: course.id, title: course.title },
+      course: { id: course.id, title: course.title, enrollmentMode },
     };
   }))).filter(Boolean);
 

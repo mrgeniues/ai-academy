@@ -29,7 +29,7 @@ type PendingEnrollment = {
   courseId: number;
   createdAt: string;
   user: { id: number; name: string; email: string; avatar: string | null };
-  course: { id: number; title: string };
+  course: { id: number; title: string; enrollmentMode?: string };
 };
 
 type UserRow = {
@@ -1224,11 +1224,22 @@ export default function AdminPage() {
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold truncate">{enrollment.user.name}</p>
                             <p className="text-xs text-muted-foreground truncate">wants to join: <span className="font-medium text-foreground">{enrollment.course.title}</span></p>
-                            {enrollment.createdAt && (
-                              <p className="text-xs text-muted-foreground">
-                                {formatDistanceToNow(new Date(enrollment.createdAt), { addSuffix: true })}
-                              </p>
-                            )}
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {enrollment.createdAt && (
+                                <p className="text-xs text-muted-foreground">
+                                  {formatDistanceToNow(new Date(enrollment.createdAt), { addSuffix: true })}
+                                </p>
+                              )}
+                              {enrollment.course.enrollmentMode && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] px-1.5 py-0 h-4 font-normal border-amber-400 text-amber-700 dark:border-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30"
+                                  data-testid={`enrollment-mode-badge-${enrollment.id}`}
+                                >
+                                  {enrollment.course.enrollmentMode === "approval_required" ? "Approval Required" : enrollment.course.enrollmentMode}
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             <Button
