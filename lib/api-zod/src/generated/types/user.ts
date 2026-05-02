@@ -22,6 +22,4 @@ export interface User {
   /** @nullable */
   lastLogout?: string | null;
   createdAt: string;
-  /** @nullable */
-  theme?: string | null;
 }

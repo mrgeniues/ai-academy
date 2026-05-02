@@ -735,6 +735,9 @@ components:
           type: integer
         enrollmentCount:
           type: integer
+        enrollmentMode:
+          type: string
+          enum: ["open", "approval_required"]
       required: [id, title, createdBy, createdAt, updatedAt, lessonCount, enrollmentCount]
 
     CourseWithLessons:

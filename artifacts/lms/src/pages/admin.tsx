@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useListUsers, useUpdateUserRole, useListCourses, useDeleteCourse, useListPosts, useDeletePost, useGetDashboardStats, getListUsersQueryKey, getListCoursesQueryKey, getListPostsQueryKey, getGetDashboardStatsQueryKey } from "@workspace/api-client-react";
+import { useListUsers, useUpdateUserRole, useListCourses, useDeleteCourse, useListPosts, useDeletePost, useGetDashboardStats, getListUsersQueryKey, getListCoursesQueryKey, getListPostsQueryKey, getGetDashboardStatsQueryKey, type Course } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,7 +29,7 @@ type PendingEnrollment = {
   courseId: number;
   createdAt: string;
   user: { id: number; name: string; email: string; avatar: string | null };
-  course: { id: number; title: string; enrollmentMode?: string };
+  course: Course;
 };
 
 type UserRow = {
@@ -57,15 +57,6 @@ function formatActionLabel(action: string): string {
   }
 }
 
-type CourseWithMode = {
-  id: number;
-  title: string;
-  description?: string | null;
-  thumbnail?: string | null;
-  lessonCount: number;
-  enrollmentCount: number;
-  enrollmentMode?: "open" | "approval_required";
-};
 
 function UndoCountdownAction({ onUndo, duration = 5 }: { onUndo: () => void; duration?: number }) {
   const [secondsLeft, setSecondsLeft] = useState(duration);
@@ -252,7 +243,7 @@ export default function AdminPage() {
     }
   };
 
-  const handleToggleEnrollmentMode = async (course: CourseWithMode) => {
+  const handleToggleEnrollmentMode = async (course: Course) => {
     const newMode = course.enrollmentMode === "open" ? "approval_required" : "open";
     setTogglingEnrollmentModeId(course.id);
     try {
@@ -1499,7 +1490,7 @@ export default function AdminPage() {
                   <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
                 ) : (
                   <div className="space-y-2">
-                    {(courses as CourseWithMode[] | undefined)?.map(course => (
+                    {courses?.map(course => (
                       <div key={course.id} data-testid={`course-row-${course.id}`} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
                         {course.thumbnail && (
                           <img src={course.thumbnail} alt="" className="w-10 h-8 object-cover rounded flex-shrink-0" />

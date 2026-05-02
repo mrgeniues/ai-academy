@@ -154,7 +154,6 @@ export const UpdateUserBody = zod.object({
   name: zod.string().optional(),
   avatar: zod.string().nullish(),
   bio: zod.string().nullish(),
-  theme: zod.string().nullish(),
   socialLinks: zod
     .object({
       facebook: zod.string().nullish(),
@@ -235,6 +234,7 @@ export const ListCoursesResponseItem = zod.object({
   updatedAt: zod.string(),
   lessonCount: zod.number(),
   enrollmentCount: zod.number(),
+  enrollmentMode: zod.enum(["open", "approval_required"]).optional(),
 });
 export const ListCoursesResponse = zod.array(ListCoursesResponseItem);
 
@@ -302,6 +302,7 @@ export const UpdateCourseResponse = zod.object({
   updatedAt: zod.string(),
   lessonCount: zod.number(),
   enrollmentCount: zod.number(),
+  enrollmentMode: zod.enum(["open", "approval_required"]).optional(),
 });
 
 /**
@@ -393,6 +394,7 @@ export const ListMyEnrollmentsResponseItem = zod.object({
     updatedAt: zod.string(),
     lessonCount: zod.number(),
     enrollmentCount: zod.number(),
+    enrollmentMode: zod.enum(["open", "approval_required"]).optional(),
   }),
 });
 export const ListMyEnrollmentsResponse = zod.array(

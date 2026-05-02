@@ -10,6 +10,7 @@ export * from "./activityItem";
 export * from "./authResponse";
 export * from "./commentWithAuthor";
 export * from "./course";
+export * from "./courseEnrollmentMode";
 export * from "./courseWithLessons";
 export * from "./createCommentBody";
 export * from "./createCourseBody";

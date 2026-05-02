@@ -78,6 +78,14 @@ export interface UpdateRoleBody {
   role: string;
 }
 
+export type CourseEnrollmentMode =
+  (typeof CourseEnrollmentMode)[keyof typeof CourseEnrollmentMode];
+
+export const CourseEnrollmentMode = {
+  open: "open",
+  approval_required: "approval_required",
+} as const;
+
 export interface Course {
   id: number;
   title: string;
@@ -90,6 +98,7 @@ export interface Course {
   updatedAt: string;
   lessonCount: number;
   enrollmentCount: number;
+  enrollmentMode?: CourseEnrollmentMode;
 }
 
 export interface Lesson {

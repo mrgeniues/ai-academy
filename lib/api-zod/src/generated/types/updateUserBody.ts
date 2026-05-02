@@ -14,6 +14,4 @@ export interface UpdateUserBody {
   /** @nullable */
   bio?: string | null;
   socialLinks?: SocialLinks;
-  /** @nullable */
-  theme?: string | null;
 }

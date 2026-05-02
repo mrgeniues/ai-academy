@@ -5,6 +5,7 @@
  * LMS Platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { CourseEnrollmentMode } from "./courseEnrollmentMode";
 
 export interface Course {
   id: number;
@@ -18,4 +19,5 @@ export interface Course {
   updatedAt: string;
   lessonCount: number;
   enrollmentCount: number;
+  enrollmentMode?: CourseEnrollmentMode;
 }
