@@ -2,7 +2,8 @@ import { Router, type IRouter } from "express";
 import { requireAuth } from "../lib/auth";
 import { supabase } from "../lib/supabase";
 import { z } from "zod";
-import { broadcastNotification } from "../lib/notifications";
+import { broadcastNotification, sendNotificationToUsers } from "../lib/notifications";
+import { sendEnrollmentApprovedEmail } from "../lib/email";
 
 const router: IRouter = Router();
 
@@ -253,7 +254,7 @@ router.patch("/courses/:id", requireAuth, async (req, res): Promise<void> => {
   // Fetch current course state before updating so we can detect a real mode transition
   const { data: existingCourse } = await supabase
     .from("courses")
-    .select("enrollment_mode")
+    .select("enrollment_mode, title")
     .eq("id", id)
     .maybeSingle();
 
@@ -267,6 +268,36 @@ router.patch("/courses/:id", requireAuth, async (req, res): Promise<void> => {
   if (parsed.data.visibility !== undefined) updates.visibility = parsed.data.visibility;
   if (parsed.data.enrollmentMode !== undefined) updates.enrollment_mode = parsed.data.enrollmentMode;
 
+  // Auto-approve pending enrollments only when the course actually transitioned to open enrollment
+  const previousMode = (existingCourse as Record<string, unknown>).enrollment_mode ?? "approval_required";
+  // Prefer the new title if it's being updated in this same PATCH so notification copy is accurate
+  const courseTitle = (parsed.data.title ?? (existingCourse as Record<string, unknown>).title as string) ?? "the course";
+  const switchingToOpen = parsed.data.enrollmentMode === "open" && previousMode !== "open";
+
+  // Fetch pending enrollments (with user info) BEFORE the update so we know who to notify
+  let pendingStudents: Array<{ userId: number; email: string; name: string }> = [];
+  if (switchingToOpen) {
+    const { data: pendingEnrollments } = await supabase
+      .from("enrollments")
+      .select("user_id")
+      .eq("course_id", id)
+      .eq("is_approved", false);
+
+    if (pendingEnrollments && pendingEnrollments.length > 0) {
+      const pendingUserIds = pendingEnrollments.map(e => e.user_id as number);
+      const { data: userRows } = await supabase
+        .from("users")
+        .select("id, email, name")
+        .in("id", pendingUserIds);
+
+      pendingStudents = (userRows ?? []).map(u => ({
+        userId: u.id as number,
+        email: u.email as string,
+        name: (u.name as string) ?? (u.email as string),
+      }));
+    }
+  }
+
   const { error: updateError } = await supabase.from("courses").update(updates).eq("id", id);
 
   // If enrollment_mode column doesn't exist yet, retry without it
@@ -277,9 +308,6 @@ router.patch("/courses/:id", requireAuth, async (req, res): Promise<void> => {
     updateSucceeded = !fallbackError;
   }
 
-  // Auto-approve pending enrollments only when the course actually transitioned to open enrollment
-  const previousMode = (existingCourse as Record<string, unknown>).enrollment_mode ?? "approval_required";
-  const switchingToOpen = parsed.data.enrollmentMode === "open" && previousMode !== "open";
   if (updateSucceeded && switchingToOpen) {
     const { error: approveError } = await supabase
       .from("enrollments")
@@ -288,6 +316,28 @@ router.patch("/courses/:id", requireAuth, async (req, res): Promise<void> => {
       .eq("is_approved", false);
     if (approveError) {
       console.error("[PATCH /courses/:id] Failed to auto-approve pending enrollments:", approveError.message);
+    }
+
+    // Notify each auto-approved student via email and in-app notification
+    // Only send if the DB update actually succeeded to avoid false "approved" messages
+    if (!approveError && pendingStudents.length > 0) {
+      const emailPromises = pendingStudents.map(s =>
+        sendEnrollmentApprovedEmail(s.email, s.name, courseTitle).catch(err =>
+          console.error(`[PATCH /courses/:id] Failed to send approval email to ${s.email}:`, err)
+        )
+      );
+
+      const notificationPromise = sendNotificationToUsers({
+        userIds: pendingStudents.map(s => s.userId),
+        type: "admin_course",
+        title: "Enrollment Approved",
+        message: `Your enrollment in "${courseTitle}" has been approved. You can now access the course.`,
+        courseId: id,
+      }).catch(err =>
+        console.error("[PATCH /courses/:id] Failed to send in-app notifications:", err)
+      );
+
+      Promise.all([...emailPromises, notificationPromise]).catch(() => {});
     }
   }
 

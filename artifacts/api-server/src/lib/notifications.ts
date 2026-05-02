@@ -12,6 +12,39 @@ interface NotificationPayload {
   excludeUserId?: number;
 }
 
+interface TargetedNotificationPayload {
+  userIds: number[];
+  type: NotificationType;
+  title: string;
+  message: string;
+  postId?: number | null;
+  courseId?: number | null;
+  isVip?: boolean;
+}
+
+export async function sendNotificationToUsers(payload: TargetedNotificationPayload): Promise<void> {
+  if (payload.userIds.length === 0) return;
+  try {
+    const { error } = await supabase.from("notifications").insert(
+      payload.userIds.map(uid => ({
+        user_id: uid,
+        type: payload.type,
+        title: payload.title,
+        message: payload.message,
+        post_id: payload.postId ?? null,
+        course_id: payload.courseId ?? null,
+        is_vip: payload.isVip ?? false,
+        is_read: false,
+      }))
+    );
+    if (error) {
+      console.error("[sendNotificationToUsers] Insert error:", error.message);
+    }
+  } catch (err) {
+    console.error("[sendNotificationToUsers] Unexpected error:", err);
+  }
+}
+
 export async function broadcastNotification(payload: NotificationPayload): Promise<void> {
   try {
     const { data: users } = await supabase.from("users").select("id");
