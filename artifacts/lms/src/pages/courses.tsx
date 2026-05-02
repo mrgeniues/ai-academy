@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { BookOpen, Users, Plus, GraduationCap, Lock, Globe, Trash2, ImageIcon, X, MessageCircle, Link as LinkIcon, Pencil, Zap, Clock } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useSearch, useLocation } from "wouter";
 
 
 type CourseWithExtras = {
@@ -42,6 +42,8 @@ export default function CoursesPage() {
   const { user, token } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const search = useSearch();
+  const [, setLocation] = useLocation();
   const [createOpen, setCreateOpen] = useState(false);
   const [privateAlertCourse, setPrivateAlertCourse] = useState<CourseWithExtras | null>(null);
   const [pendingAlertCourse, setPendingAlertCourse] = useState<CourseWithExtras | null>(null);
@@ -85,8 +87,23 @@ export default function CoursesPage() {
 
   const isAdmin = user?.role === "admin";
 
-  // ── Enrollment type filter ───────────────────────────────────────────────
-  const [enrollmentFilter, setEnrollmentFilter] = useState<"all" | "open" | "approval_required">("all");
+  // ── Enrollment type filter (persisted in URL query string) ───────────────
+  const validFilters = ["all", "open", "approval_required"] as const;
+  type FilterValue = typeof validFilters[number];
+  const rawFilter = new URLSearchParams(search).get("filter") ?? "all";
+  const enrollmentFilter: FilterValue = (validFilters as readonly string[]).includes(rawFilter)
+    ? (rawFilter as FilterValue)
+    : "all";
+  const setEnrollmentFilter = (value: FilterValue) => {
+    const params = new URLSearchParams(search);
+    if (value === "all") {
+      params.delete("filter");
+    } else {
+      params.set("filter", value);
+    }
+    const qs = params.toString();
+    setLocation(`/courses${qs ? `?${qs}` : ""}`, { replace: false });
+  };
 
   // ── Create form helpers ──────────────────────────────────────────────────
   const resetForm = () => {
