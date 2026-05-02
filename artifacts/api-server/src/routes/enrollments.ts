@@ -362,6 +362,7 @@ router.post("/enrollments/bulk-action", requireAuth, async (req, res): Promise<v
 
   const rejectionReason = typeof reason === "string" && reason.trim() ? reason.trim() : undefined;
   let updated = 0;
+  let updatedIds: number[] = [];
 
   if (action === "approve") {
     const { data: enrollments, error } = await supabase
@@ -376,6 +377,7 @@ router.post("/enrollments/bulk-action", requireAuth, async (req, res): Promise<v
     }
 
     updated = enrollments?.length ?? 0;
+    updatedIds = (enrollments ?? []).map(e => e.id);
 
     // Send approval emails and log audit actions
     await Promise.allSettled((enrollments ?? []).map(async (enrollment) => {
@@ -450,7 +452,109 @@ router.post("/enrollments/bulk-action", requireAuth, async (req, res): Promise<v
     }));
   }
 
-  res.json({ updated });
+  res.json({ updated, updatedIds });
+});
+
+// Admin: undo a bulk enrollment approve or reject
+router.post("/enrollments/bulk-undo", requireAuth, async (req, res): Promise<void> => {
+  if (req.userRole !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+
+  const { action, enrollmentIds, enrollments: enrollmentPairs } = req.body as {
+    action?: unknown;
+    enrollmentIds?: unknown;
+    enrollments?: unknown;
+  };
+
+  if (action !== "approve" && action !== "reject") {
+    res.status(400).json({ error: "action must be 'approve' or 'reject'" });
+    return;
+  }
+
+  if (action === "approve") {
+    if (!Array.isArray(enrollmentIds) || enrollmentIds.length === 0) {
+      res.status(400).json({ error: "enrollmentIds must be a non-empty array" });
+      return;
+    }
+
+    const ids = (enrollmentIds as unknown[]).map(id => parseInt(String(id), 10)).filter(id => !isNaN(id));
+    if (ids.length === 0) {
+      res.status(400).json({ error: "No valid enrollment ids provided" });
+      return;
+    }
+
+    const { data: updatedEnrollments, error } = await supabase
+      .from("enrollments")
+      .update({ is_approved: false })
+      .in("id", ids)
+      .select();
+
+    if (error) {
+      res.status(500).json({ error: "Failed to undo enrollment approvals" });
+      return;
+    }
+
+    for (const enrollment of updatedEnrollments ?? []) {
+      logAdminAction({
+        actorId: req.userId!,
+        targetUserId: enrollment.user_id,
+        action: "enrollment_approval_undone",
+        entityType: "enrollment",
+        entityId: enrollment.id,
+      }).catch((err: unknown) => { console.error("[audit] logAdminAction fire-and-forget failed:", err); });
+    }
+
+    res.json({ updated: (updatedEnrollments ?? []).length });
+  } else {
+    // Undo reject: re-insert enrollment rows with is_approved=false
+    if (!Array.isArray(enrollmentPairs) || enrollmentPairs.length === 0) {
+      res.status(400).json({ error: "enrollments must be a non-empty array" });
+      return;
+    }
+
+    const pairs = (enrollmentPairs as unknown[]).filter(
+      (p): p is { userId: number; courseId: number } =>
+        typeof p === "object" && p !== null &&
+        typeof (p as Record<string, unknown>).userId === "number" &&
+        typeof (p as Record<string, unknown>).courseId === "number"
+    );
+
+    if (pairs.length === 0) {
+      res.status(400).json({ error: "No valid enrollment pairs provided" });
+      return;
+    }
+
+    const rows = pairs.map(p => ({
+      user_id: p.userId,
+      course_id: p.courseId,
+      progress: 0,
+      is_approved: false,
+    }));
+
+    const { data: inserted, error } = await supabase
+      .from("enrollments")
+      .insert(rows)
+      .select();
+
+    if (error) {
+      res.status(500).json({ error: "Failed to undo enrollment rejections" });
+      return;
+    }
+
+    for (const enrollment of inserted ?? []) {
+      logAdminAction({
+        actorId: req.userId!,
+        targetUserId: enrollment.user_id,
+        action: "enrollment_rejection_undone",
+        entityType: "enrollment",
+        entityId: enrollment.id,
+      }).catch((err: unknown) => { console.error("[audit] logAdminAction fire-and-forget failed:", err); });
+    }
+
+    res.json({ updated: (inserted ?? []).length });
+  }
 });
 
 router.patch("/enrollments/:courseId/progress", requireAuth, async (req, res): Promise<void> => {

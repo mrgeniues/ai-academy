@@ -572,8 +572,43 @@ export default function AdminPage() {
     finally { setAuditLogLoading(false); }
   }, [token]);
 
+  const handleBulkEnrollmentUndo = async (
+    enrollmentIds: number[],
+    enrollmentPairs: { userId: number; courseId: number }[],
+    action: "approve" | "reject"
+  ) => {
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const body = action === "approve"
+        ? { action, enrollmentIds }
+        : { action, enrollments: enrollmentPairs };
+      const resp = await fetch("/api/enrollments/bulk-undo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify(body),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Failed to undo action");
+      }
+      const data = await resp.json() as { updated: number };
+      await fetchPendingEnrollments();
+      window.dispatchEvent(new Event(EVENTS.PENDING_APPROVALS_REFRESH));
+      toast({
+        title: `Undone — ${data.updated} enrollment${data.updated !== 1 ? "s" : ""} moved back to pending`,
+      });
+      if (auditLogLoaded) void fetchAuditLog();
+    } catch (err) {
+      toast({ title: (err as Error).message, variant: "destructive" });
+    }
+  };
+
   const handleBulkEnrollmentAction = async (action: "approve" | "reject", reason?: string) => {
     if (selectedEnrollmentIds.size === 0) return;
+    const affectedIds = Array.from(selectedEnrollmentIds);
+    const affectedPairs = pendingEnrollments
+      .filter(e => selectedEnrollmentIds.has(e.id))
+      .map(e => ({ userId: e.userId, courseId: e.courseId }));
     setBulkEnrollmentActioning(true);
     setShowBulkEnrollmentRejectReason(false);
     setBulkEnrollmentRejectReason("");
@@ -582,20 +617,29 @@ export default function AdminPage() {
       const resp = await fetch("/api/enrollments/bulk-action", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-        body: JSON.stringify({ enrollmentIds: Array.from(selectedEnrollmentIds), action, ...(reason ? { reason } : {}) }),
+        body: JSON.stringify({ enrollmentIds: affectedIds, action, ...(reason ? { reason } : {}) }),
       });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({})) as { error?: string };
         throw new Error(err.error ?? `Failed to ${action} enrollments`);
       }
-      const data = await resp.json() as { updated: number };
+      const data = await resp.json() as { updated: number; updatedIds?: number[] };
+      const undoIds = data.updatedIds ?? affectedIds;
       setSelectedEnrollmentIds(new Set());
       await fetchPendingEnrollments();
       window.dispatchEvent(new Event(EVENTS.PENDING_APPROVALS_REFRESH));
+      const undoAction = (
+        <UndoCountdownAction
+          duration={5}
+          onUndo={() => void handleBulkEnrollmentUndo(undoIds, affectedPairs, action)}
+        />
+      );
       toast({
         title: action === "approve"
           ? `${data.updated} enrollment${data.updated !== 1 ? "s" : ""} approved`
           : `${data.updated} enrollment${data.updated !== 1 ? "s" : ""} rejected`,
+        duration: 5000,
+        action: undoAction,
       });
       if (auditLogLoaded) void fetchAuditLog();
     } catch (err) {
