@@ -73,6 +73,12 @@ export async function getSupportEmailSetting(): Promise<string | null> {
   return getSetting("support_email");
 }
 
+export async function getDefaultEnrollmentModeSetting(): Promise<"open" | "approval_required"> {
+  const value = await getSetting("default_enrollment_mode");
+  if (value === "open" || value === "approval_required") return value;
+  return "approval_required";
+}
+
 // ── Email settings ───────────────────────────────────────────────────────────
 
 // Admin: get email settings

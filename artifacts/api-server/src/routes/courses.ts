@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase";
 import { z } from "zod";
 import { broadcastNotification, sendNotificationToUsers } from "../lib/notifications";
 import { sendEnrollmentApprovedEmail } from "../lib/email";
+import { getDefaultEnrollmentModeSetting } from "./settings";
 
 const router: IRouter = Router();
 
@@ -13,7 +14,7 @@ const CreateCourseBodyExtended = z.object({
   thumbnail: z.string().optional().nullable(),
   externalUrl: z.string().optional().nullable(),
   visibility: z.enum(["public", "private"]).default("public"),
-  enrollmentMode: z.enum(["open", "approval_required"]).default("approval_required"),
+  enrollmentMode: z.enum(["open", "approval_required"]).optional(),
   lessons: z.array(z.object({
     title: z.string().min(1),
     description: z.string().optional().nullable(),
@@ -99,7 +100,9 @@ router.post("/courses", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { title, description, thumbnail, externalUrl, visibility, enrollmentMode, lessons } = parsed.data;
+  const { title, description, thumbnail, externalUrl, visibility, lessons } = parsed.data;
+
+  const enrollmentMode = parsed.data.enrollmentMode ?? await getDefaultEnrollmentModeSetting();
 
   // Build insert payload dynamically so missing optional columns don't crash the insert
   const coursePayload: Record<string, unknown> = {
