@@ -958,7 +958,11 @@ components:
           type: integer
         myProgress:
           type: integer
-      required: [totalUsers, totalCourses, totalEnrollments, totalPosts, myEnrollments, myProgress]
+        openCourses:
+          type: integer
+        approvalGatedCourses:
+          type: integer
+      required: [totalUsers, totalCourses, totalEnrollments, totalPosts, myEnrollments, myProgress, openCourses, approvalGatedCourses]
 
     ActivityItem:
       type: object

@@ -553,6 +553,8 @@ export const GetDashboardStatsResponse = zod.object({
   totalPosts: zod.number(),
   myEnrollments: zod.number(),
   myProgress: zod.number(),
+  openCourses: zod.number(),
+  approvalGatedCourses: zod.number(),
 });
 
 /**

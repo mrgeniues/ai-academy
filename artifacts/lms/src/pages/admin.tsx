@@ -826,6 +826,11 @@ export default function AdminPage() {
                   <div>
                     <p className="text-xs text-muted-foreground">{label}</p>
                     <p className="text-2xl font-bold">{value}</p>
+                    {label === "Total Courses" && stats && (
+                      <p className="text-xs text-muted-foreground mt-0.5" data-testid="enrollment-mode-summary">
+                        {stats.openCourses} open / {stats.approvalGatedCourses} approval-gated
+                      </p>
+                    )}
                   </div>
                   <Icon className={`w-8 h-8 ${color} opacity-60`} />
                 </div>

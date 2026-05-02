@@ -11,12 +11,14 @@ router.get("/dashboard/stats", requireAuth, async (req, res): Promise<void> => {
     { count: totalEnrollments },
     { count: totalPosts },
     { data: myEnrollments },
+    { data: coursesModeData },
   ] = await Promise.all([
     supabase.from("users").select("*", { count: "exact", head: true }),
     supabase.from("courses").select("*", { count: "exact", head: true }),
     supabase.from("enrollments").select("*", { count: "exact", head: true }),
     supabase.from("posts").select("*", { count: "exact", head: true }),
     supabase.from("enrollments").select("progress").eq("user_id", req.userId!),
+    supabase.from("courses").select("enrollment_mode"),
   ]);
 
   const myEnrollmentList = myEnrollments ?? [];
@@ -28,6 +30,10 @@ router.get("/dashboard/stats", requireAuth, async (req, res): Promise<void> => {
         )
       : 0;
 
+  const coursesList = (coursesModeData ?? []) as Array<{ enrollment_mode?: string | null }>;
+  const openCourses = coursesList.filter(c => c.enrollment_mode === "open").length;
+  const approvalGatedCourses = coursesList.filter(c => c.enrollment_mode !== "open").length;
+
   res.json({
     totalUsers: totalUsers ?? 0,
     totalCourses: totalCourses ?? 0,
@@ -35,6 +41,8 @@ router.get("/dashboard/stats", requireAuth, async (req, res): Promise<void> => {
     totalPosts: totalPosts ?? 0,
     myEnrollments: myEnrollmentList.length,
     myProgress,
+    openCourses,
+    approvalGatedCourses,
   });
 });
 

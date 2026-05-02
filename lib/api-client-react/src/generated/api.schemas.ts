@@ -230,6 +230,8 @@ export interface DashboardStats {
   totalPosts: number;
   myEnrollments: number;
   myProgress: number;
+  openCourses: number;
+  approvalGatedCourses: number;
 }
 
 export interface ActivityItem {
