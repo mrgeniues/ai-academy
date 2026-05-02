@@ -1,0 +1,108 @@
+You are a senior Next.js and Supabase developer.
+
+Implement an ADVANCED YOUTUBE VIDEO EMBED SYSTEM inside the LMS.
+
+IMPORTANT:
+
+* Do NOT change UI design
+* Do NOT remove any existing features
+* ONLY enhance video rendering logic
+* Keep everything else untouched
+
+=====================================
+GOAL:
+
+Convert YouTube links into a fully embedded, optimized video player inside the portal.
+
+=====================================
+STEP 1: DETECT YOUTUBE LINK
+
+If video_url contains:
+
+* youtube.com
+* youtu.be
+
+Then process it
+
+=====================================
+STEP 2: EXTRACT VIDEO ID
+
+Support formats:
+
+https://youtube.com/watch?v=VIDEO_ID
+https://youtu.be/VIDEO_ID
+
+Extract VIDEO_ID correctly
+
+=====================================
+STEP 3: CREATE ADVANCED EMBED URL
+
+Use this format:
+
+https://www.youtube.com/embed/VIDEO_ID?autoplay=1&mute=1&controls=0&modestbranding=1&rel=0
+
+PARAMETERS:
+
+* autoplay=1 → video auto plays
+* mute=1 → required for autoplay to work
+* controls=0 → hide player controls
+* modestbranding=1 → reduce YouTube branding
+* rel=0 → disable related videos
+
+=====================================
+STEP 4: RENDER PLAYER
+
+Use iframe:
+
+<iframe
+  width="100%"
+  height="400"
+  src="EMBED_URL"
+  frameborder="0"
+  allow="autoplay; encrypted-media"
+  allowfullscreen>
+</iframe>
+
+=====================================
+STEP 5: RESPONSIVE DESIGN
+
+* Make video full width
+* Maintain aspect ratio (16:9)
+* Ensure mobile compatibility
+
+=====================================
+STEP 6: ACCESS CONTROL
+
+Before rendering video:
+
+* User must be logged in
+* If course → must be enrolled
+* If tool → must have access
+
+If not:
+
+* Show proper message
+* Do NOT load video
+
+=====================================
+STEP 7: FALLBACK
+
+If URL is not YouTube:
+
+* Show normal link or existing behavior
+* Do NOT break system
+
+=====================================
+STEP 8: OUTPUT
+
+* YouTube detection logic
+* Video ID extractor function
+* Advanced embed URL generator
+* Updated UI rendering
+
+Ensure:
+
+* Video plays inside portal
+* No redirect happens
+* Smooth playback experience
+* No UI break

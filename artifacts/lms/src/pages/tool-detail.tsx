@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Link2, ExternalLink, Play, Clock, Wrench } from "lucide-react";
+import { YouTubePlayer, isYouTubeUrl } from "@/components/youtube-player";
 
 const API = "/api";
 function authHeaders(token: string | null): Record<string, string> {
@@ -77,11 +78,6 @@ export default function ToolDetailPage() {
     toast({ title: "Link copied!" });
   };
 
-  const getYouTubeEmbed = (url: string) => {
-    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/);
-    return match ? `https://www.youtube.com/embed/${match[1]}` : null;
-  };
-
   if (loading) {
     return (
       <Layout>
@@ -105,7 +101,6 @@ export default function ToolDetailPage() {
     );
   }
 
-  const embedUrl = tool.videoUrl ? getYouTubeEmbed(tool.videoUrl) : null;
   const hasRequested = !!myRequest;
   const isApproved = myRequest?.isApproved === true;
 
@@ -130,15 +125,8 @@ export default function ToolDetailPage() {
 
         <Card className="overflow-hidden">
           {/* Media */}
-          {embedUrl ? (
-            <div className="relative aspect-video bg-black">
-              <iframe src={embedUrl} className="w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen />
-              <div className="absolute top-2 left-2">
-                <Badge variant="secondary" className="text-xs gap-1"><Play className="w-3 h-3" /> Preview</Badge>
-              </div>
-            </div>
+          {tool.videoUrl && isYouTubeUrl(tool.videoUrl) ? (
+            <YouTubePlayer url={tool.videoUrl} />
           ) : tool.imageUrl ? (
             <div className="aspect-video overflow-hidden bg-muted">
               <img src={tool.imageUrl} alt={tool.title} className="w-full h-full object-cover" />

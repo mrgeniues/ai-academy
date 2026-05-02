@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Wrench, Plus, Trash2, ImageIcon, X, ExternalLink, Play, Clock, Pencil, Link2 } from "lucide-react";
+import { YouTubePlayer, isYouTubeUrl, extractYouTubeId, buildYouTubeEmbedUrl } from "@/components/youtube-player";
 
 type Tool = {
   id: number;
@@ -223,12 +224,6 @@ export default function AiToolsPage() {
     }
   };
 
-  // ── UI helpers ────────────────────────────────────────────────────────────
-  const getYouTubeEmbed = (url: string) => {
-    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/);
-    return match ? `https://www.youtube.com/embed/${match[1]}` : null;
-  };
-
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <Layout>
@@ -273,7 +268,9 @@ export default function AiToolsPage() {
               const request = requestMap.get(tool.id);
               const hasRequested = !!request;
               const isApproved = request?.isApproved === true;
-              const embedUrl = tool.videoUrl ? getYouTubeEmbed(tool.videoUrl) : null;
+              const isYT = tool.videoUrl ? isYouTubeUrl(tool.videoUrl) : false;
+              const ytId = isYT && tool.videoUrl ? extractYouTubeId(tool.videoUrl) : null;
+              const embedUrl = ytId ? buildYouTubeEmbedUrl(ytId) : null;
 
               return (
                 <motion.div
@@ -284,13 +281,17 @@ export default function AiToolsPage() {
                   <Card className="overflow-hidden flex flex-col h-full">
                     {/* Thumbnail / Video */}
                     {embedUrl ? (
-                      <div className="relative aspect-video bg-black">
-                        <iframe
-                          src={embedUrl}
-                          className="w-full h-full"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                        />
+                      <div className="relative bg-black">
+                        <div className="w-full" style={{ aspectRatio: "16/9" }}>
+                          <iframe
+                            src={embedUrl}
+                            className="w-full h-full border-0"
+                            allow="autoplay; encrypted-media; picture-in-picture"
+                            allowFullScreen
+                            loading="lazy"
+                            title={tool.title}
+                          />
+                        </div>
                         <div className="absolute top-2 left-2">
                           <Badge variant="secondary" className="text-xs gap-1">
                             <Play className="w-3 h-3" /> Preview

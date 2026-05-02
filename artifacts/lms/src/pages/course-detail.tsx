@@ -17,6 +17,7 @@ import { RichTextDisplay } from "@/components/rich-text-display";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { BookOpen, Users, PlayCircle, CheckCircle, Circle, FileText, Plus, ArrowLeft, Trash2, Lock, MessageCircle, Globe, ExternalLink, Clock, Pencil, Zap, XCircle, Link2 } from "lucide-react";
+import { YouTubePlayer, isYouTubeUrl } from "@/components/youtube-player";
 import { Link } from "wouter";
 
 
@@ -573,15 +574,12 @@ export default function CourseDetailPage() {
                       <>
                         {/* ── PUBLIC / ADMIN CONTENT ──────────────────────────────── */}
                         {activeLesson.videoUrl && (
-                          <div className="rounded-lg overflow-hidden bg-black">
-                            {activeLesson.videoUrl.includes("youtube.com") || activeLesson.videoUrl.includes("youtu.be") ? (
-                              <iframe
-                                src={activeLesson.videoUrl.replace("watch?v=", "embed/").replace("youtu.be/", "youtube.com/embed/")}
-                                className="w-full aspect-video"
-                                allowFullScreen
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                              />
-                            ) : (
+                          isYouTubeUrl(activeLesson.videoUrl) ? (
+                            <YouTubePlayer
+                              url={activeLesson.videoUrl}
+                            />
+                          ) : (
+                            <div className="rounded-lg overflow-hidden bg-muted">
                               <a
                                 data-testid="link-video"
                                 href={activeLesson.videoUrl}
@@ -591,8 +589,8 @@ export default function CourseDetailPage() {
                               >
                                 <PlayCircle className="w-5 h-5" /> Watch Video
                               </a>
-                            )}
-                          </div>
+                            </div>
+                          )
                         )}
                         {activeLesson.content && (
                           <div className="text-sm text-foreground">
