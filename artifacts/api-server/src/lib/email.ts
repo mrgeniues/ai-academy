@@ -1,5 +1,13 @@
 import { Resend } from "resend";
-import { getEmailFromSetting } from "../routes/settings";
+import { getEmailFromSetting, getPlatformNameSetting, getSupportEmailSetting } from "../routes/settings";
+import {
+  DEFAULT_PLATFORM_NAME,
+  buildFooterHtml,
+  buildFooterText,
+  buildContactLineHtml,
+  buildContactLineText,
+  type PlatformSettings,
+} from "./email-templates";
 
 const apiKey = process.env.RESEND_API_KEY;
 
@@ -27,26 +35,48 @@ async function resolveFromEmail(): Promise<string> {
   } catch {
     // fall through to env / default
   }
-  return process.env.EMAIL_FROM ?? "LMS Platform <notifications@resend.dev>";
+  return process.env.EMAIL_FROM ?? `${DEFAULT_PLATFORM_NAME} <notifications@resend.dev>`;
+}
+
+async function resolvePlatformSettings(): Promise<PlatformSettings> {
+  try {
+    const [platformName, supportEmail] = await Promise.all([
+      getPlatformNameSetting(),
+      getSupportEmailSetting(),
+    ]);
+    return {
+      platformName: platformName ?? DEFAULT_PLATFORM_NAME,
+      supportEmail: supportEmail ?? null,
+    };
+  } catch {
+    return { platformName: DEFAULT_PLATFORM_NAME, supportEmail: null };
+  }
 }
 
 export async function sendUserApprovedEmail(to: string, name: string): Promise<void> {
   const client = getClient();
   if (!client) return;
 
-  const fromEmail = await resolveFromEmail();
+  const [fromEmail, { platformName, supportEmail }] = await Promise.all([
+    resolveFromEmail(),
+    resolvePlatformSettings(),
+  ]);
+
+  const footerHtml = buildFooterHtml(platformName, supportEmail);
+  const footerText = buildFooterText(platformName, supportEmail);
 
   try {
     const { error } = await client.emails.send({
       from: fromEmail,
       to,
-      subject: "Your account has been approved",
+      subject: `Your ${platformName} account has been approved`,
       html: `
         <p>Hi ${name},</p>
         <p>Great news — your account has been approved! You can now log in and access the platform.</p>
         <p>Welcome aboard!</p>
+        ${footerHtml}
       `,
-      text: `Hi ${name},\n\nGreat news — your account has been approved! You can now log in and access the platform.\n\nWelcome aboard!`,
+      text: `Hi ${name},\n\nGreat news — your account has been approved! You can now log in and access the platform.\n\nWelcome aboard!${footerText}`,
     });
 
     if (error) {
@@ -63,23 +93,36 @@ export async function sendUserRejectedEmail(to: string, name: string, reason?: s
   const client = getClient();
   if (!client) return;
 
-  const fromEmail = await resolveFromEmail();
+  const [fromEmail, { platformName, supportEmail }] = await Promise.all([
+    resolveFromEmail(),
+    resolvePlatformSettings(),
+  ]);
 
   const reasonHtml = reason ? `<p><strong>Reason:</strong> ${reason}</p>` : "";
   const reasonText = reason ? `\n\nReason: ${reason}` : "";
+  const footerHtml = buildFooterHtml(platformName, supportEmail);
+  const footerText = buildFooterText(platformName, supportEmail);
+
+  const contactLine = supportEmail
+    ? `If you believe this is a mistake, please contact us at <a href="mailto:${supportEmail}">${supportEmail}</a>.`
+    : "If you believe this is a mistake, please contact the platform administrator for more information.";
+  const contactLineText = supportEmail
+    ? `If you believe this is a mistake, please contact us at ${supportEmail}.`
+    : "If you believe this is a mistake, please contact the platform administrator for more information.";
 
   try {
     const { error } = await client.emails.send({
       from: fromEmail,
       to,
-      subject: "Your account application was not approved",
+      subject: `Your ${platformName} account application was not approved`,
       html: `
         <p>Hi ${name},</p>
         <p>Unfortunately, your account application has not been approved at this time.</p>
         ${reasonHtml}
-        <p>If you believe this is a mistake, please contact the platform administrator for more information.</p>
+        <p>${contactLine}</p>
+        ${footerHtml}
       `,
-      text: `Hi ${name},\n\nUnfortunately, your account application has not been approved at this time.${reasonText}\n\nIf you believe this is a mistake, please contact the platform administrator for more information.`,
+      text: `Hi ${name},\n\nUnfortunately, your account application has not been approved at this time.${reasonText}\n\n${contactLineText}${footerText}`,
     });
 
     if (error) {
@@ -101,10 +144,22 @@ export async function sendEnrollmentRejectedEmail(
   const client = getClient();
   if (!client) return;
 
-  const fromEmail = await resolveFromEmail();
+  const [fromEmail, { platformName, supportEmail }] = await Promise.all([
+    resolveFromEmail(),
+    resolvePlatformSettings(),
+  ]);
 
   const reasonHtml = reason ? `<p><strong>Reason:</strong> ${reason}</p>` : "";
   const reasonText = reason ? `\n\nReason: ${reason}` : "";
+  const footerHtml = buildFooterHtml(platformName, supportEmail);
+  const footerText = buildFooterText(platformName, supportEmail);
+
+  const contactLine = supportEmail
+    ? `If you believe this is a mistake, please contact us at <a href="mailto:${supportEmail}">${supportEmail}</a>.`
+    : "If you believe this is a mistake, please contact the platform administrator for more information.";
+  const contactLineText = supportEmail
+    ? `If you believe this is a mistake, please contact us at ${supportEmail}.`
+    : "If you believe this is a mistake, please contact the platform administrator for more information.";
 
   try {
     const { error } = await client.emails.send({
@@ -115,9 +170,10 @@ export async function sendEnrollmentRejectedEmail(
         <p>Hi ${name},</p>
         <p>Unfortunately, your enrollment request for <strong>${courseName}</strong> has not been approved at this time.</p>
         ${reasonHtml}
-        <p>If you believe this is a mistake, please contact the platform administrator for more information.</p>
+        <p>${contactLine}</p>
+        ${footerHtml}
       `,
-      text: `Hi ${name},\n\nUnfortunately, your enrollment request for "${courseName}" has not been approved at this time.${reasonText}\n\nIf you believe this is a mistake, please contact the platform administrator for more information.`,
+      text: `Hi ${name},\n\nUnfortunately, your enrollment request for "${courseName}" has not been approved at this time.${reasonText}\n\n${contactLineText}${footerText}`,
     });
 
     if (error) {
@@ -136,20 +192,27 @@ export async function sendTestEmail(to: string, name: string): Promise<{ ok: boo
     return { ok: false, error: "Email is not configured — RESEND_API_KEY is missing." };
   }
 
-  const fromEmail = resolveFromEmail();
+  const [fromEmail, { platformName, supportEmail }] = await Promise.all([
+    resolveFromEmail(),
+    resolvePlatformSettings(),
+  ]);
+
+  const footerHtml = buildFooterHtml(platformName, supportEmail);
+  const footerText = buildFooterText(platformName, supportEmail);
 
   try {
     const { error } = await client.emails.send({
       from: fromEmail,
       to,
-      subject: "Test email from LMS Platform",
+      subject: `Test email from ${platformName}`,
       html: `
         <p>Hi ${name},</p>
-        <p>This is a test email from your LMS Platform to verify that email delivery is working correctly.</p>
+        <p>This is a test email from <strong>${platformName}</strong> to verify that email delivery is working correctly.</p>
         <p>If you received this, your email configuration is set up properly.</p>
         <p><strong>Sending from:</strong> ${fromEmail}</p>
+        ${footerHtml}
       `,
-      text: `Hi ${name},\n\nThis is a test email from your LMS Platform to verify that email delivery is working correctly.\n\nIf you received this, your email configuration is set up properly.\n\nSending from: ${fromEmail}`,
+      text: `Hi ${name},\n\nThis is a test email from ${platformName} to verify that email delivery is working correctly.\n\nIf you received this, your email configuration is set up properly.\n\nSending from: ${fromEmail}${footerText}`,
     });
 
     if (error) {
@@ -176,23 +239,30 @@ export async function sendPasswordResetEmail(
     return;
   }
 
-  const fromEmail = await resolveFromEmail();
+  const [fromEmail, { platformName, supportEmail }] = await Promise.all([
+    resolveFromEmail(),
+    resolvePlatformSettings(),
+  ]);
+
   const baseUrl = process.env.SITE_URL ?? "https://aiacadmy.online";
   const resetLink = `${baseUrl}/reset-password?token=${encodeURIComponent(token)}`;
+  const footerHtml = buildFooterHtml(platformName, supportEmail);
+  const footerText = buildFooterText(platformName, supportEmail);
 
   try {
     const { error } = await client.emails.send({
       from: fromEmail,
       to,
-      subject: "Reset your AI Academy 2.0 password",
+      subject: `Reset your ${platformName} password`,
       html: `
         <p>Hi ${name},</p>
-        <p>We received a request to reset your password. Click the link below to choose a new one:</p>
+        <p>We received a request to reset your password for <strong>${platformName}</strong>. Click the link below to choose a new one:</p>
         <p><a href="${resetLink}" style="display:inline-block;padding:10px 20px;background:#6d28d9;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;">Reset Password</a></p>
         <p>Or copy this link into your browser:<br><a href="${resetLink}">${resetLink}</a></p>
         <p>This link expires in <strong>1 hour</strong>. If you did not request a password reset, you can safely ignore this email.</p>
+        ${footerHtml}
       `,
-      text: `Hi ${name},\n\nWe received a request to reset your password.\n\nReset link (expires in 1 hour):\n${resetLink}\n\nIf you did not request this, you can safely ignore this email.`,
+      text: `Hi ${name},\n\nWe received a request to reset your password for ${platformName}.\n\nReset link (expires in 1 hour):\n${resetLink}\n\nIf you did not request this, you can safely ignore this email.${footerText}`,
     });
 
     if (error) {
@@ -213,7 +283,13 @@ export async function sendEnrollmentApprovedEmail(
   const client = getClient();
   if (!client) return;
 
-  const fromEmail = await resolveFromEmail();
+  const [fromEmail, { platformName, supportEmail }] = await Promise.all([
+    resolveFromEmail(),
+    resolvePlatformSettings(),
+  ]);
+
+  const footerHtml = buildFooterHtml(platformName, supportEmail);
+  const footerText = buildFooterText(platformName, supportEmail);
 
   try {
     const { error } = await client.emails.send({
@@ -224,8 +300,9 @@ export async function sendEnrollmentApprovedEmail(
         <p>Hi ${name},</p>
         <p>Your enrollment request for <strong>${courseName}</strong> has been approved. You can now access the course.</p>
         <p>Happy learning!</p>
+        ${footerHtml}
       `,
-      text: `Hi ${name},\n\nYour enrollment request for "${courseName}" has been approved. You can now access the course.\n\nHappy learning!`,
+      text: `Hi ${name},\n\nYour enrollment request for "${courseName}" has been approved. You can now access the course.\n\nHappy learning!${footerText}`,
     });
 
     if (error) {

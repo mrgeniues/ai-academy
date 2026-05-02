@@ -3,6 +3,10 @@ import { Router, type IRouter } from "express";
 import { requireAuth } from "../lib/auth";
 import { sendTestEmail } from "../lib/email";
 import {
+  DEFAULT_PLATFORM_NAME,
+  buildFooterHtml,
+} from "../lib/email-templates";
+import {
   supabase,
   reinitializeSupabase,
   saveSupabaseConfig,
@@ -61,6 +65,14 @@ export async function getEmailFromSetting(): Promise<string | null> {
   return getSetting("email_from");
 }
 
+export async function getPlatformNameSetting(): Promise<string | null> {
+  return getSetting("platform_name");
+}
+
+export async function getSupportEmailSetting(): Promise<string | null> {
+  return getSetting("support_email");
+}
+
 // ── Email settings ───────────────────────────────────────────────────────────
 
 // Admin: get email settings
@@ -117,25 +129,33 @@ router.get("/settings/email/test/preview", requireAuth, async (req, res): Promis
     return;
   }
 
-  const fromEmail = await (async () => {
-    try {
-      const stored = await getEmailFromSetting();
-      if (stored) return stored;
-    } catch { /* fall through */ }
-    return process.env.EMAIL_FROM ?? "LMS Platform <notifications@resend.dev>";
-  })();
+  const [fromEmail, platformName, supportEmail] = await Promise.all([
+    (async () => {
+      try {
+        const stored = await getSetting("email_from");
+        if (stored) return stored;
+      } catch { /* fall through */ }
+      return process.env.EMAIL_FROM ?? "LMS Platform <notifications@resend.dev>";
+    })(),
+    getSetting("platform_name"),
+    getSetting("support_email"),
+  ]);
 
+  const resolvedPlatformName = platformName ?? DEFAULT_PLATFORM_NAME;
   const name = userRow.name as string;
 
+  const footerHtml = buildFooterHtml(resolvedPlatformName, supportEmail ?? null);
+
   res.json({
-    subject: "Test email from LMS Platform",
+    subject: `Test email from ${resolvedPlatformName}`,
     from: fromEmail,
     to: userRow.email as string,
     html: `
       <p>Hi ${name},</p>
-      <p>This is a test email from your LMS Platform to verify that email delivery is working correctly.</p>
+      <p>This is a test email from <strong>${resolvedPlatformName}</strong> to verify that email delivery is working correctly.</p>
       <p>If you received this, your email configuration is set up properly.</p>
       <p><strong>Sending from:</strong> ${fromEmail}</p>
+      ${footerHtml}
     `,
   });
 });
