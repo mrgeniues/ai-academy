@@ -159,7 +159,7 @@ router.get("/dashboard/enrollments", requireAuth, async (req, res): Promise<void
   } else {
     const { data: enrollments, error } = await supabase
       .from("enrollments")
-      .select("progress, course:courses(id, title)")
+      .select("progress, is_approved, course:courses(id, title)")
       .eq("user_id", req.userId!)
       .order("created_at", { ascending: true });
 
@@ -167,7 +167,7 @@ router.get("/dashboard/enrollments", requireAuth, async (req, res): Promise<void
 
     res.json((enrollments ?? []).map(e => {
       const course = Array.isArray(e.course) ? e.course[0] : e.course;
-      return { title: course?.title ?? "Unknown Course", progress: e.progress };
+      return { title: course?.title ?? "Unknown Course", progress: e.progress, isApproved: e.is_approved };
     }));
   }
 });

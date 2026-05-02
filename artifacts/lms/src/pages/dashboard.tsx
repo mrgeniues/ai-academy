@@ -16,7 +16,7 @@ import { useLocation } from "wouter";
 // ── Types ────────────────────────────────────────────────────────────────────
 
 type MemberUser = { id: number; name: string; email?: string; createdAt?: string };
-type UserEnrollment = { title: string; progress: number };
+type UserEnrollment = { title: string; progress: number; isApproved?: boolean };
 type AdminEnrollmentRow = { userId: number; userName: string; courses: UserEnrollment[] };
 type UserProgressData = { avgProgress: number; courses: UserEnrollment[] };
 type AdminProgressData = {
@@ -235,7 +235,13 @@ export default function DashboardPage() {
         {courses.map((c, i) => (
           <div key={i} className="flex items-center justify-between py-3 gap-4">
             <p className="text-sm font-medium truncate flex-1">{c.title}</p>
-            <Badge variant="secondary" className="flex-shrink-0">{c.progress}% done</Badge>
+            {c.isApproved === false ? (
+              <Badge variant="outline" className="flex-shrink-0 border-amber-400 text-amber-600 dark:text-amber-400 gap-1">
+                <Clock className="w-3 h-3" /> Pending approval
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="flex-shrink-0">{c.progress}% done</Badge>
+            )}
           </div>
         ))}
       </div>

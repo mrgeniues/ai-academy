@@ -44,6 +44,7 @@ export default function CoursesPage() {
   const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
   const [privateAlertCourse, setPrivateAlertCourse] = useState<CourseWithExtras | null>(null);
+  const [pendingAlertCourse, setPendingAlertCourse] = useState<CourseWithExtras | null>(null);
 
   // Create form state
   const [title, setTitle] = useState("");
@@ -522,7 +523,17 @@ export default function CoursesPage() {
 
                     {/* Actions */}
                     <div className="flex gap-2 mt-auto pt-1">
-                      {canAccess ? (
+                      {canAccess && isEnrolled && !approvedIds.has(course.id) && !isAdmin ? (
+                        <Button
+                          data-testid={`button-view-course-${course.id}`}
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 text-sm"
+                          onClick={() => setPendingAlertCourse(course)}
+                        >
+                          <Clock className="w-3 h-3 mr-1" /> View Course
+                        </Button>
+                      ) : canAccess ? (
                         <Link href={`/courses/${course.id}`} className="flex-1">
                           <Button data-testid={`button-view-course-${course.id}`} variant="outline" className="w-full text-sm" size="sm">
                             View Course
@@ -641,6 +652,24 @@ export default function CoursesPage() {
                 {editSaving ? "Saving..." : "Save Changes"}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Pending Approval Dialog ──────────────────────────────────────── */}
+      <Dialog open={!!pendingAlertCourse} onOpenChange={v => { if (!v) setPendingAlertCourse(null); }}>
+        <DialogContent className="max-w-sm text-center">
+          <div className="flex flex-col items-center gap-4 py-4">
+            <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+              <Clock className="w-8 h-8 text-amber-500" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold">Awaiting Approval</h2>
+              <p className="text-muted-foreground text-sm mt-1">
+                Your enrollment request for <span className="font-medium text-foreground">{pendingAlertCourse?.title}</span> is pending. An admin will review and approve your request shortly.
+              </p>
+            </div>
+            <p className="text-xs text-muted-foreground">You'll gain access to the course content once approved.</p>
           </div>
         </DialogContent>
       </Dialog>
