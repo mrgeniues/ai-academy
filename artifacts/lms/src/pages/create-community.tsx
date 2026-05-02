@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation, Link } from "wouter";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { Users2, Clock, CheckCircle, XCircle } from "lucide-react";
+import { Users2, Clock, CheckCircle, XCircle, CreditCard, AlertCircle } from "lucide-react";
 
 const API = "/api";
 
@@ -34,6 +35,7 @@ const STATUS_CONFIG = {
 export default function CreateCommunityPage() {
   const { token } = useAuth();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
 
   const [name, setName]             = useState("");
   const [description, setDescription] = useState("");
@@ -69,11 +71,12 @@ export default function CreateCommunityPage() {
       const data = await res.json();
       if (!res.ok) { toast({ title: data.error ?? "Failed to submit", variant: "destructive" }); return; }
 
-      toast({ title: "Community submitted!", description: "Your request is pending admin approval." });
+      toast({ title: "Community created!", description: "Complete your payment to go live." });
       setName("");
       setDescription("");
-      setSubmitted(true);
       setMyCommunities(prev => [data, ...prev]);
+      // Redirect to payment page
+      navigate(`/community-payment/${data.id}`);
     } catch {
       toast({ title: "Network error. Please try again.", variant: "destructive" });
     } finally {

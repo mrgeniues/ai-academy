@@ -326,6 +326,40 @@ ALTER TABLE password_resets DISABLE ROW LEVEL SECURITY;
 
 
 -- ────────────────────────────────────────────────────────────────
+-- COMMUNITY PAYMENT SETTINGS  (single-row config table)
+-- ────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS community_payment_settings (
+  id              SERIAL PRIMARY KEY,
+  monthly_price   NUMERIC(10,2) NOT NULL DEFAULT 9.99,
+  yearly_price    NUMERIC(10,2) NOT NULL DEFAULT 79.99,
+  lifetime_price  NUMERIC(10,2) NOT NULL DEFAULT 199.99,
+  binance_account TEXT,
+  binance_qr_url  TEXT,
+  nayapay_account TEXT,
+  nayapay_qr_url  TEXT,
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE community_payment_settings DISABLE ROW LEVEL SECURITY;
+INSERT INTO community_payment_settings DEFAULT VALUES ON CONFLICT DO NOTHING;
+
+-- ────────────────────────────────────────────────────────────────
+-- COMMUNITY PAYMENTS
+-- ────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS community_payments (
+  id             SERIAL PRIMARY KEY,
+  user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  community_id   INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  plan           TEXT NOT NULL,           -- 'monthly' | 'yearly' | 'lifetime'
+  payment_method TEXT,                    -- 'binance' | 'nayapay'
+  screenshot_url TEXT NOT NULL,
+  status         TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'approved' | 'rejected'
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE community_payments DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS community_payments_status_idx ON community_payments(status);
+CREATE INDEX IF NOT EXISTS community_payments_user_id_idx ON community_payments(user_id);
+
+-- ────────────────────────────────────────────────────────────────
 -- COMMUNITY MEMBERS
 -- ────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS community_members (

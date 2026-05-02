@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trash2, Users, BookOpen, MessageSquare, TrendingUp, Shield, Ban, CheckCircle, Clock, Calendar, GraduationCap, Wrench, XCircle, ScrollText, Database, Users2 } from "lucide-react";
+import { Trash2, Users, BookOpen, MessageSquare, TrendingUp, Shield, Ban, CheckCircle, Clock, Calendar, GraduationCap, Wrench, XCircle, ScrollText, Database, Users2, CreditCard, Upload, ImageIcon, ExternalLink } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -134,6 +134,36 @@ export default function AdminPage() {
   const [pendingCommunities, setPendingCommunities] = useState<PendingCommunity[]>([]);
   const [communitiesLoading, setCommunitiesLoading] = useState(true);
   const [actioningCommunityId, setActioningCommunityId] = useState<number | null>(null);
+
+  // Payment state
+  type CommunityPayment = {
+    id: number; plan: string; payment_method: string | null;
+    screenshot_url: string; status: string; created_at: string;
+    user_id: number; community_id: number;
+    users: { id: number; name: string; email: string; avatar: string | null } | null;
+    communities: { id: number; name: string; description: string | null } | null;
+  };
+  type PaymentSettings = {
+    monthly_price: number; yearly_price: number; lifetime_price: number;
+    binance_account: string | null; binance_qr_url: string | null;
+    nayapay_account: string | null; nayapay_qr_url: string | null;
+  };
+  const [communityPayments, setCommunityPayments]   = useState<CommunityPayment[]>([]);
+  const [paymentsLoading, setPaymentsLoading]       = useState(false);
+  const [actioningPaymentId, setActioningPaymentId] = useState<number | null>(null);
+  const [paymentSettings, setPaymentSettings]       = useState<PaymentSettings | null>(null);
+  const [psLoading, setPsLoading]                   = useState(false);
+  const [psSaving, setPsSaving]                     = useState(false);
+  const [psLoaded, setPsLoaded]                     = useState(false);
+  const [psMonthly, setPsMonthly]                   = useState("");
+  const [psYearly, setPsYearly]                     = useState("");
+  const [psLifetime, setPsLifetime]                 = useState("");
+  const [psBinanceAcc, setPsBinanceAcc]             = useState("");
+  const [psBinanceQr, setPsBinanceQr]               = useState("");
+  const [psNayapayAcc, setPsNayapayAcc]             = useState("");
+  const [psNayapayQr, setPsNayapayQr]               = useState("");
+  const [qrUploading, setQrUploading]               = useState<string | null>(null); // 'binance'|'nayapay'
+  const [viewScreenshot, setViewScreenshot]         = useState<string | null>(null);
 
   // Tool requests state
   type PendingToolRequest = {
@@ -449,6 +479,14 @@ export default function AdminPage() {
     }
   }, [user, fetchPendingCommunities]);
 
+  useEffect(() => {
+    if (user?.role === "admin") {
+      void fetchCommunityPayments();
+      const interval = setInterval(() => { void fetchCommunityPayments(); }, 30_000);
+      return () => clearInterval(interval);
+    }
+  }, [user, fetchCommunityPayments]);
+
   const handleCommunityAction = async (community: PendingCommunity, status: "approved" | "rejected") => {
     setActioningCommunityId(community.id);
     try {
@@ -469,6 +507,92 @@ export default function AdminPage() {
     } finally {
       setActioningCommunityId(null);
     }
+  };
+
+  // ── Payment settings + payments fetch ─────────────────────────────────────
+  const fetchPaymentSettings = useCallback(async () => {
+    if (psLoaded) return;
+    setPsLoading(true);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch("/api/community-payments/settings", { headers: { Authorization: `Bearer ${authToken}` } });
+      if (resp.ok) {
+        const d = await resp.json() as PaymentSettings;
+        setPaymentSettings(d);
+        setPsMonthly(String(d.monthly_price ?? ""));
+        setPsYearly(String(d.yearly_price ?? ""));
+        setPsLifetime(String(d.lifetime_price ?? ""));
+        setPsBinanceAcc(d.binance_account ?? "");
+        setPsBinanceQr(d.binance_qr_url ?? "");
+        setPsNayapayAcc(d.nayapay_account ?? "");
+        setPsNayapayQr(d.nayapay_qr_url ?? "");
+        setPsLoaded(true);
+      }
+    } catch { /* silent */ } finally { setPsLoading(false); }
+  }, [token, psLoaded]);
+
+  const fetchCommunityPayments = useCallback(async () => {
+    setPaymentsLoading(true);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch("/api/community-payments/all", { headers: { Authorization: `Bearer ${authToken}` } });
+      if (resp.ok) setCommunityPayments(await resp.json() as CommunityPayment[]);
+    } catch { /* silent */ } finally { setPaymentsLoading(false); }
+  }, [token]);
+
+  const handleSavePaymentSettings = async () => {
+    setPsSaving(true);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch("/api/community-payments/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({
+          monthly_price: parseFloat(psMonthly) || 0,
+          yearly_price:  parseFloat(psYearly) || 0,
+          lifetime_price: parseFloat(psLifetime) || 0,
+          binance_account: psBinanceAcc || null,
+          binance_qr_url: psBinanceQr || null,
+          nayapay_account: psNayapayAcc || null,
+          nayapay_qr_url: psNayapayQr || null,
+        }),
+      });
+      if (!resp.ok) { const d = await resp.json() as { error?: string }; throw new Error(d.error ?? "Failed"); }
+      toast({ title: "Payment settings saved" });
+      setPsLoaded(false);
+    } catch (err) { toast({ title: (err as Error).message, variant: "destructive" }); }
+    finally { setPsSaving(false); }
+  };
+
+  const handleQrUpload = async (method: "binance" | "nayapay", file: File) => {
+    setQrUploading(method);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const fd = new FormData(); fd.append("file", file);
+      const resp = await fetch("/api/upload", { method: "POST", headers: { Authorization: `Bearer ${authToken}` }, body: fd });
+      const d = await resp.json() as { url?: string; error?: string };
+      if (!resp.ok) throw new Error(d.error ?? "Upload failed");
+      if (method === "binance") setPsBinanceQr(d.url!);
+      else setPsNayapayQr(d.url!);
+      toast({ title: "QR uploaded — save settings to apply" });
+    } catch (err) { toast({ title: (err as Error).message, variant: "destructive" }); }
+    finally { setQrUploading(null); }
+  };
+
+  const handlePaymentAction = async (payment: CommunityPayment, status: "approved" | "rejected") => {
+    setActioningPaymentId(payment.id);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch(`/api/community-payments/${payment.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ status }),
+      });
+      if (!resp.ok) { const d = await resp.json() as { error?: string }; throw new Error(d.error ?? "Failed"); }
+      toast({ title: status === "approved" ? "Payment approved — community is now live!" : "Payment rejected" });
+      setCommunityPayments(prev => prev.map(p => p.id === payment.id ? { ...p, status } : p));
+    } catch (err) { toast({ title: (err as Error).message, variant: "destructive" }); }
+    finally { setActioningPaymentId(null); }
   };
 
   const handleApproveToolRequest = async (request: PendingToolRequest) => {
@@ -947,7 +1071,7 @@ export default function AdminPage() {
 
         {/* Management tabs */}
         <Tabs defaultValue="pending">
-          <TabsList className="grid grid-cols-9 w-full max-w-4xl">
+          <TabsList className="grid grid-cols-10 w-full max-w-4xl">
             <TabsTrigger value="pending" data-testid="tab-pending">
               Approvals
               {pendingUsers.length > 0 && (
@@ -965,6 +1089,15 @@ export default function AdminPage() {
               Comm.
               {pendingCommunities.length > 0 && (
                 <Badge variant="destructive" className="ml-1.5 text-xs px-1.5 py-0 h-4">{pendingCommunities.length}</Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="payments" data-testid="tab-payments">
+              <CreditCard className="w-3.5 h-3.5 mr-1" />
+              Pay
+              {communityPayments.filter(p => p.status === "pending").length > 0 && (
+                <Badge variant="destructive" className="ml-1.5 text-xs px-1.5 py-0 h-4">
+                  {communityPayments.filter(p => p.status === "pending").length}
+                </Badge>
               )}
             </TabsTrigger>
             <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
@@ -2053,6 +2186,164 @@ export default function AdminPage() {
           </TabsContent>
 
           {/* ── Activity Log tab ──────────────────────────────────────── */}
+          {/* ── PAYMENTS tab ──────────────────────────────────────────── */}
+          <TabsContent value="payments" className="mt-4 space-y-4">
+
+            {/* Payment Settings */}
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <CreditCard className="w-4 h-4" /> Payment Settings
+                  </CardTitle>
+                  <Button size="sm" onClick={() => { setPsLoaded(false); void fetchPaymentSettings(); }} variant="ghost" disabled={psLoading}>
+                    {psLoading ? "Loading…" : psLoaded ? "Reload" : "Load Settings"}
+                  </Button>
+                </div>
+              </CardHeader>
+              {psLoaded && (
+                <CardContent className="space-y-5">
+                  {/* Plan Prices */}
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Plan Pricing (USD)</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      {([["Monthly", psMonthly, setPsMonthly], ["Yearly", psYearly, setPsYearly], ["Lifetime", psLifetime, setPsLifetime]] as const).map(([label, val, setter]) => (
+                        <div key={label} className="space-y-1">
+                          <Label className="text-xs">{label}</Label>
+                          <div className="relative">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                            <Input className="pl-6 h-8 text-sm" type="number" min="0" step="0.01" value={val} onChange={e => setter(e.target.value)} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Binance */}
+                  <div className="space-y-3 p-3 rounded-xl bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800">
+                    <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-400 uppercase tracking-wide">Binance Pay</p>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Account ID / Email</Label>
+                      <Input className="h-8 text-sm" value={psBinanceAcc} onChange={e => setPsBinanceAcc(e.target.value)} placeholder="binance@example.com or UID" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">QR Code</Label>
+                      {psBinanceQr && (
+                        <div className="flex items-center gap-3">
+                          <img src={psBinanceQr} alt="Binance QR" className="w-16 h-16 rounded-lg border object-contain bg-white p-1" />
+                          <a href={psBinanceQr} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1"><ExternalLink className="w-3 h-3" />View</a>
+                        </div>
+                      )}
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) void handleQrUpload("binance", f); }} />
+                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" disabled={qrUploading === "binance"} type="button" asChild>
+                          <span><Upload className="w-3 h-3" />{qrUploading === "binance" ? "Uploading…" : psBinanceQr ? "Replace QR" : "Upload QR"}</span>
+                        </Button>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* NayaPay */}
+                  <div className="space-y-3 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800">
+                    <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">NayaPay</p>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Account Number / ID</Label>
+                      <Input className="h-8 text-sm" value={psNayapayAcc} onChange={e => setPsNayapayAcc(e.target.value)} placeholder="03XX-XXXXXXX" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">QR Code</Label>
+                      {psNayapayQr && (
+                        <div className="flex items-center gap-3">
+                          <img src={psNayapayQr} alt="NayaPay QR" className="w-16 h-16 rounded-lg border object-contain bg-white p-1" />
+                          <a href={psNayapayQr} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1"><ExternalLink className="w-3 h-3" />View</a>
+                        </div>
+                      )}
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) void handleQrUpload("nayapay", f); }} />
+                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" disabled={qrUploading === "nayapay"} type="button" asChild>
+                          <span><Upload className="w-3 h-3" />{qrUploading === "nayapay" ? "Uploading…" : psNayapayQr ? "Replace QR" : "Upload QR"}</span>
+                        </Button>
+                      </label>
+                    </div>
+                  </div>
+
+                  <Button onClick={() => void handleSavePaymentSettings()} disabled={psSaving} className="w-full">
+                    {psSaving ? "Saving…" : "Save Payment Settings"}
+                  </Button>
+                </CardContent>
+              )}
+            </Card>
+
+            {/* Payment Requests */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4" /> Payment Requests
+                  {communityPayments.filter(p => p.status === "pending").length > 0 && (
+                    <Badge variant="destructive" className="text-xs">{communityPayments.filter(p => p.status === "pending").length} pending</Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {paymentsLoading ? (
+                  <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-20 w-full rounded-lg" />)}</div>
+                ) : communityPayments.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-10 text-sm">No payment submissions yet.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {communityPayments.map(payment => (
+                      <div key={payment.id} className="flex items-start justify-between gap-4 p-4 rounded-xl border bg-card">
+                        <div className="flex items-start gap-3 min-w-0">
+                          <Avatar className="w-9 h-9 flex-shrink-0">
+                            <AvatarImage src={payment.users?.avatar ?? undefined} />
+                            <AvatarFallback className="text-xs">{(payment.users?.name ?? "U").slice(0,2).toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm">{payment.communities?.name ?? "Unknown Community"}</p>
+                            <p className="text-xs text-muted-foreground">{payment.users?.name} · {payment.users?.email}</p>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              <Badge variant="outline" className="text-[10px] capitalize px-1.5">{payment.plan}</Badge>
+                              {payment.payment_method && <Badge variant="outline" className="text-[10px] capitalize px-1.5">{payment.payment_method}</Badge>}
+                              <Badge variant={payment.status === "approved" ? "default" : payment.status === "rejected" ? "destructive" : "secondary"}
+                                className="text-[10px] capitalize px-1.5">
+                                {payment.status}
+                              </Badge>
+                              <span className="text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(payment.created_at), { addSuffix: true })}</span>
+                            </div>
+                            <button
+                              onClick={() => setViewScreenshot(payment.screenshot_url)}
+                              className="mt-1.5 text-xs text-primary hover:underline flex items-center gap-1"
+                            >
+                              <ImageIcon className="w-3 h-3" />View Screenshot
+                            </button>
+                          </div>
+                        </div>
+                        {payment.status === "pending" && (
+                          <div className="flex gap-2 flex-shrink-0">
+                            <Button size="sm" variant="outline"
+                              className="text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-950/30 h-7 text-xs"
+                              disabled={actioningPaymentId === payment.id}
+                              onClick={() => void handlePaymentAction(payment, "approved")}
+                            >
+                              <CheckCircle className="w-3 h-3 mr-1" />Approve
+                            </Button>
+                            <Button size="sm" variant="outline"
+                              className="text-destructive border-destructive/20 hover:bg-destructive/5 h-7 text-xs"
+                              disabled={actioningPaymentId === payment.id}
+                              onClick={() => void handlePaymentAction(payment, "rejected")}
+                            >
+                              <XCircle className="w-3 h-3 mr-1" />Reject
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="activity-log" className="mt-4">
             <Card>
               <CardHeader className="pb-2">
@@ -2240,6 +2531,24 @@ export default function AdminPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Screenshot viewer dialog */}
+      <Dialog open={!!viewScreenshot} onOpenChange={open => { if (!open) setViewScreenshot(null); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><ImageIcon className="w-4 h-4" />Payment Screenshot</DialogTitle>
+          </DialogHeader>
+          {viewScreenshot && (
+            <div className="space-y-3">
+              <img src={viewScreenshot} alt="Payment screenshot" className="w-full rounded-xl border object-contain max-h-[60vh]" />
+              <a href={viewScreenshot} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+                <ExternalLink className="w-3.5 h-3.5" />Open full size
+              </a>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showBulkEnrollmentApproveConfirm} onOpenChange={setShowBulkEnrollmentApproveConfirm}>
         <DialogContent className="max-w-sm" data-testid="bulk-enrollment-approve-confirm-dialog">

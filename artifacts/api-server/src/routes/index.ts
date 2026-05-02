@@ -16,6 +16,7 @@ import settingsRouter from "./settings";
 import adminActionsRouter from "./admin-actions";
 import communitiesRouter from "./communities";
 import communityPanelRouter from "./community-panel";
+import communityPaymentsRouter from "./community-payments";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use(settingsRouter);
 router.use(adminActionsRouter);
 router.use(communitiesRouter);
 router.use(communityPanelRouter);
+router.use(communityPaymentsRouter);
 
 export default router;
