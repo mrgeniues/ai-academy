@@ -105,6 +105,36 @@ export default function CoursesPage() {
     setLocation(`/courses${qs ? `?${qs}` : ""}`, { replace: false });
   };
 
+  // ── Sort (persisted in URL query string) ─────────────────────────────────
+  const validSorts = ["newest", "most_enrolled", "az"] as const;
+  type SortValue = typeof validSorts[number];
+  const rawSort = new URLSearchParams(search).get("sort") ?? "newest";
+  const sortValue: SortValue = (validSorts as readonly string[]).includes(rawSort)
+    ? (rawSort as SortValue)
+    : "newest";
+  const setSortValue = (value: SortValue) => {
+    const params = new URLSearchParams(search);
+    if (value === "newest") {
+      params.delete("sort");
+    } else {
+      params.set("sort", value);
+    }
+    const qs = params.toString();
+    setLocation(`/courses${qs ? `?${qs}` : ""}`, { replace: false });
+  };
+
+  const sortCourses = (list: CourseWithExtras[]): CourseWithExtras[] => {
+    const copy = [...list];
+    if (sortValue === "az") {
+      copy.sort((a, b) => a.title.localeCompare(b.title));
+    } else if (sortValue === "most_enrolled") {
+      copy.sort((a, b) => b.enrollmentCount - a.enrollmentCount);
+    } else {
+      copy.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+    return copy;
+  };
+
   // ── Create form helpers ──────────────────────────────────────────────────
   const resetForm = () => {
     setTitle(""); setDescription(""); setImageFile(null); setImagePreview(null); setExternalUrl("");
@@ -396,32 +426,47 @@ export default function CoursesPage() {
           )}
         </div>
 
-        {/* Enrollment type filter */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm text-muted-foreground font-medium mr-1">Filter:</span>
-          {(
-            [
-              { value: "all", label: "All Courses" },
-              { value: "open", label: "Instant Access" },
-              { value: "approval_required", label: "Approval Required" },
-            ] as { value: "all" | "open" | "approval_required"; label: string }[]
-          ).map(({ value, label }) => (
-            <button
-              key={value}
-              data-testid={`filter-enrollment-${value}`}
-              onClick={() => setEnrollmentFilter(value)}
-              className={[
-                "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
-                enrollmentFilter === value
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-background text-muted-foreground border-border hover:border-primary hover:text-primary",
-              ].join(" ")}
-            >
-              {value === "open" && <Zap className="w-3 h-3 inline-block mr-1 -mt-0.5" />}
-              {value === "approval_required" && <Clock className="w-3 h-3 inline-block mr-1 -mt-0.5" />}
-              {label}
-            </button>
-          ))}
+        {/* Enrollment type filter + sort */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm text-muted-foreground font-medium mr-1">Filter:</span>
+            {(
+              [
+                { value: "all", label: "All Courses" },
+                { value: "open", label: "Instant Access" },
+                { value: "approval_required", label: "Approval Required" },
+              ] as { value: "all" | "open" | "approval_required"; label: string }[]
+            ).map(({ value, label }) => (
+              <button
+                key={value}
+                data-testid={`filter-enrollment-${value}`}
+                onClick={() => setEnrollmentFilter(value)}
+                className={[
+                  "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                  enrollmentFilter === value
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background text-muted-foreground border-border hover:border-primary hover:text-primary",
+                ].join(" ")}
+              >
+                {value === "open" && <Zap className="w-3 h-3 inline-block mr-1 -mt-0.5" />}
+                {value === "approval_required" && <Clock className="w-3 h-3 inline-block mr-1 -mt-0.5" />}
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 ml-auto">
+            <span className="text-sm text-muted-foreground font-medium">Sort:</span>
+            <Select value={sortValue} onValueChange={(v) => setSortValue(v as SortValue)}>
+              <SelectTrigger data-testid="select-sort" className="h-8 text-xs w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest</SelectItem>
+                <SelectItem value="most_enrolled">Most Enrolled</SelectItem>
+                <SelectItem value="az">A–Z</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Course grid */}
@@ -432,8 +477,10 @@ export default function CoursesPage() {
             ))}
           </div>
         ) : courses && courses.length > 0 ? (() => {
-          const filteredCourses = (courses as CourseWithExtras[]).filter(course =>
-            enrollmentFilter === "all" || course.enrollmentMode === enrollmentFilter
+          const filteredCourses = sortCourses(
+            (courses as CourseWithExtras[]).filter(course =>
+              enrollmentFilter === "all" || course.enrollmentMode === enrollmentFilter
+            )
           );
           return filteredCourses.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground">
