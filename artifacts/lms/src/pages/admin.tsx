@@ -67,6 +67,26 @@ type CourseWithMode = {
   enrollmentMode?: "open" | "approval_required";
 };
 
+function UndoCountdownAction({ onUndo, duration = 5 }: { onUndo: () => void; duration?: number }) {
+  const [secondsLeft, setSecondsLeft] = useState(duration);
+
+  useEffect(() => {
+    if (secondsLeft <= 0) return;
+    const id = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [secondsLeft]);
+
+  return (
+    <ToastAction
+      altText="Undo bulk action"
+      data-testid="bulk-undo-btn"
+      onClick={onUndo}
+    >
+      Undo ({secondsLeft}s)
+    </ToastAction>
+  );
+}
+
 export default function AdminPage() {
   const { user, token } = useAuth();
   const [, setLocation] = useLocation();
@@ -302,13 +322,10 @@ export default function AdminPage() {
       queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
       window.dispatchEvent(new Event(EVENTS.PENDING_APPROVALS_REFRESH));
       const undoAction = (
-        <ToastAction
-          altText="Undo bulk action"
-          data-testid="bulk-undo-btn"
-          onClick={() => void handleBulkUndo(undoIds, action)}
-        >
-          Undo
-        </ToastAction>
+        <UndoCountdownAction
+          duration={5}
+          onUndo={() => void handleBulkUndo(undoIds, action)}
+        />
       );
       toast({
         title: action === "approve"
