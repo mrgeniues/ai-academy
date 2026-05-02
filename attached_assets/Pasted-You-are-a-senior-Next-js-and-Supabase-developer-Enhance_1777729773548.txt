@@ -1,0 +1,88 @@
+You are a senior Next.js and Supabase developer.
+
+Enhance the COMMENT SYSTEM UI by adding a threaded reply indicator (vertical line) so users can clearly see which comment is a reply to another.
+
+IMPORTANT:
+
+* Do NOT add any extra features
+* Do NOT modify existing layout or design structure
+* ONLY add visual threaded reply line for comments
+
+=====================================
+GOAL:
+
+Show a vertical line (thread line) for reply comments to visually indicate parent-child relationship between comments.
+
+=====================================
+DATABASE (NO CHANGE REQUIRED):
+
+Assume comments table already has:
+
+* id
+* user_id
+* post_id
+* content
+* parent_id (nullable for replies)
+* created_at
+
+=====================================
+LOGIC:
+
+1. If comment.parent_id is NULL:
+   → This is a main comment (no line)
+
+2. If comment.parent_id exists:
+   → This is a reply
+
+=====================================
+UI REQUIREMENT:
+
+For reply comments:
+
+* Add left margin (indent)
+* Add a vertical line on left side
+* Line should visually connect replies
+
+=====================================
+IMPLEMENTATION:
+
+Wrap reply comment with a container:
+
+Example (Tailwind CSS):
+
+<div class="relative pl-6 ml-4 border-l border-gray-600">
+  <!-- reply comment content -->
+</div>
+
+OR improved version:
+
+<div class="relative ml-6">
+  <div class="absolute left-0 top-0 h-full border-l border-gray-600"></div>
+  <div class="pl-4">
+    <!-- comment content -->
+  </div>
+</div>
+
+=====================================
+OPTIONAL SMALL ENHANCEMENT:
+
+* Slightly reduce opacity or font size for nested replies
+* Maintain existing UI colors
+
+=====================================
+STRICT RULES:
+
+* Do NOT change comment structure
+* Do NOT change database
+* Do NOT add new features
+* Do NOT break existing comment system
+* Only add visual thread line + indent
+
+=====================================
+OUTPUT:
+
+* Updated comment UI component
+* Reply detection logic (based on parent_id)
+* Clean threaded design with vertical line
+
+Ensure it works perfectly without breaking anything.
