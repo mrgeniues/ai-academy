@@ -100,6 +100,34 @@ router.post("/tools", requireAuth, async (req, res): Promise<void> => {
   })();
 });
 
+// ── Get a single tool ─────────────────────────────────────────────────────
+router.get("/tools/:id", requireAuth, async (req, res): Promise<void> => {
+  const toolId = parseInt(req.params.id, 10);
+  if (isNaN(toolId)) { res.status(400).json({ error: "Invalid tool id" }); return; }
+
+  const { data, error } = await supabase
+    .from("tools")
+    .select("*")
+    .eq("id", toolId)
+    .single();
+
+  if (error || !data) {
+    res.status(404).json({ error: "Tool not found" });
+    return;
+  }
+
+  res.json({
+    id: data.id,
+    title: data.title,
+    description: data.description ?? null,
+    imageUrl: data.image_url ?? null,
+    videoUrl: data.video_url ?? null,
+    toolUrl: data.tool_url ?? null,
+    createdBy: data.created_by,
+    createdAt: data.created_at,
+  });
+});
+
 // ── Update a tool (admin only) ────────────────────────────────────────────
 router.patch("/tools/:id", requireAuth, async (req, res): Promise<void> => {
   if (req.userRole !== "admin") {

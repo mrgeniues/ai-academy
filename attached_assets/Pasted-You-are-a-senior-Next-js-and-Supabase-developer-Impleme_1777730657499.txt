@@ -1,0 +1,148 @@
+You are a senior Next.js and Supabase developer.
+
+Implement a UNIQUE SHAREABLE URL SYSTEM for posts, courses, and AI tools.
+
+IMPORTANT:
+
+* Do NOT add any extra features
+* Do NOT modify UI design
+* Do NOT break existing functionality
+* ONLY add unique URL + routing + access control
+
+=====================================
+GOAL:
+
+Each item (post, course, tool) must have a unique URL.
+
+Example:
+
+/post/slug-or-id
+/course/slug-or-id
+/tool/slug-or-id
+
+When user clicks URL → direct landing on that item page.
+
+=====================================
+STEP 1: ADD SLUG FIELD
+
+For each table:
+
+posts
+courses
+tools
+
+Add:
+
+slug TEXT UNIQUE
+
+=====================================
+STEP 2: AUTO GENERATE SLUG
+
+When new item is created:
+
+* Convert title to slug
+
+Example:
+
+"Learn Web Development" → "learn-web-development"
+
+* Ensure uniqueness:
+
+If duplicate exists → add random suffix
+
+Example:
+
+learn-web-development-123
+
+=====================================
+STEP 3: ROUTING (NEXT.JS)
+
+Create dynamic routes:
+
+/post/[slug]
+/course/[slug]
+/tool/[slug]
+
+Fetch data by slug from Supabase.
+
+=====================================
+STEP 4: SHARE BUTTON
+
+In UI:
+
+* Add "Copy Link" button
+
+Example URL:
+
+https://yourdomain.com/post/{slug}
+
+Use:
+
+navigator.clipboard.writeText(url)
+
+=====================================
+STEP 5: ACCESS CONTROL (VERY IMPORTANT)
+
+If user opens URL:
+
+---
+
+CASE 1: Not logged in
+
+→ Redirect to login page
+
+---
+
+CASE 2: Logged in but NOT approved
+
+→ Show:
+
+"Wait for admin approval"
+
+---
+
+CASE 3: Course access
+
+→ If not enrolled:
+
+Show:
+
+"Enroll to access this course"
+
+---
+
+CASE 4: Tool access
+
+→ If not approved:
+
+Show:
+
+"Request access"
+
+---
+
+=====================================
+STEP 6: SECURITY
+
+* Do NOT expose private data
+* Validate access before rendering content
+* Protect API routes
+
+=====================================
+STEP 7: BACKEND QUERY
+
+Fetch using:
+
+select * from posts where slug = ?
+
+Same for courses and tools
+
+=====================================
+STEP 8: OUTPUT
+
+* Slug generation logic
+* Dynamic routing pages
+* Copy link button
+* Access control logic
+
+Ensure everything works perfectly without breaking existing features.

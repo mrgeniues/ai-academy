@@ -193,6 +193,46 @@ router.get("/posts", requireAuth, async (req, res): Promise<void> => {
   res.json(enriched);
 });
 
+router.get("/posts/:id", requireAuth, async (req, res): Promise<void> => {
+  const postId = parseInt(req.params.id, 10);
+  if (isNaN(postId)) { res.status(400).json({ error: "Invalid post id" }); return; }
+
+  const userId = req.userId!;
+
+  const { data: post, error } = await supabase
+    .from("posts")
+    .select("*, author:users(*)")
+    .eq("id", postId)
+    .single();
+
+  if (error || !post) {
+    res.status(404).json({ error: "Post not found" });
+    return;
+  }
+
+  const [{ data: likeCounts }, { data: commentCounts }, { data: myLikes }] = await Promise.all([
+    supabase.from("likes").select("post_id").eq("post_id", postId),
+    supabase.from("comments").select("post_id").eq("post_id", postId),
+    supabase.from("likes").select("post_id").eq("user_id", userId).eq("post_id", postId),
+  ]);
+
+  const media = extractMediaFields(post as Record<string, unknown>);
+  res.json({
+    id: post.id,
+    userId: post.user_id,
+    content: post.content,
+    imageUrl: media.imageUrl,
+    fileUrl: media.fileUrl,
+    fileType: media.fileType,
+    isVip: (post as Record<string, unknown>).is_vip ?? false,
+    likeCount: likeCounts?.length ?? 0,
+    commentCount: commentCounts?.length ?? 0,
+    isLiked: (myLikes?.length ?? 0) > 0,
+    createdAt: post.created_at,
+    author: formatUser(post.author),
+  });
+});
+
 router.post("/posts", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreatePostSchema.safeParse(req.body);
   if (!parsed.success) {

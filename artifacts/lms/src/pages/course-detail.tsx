@@ -16,7 +16,7 @@ import { RichTextEditor } from "@/components/rich-text-editor";
 import { RichTextDisplay } from "@/components/rich-text-display";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { BookOpen, Users, PlayCircle, CheckCircle, Circle, FileText, Plus, ArrowLeft, Trash2, Lock, MessageCircle, Globe, ExternalLink, Clock, Pencil, Zap, XCircle } from "lucide-react";
+import { BookOpen, Users, PlayCircle, CheckCircle, Circle, FileText, Plus, ArrowLeft, Trash2, Lock, MessageCircle, Globe, ExternalLink, Clock, Pencil, Zap, XCircle, Link2 } from "lucide-react";
 import { Link } from "wouter";
 
 
@@ -299,12 +299,25 @@ export default function CourseDetailPage() {
   return (
     <Layout>
       <div className="p-6 max-w-6xl mx-auto space-y-6">
-        {/* Back */}
-        <Link href="/courses">
-          <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="link-back-courses">
-            <ArrowLeft className="w-4 h-4" /> Back to courses
+        {/* Back + Share */}
+        <div className="flex items-center justify-between">
+          <Link href="/courses">
+            <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="link-back-courses">
+              <ArrowLeft className="w-4 h-4" /> Back to courses
+            </button>
+          </Link>
+          <button
+            onClick={() => {
+              const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+              navigator.clipboard.writeText(`${window.location.origin}${base}/courses/${courseId}`);
+              toast({ title: "Link copied!" });
+            }}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            title="Copy shareable link"
+          >
+            <Link2 className="w-4 h-4" /> Copy Link
           </button>
-        </Link>
+        </div>
 
         {/* Course header */}
         <div className="flex flex-col md:flex-row gap-6">

@@ -647,6 +647,18 @@ function PostCard({ post, token, onDelete }: { post: Post; token: string | null;
             <span>{post.commentCount}</span>
             {showComments ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           </button>
+
+          <button
+            onClick={() => {
+              const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+              navigator.clipboard.writeText(`${window.location.origin}${base}/post/${post.id}`);
+              toast({ title: "Link copied!" });
+            }}
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors ml-auto"
+            title="Copy shareable link"
+          >
+            <Link2 className="w-4 h-4" />
+          </button>
         </div>
 
         {showComments && <CommentSection postId={post.id} token={token} />}

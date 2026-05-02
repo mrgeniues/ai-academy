@@ -19,6 +19,8 @@ import ResetPasswordPage from "@/pages/reset-password";
 import WaitingApprovalPage from "@/pages/waiting-approval";
 import MaintenancePage from "@/pages/maintenance";
 import AiToolsPage from "@/pages/ai-tools";
+import PostDetailPage from "@/pages/post-detail";
+import ToolDetailPage from "@/pages/tool-detail";
 import NotFound from "@/pages/not-found";
 import { WhatsAppButton } from "@/components/whatsapp-button";
 import { useEffect, useRef } from "react";
@@ -166,6 +168,12 @@ function Router() {
         </Route>
         <Route path="/messages">
           <ProtectedRoute component={MessagesPage} />
+        </Route>
+        <Route path="/post/:id">
+          <ProtectedRoute component={PostDetailPage} />
+        </Route>
+        <Route path="/tool/:id">
+          <ProtectedRoute component={ToolDetailPage} />
         </Route>
         <Route component={NotFound} />
       </Switch>

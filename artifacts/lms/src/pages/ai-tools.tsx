@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Wrench, Plus, Trash2, ImageIcon, X, ExternalLink, Play, Clock, Pencil } from "lucide-react";
+import { Wrench, Plus, Trash2, ImageIcon, X, ExternalLink, Play, Clock, Pencil, Link2 } from "lucide-react";
 
 type Tool = {
   id: number;
@@ -311,24 +311,37 @@ export default function AiToolsPage() {
                       <div className="flex-1 space-y-1.5">
                         <div className="flex items-start justify-between gap-2">
                           <h3 className="font-semibold text-sm leading-tight">{tool.title}</h3>
-                          {isAdmin && (
-                            <div className="flex gap-1 flex-shrink-0">
-                              <button
-                                onClick={() => openEdit(tool)}
-                                className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
-                                data-testid={`button-edit-tool-${tool.id}`}
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDelete(tool.id)}
-                                className="p-1 rounded text-muted-foreground hover:text-destructive transition-colors"
-                                data-testid={`button-delete-tool-${tool.id}`}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          )}
+                          <div className="flex gap-1 flex-shrink-0">
+                            <button
+                              onClick={() => {
+                                const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+                                navigator.clipboard.writeText(`${window.location.origin}${base}/tool/${tool.id}`);
+                                toast({ title: "Link copied!" });
+                              }}
+                              className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
+                              title="Copy shareable link"
+                            >
+                              <Link2 className="w-3.5 h-3.5" />
+                            </button>
+                            {isAdmin && (
+                              <>
+                                <button
+                                  onClick={() => openEdit(tool)}
+                                  className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
+                                  data-testid={`button-edit-tool-${tool.id}`}
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(tool.id)}
+                                  className="p-1 rounded text-muted-foreground hover:text-destructive transition-colors"
+                                  data-testid={`button-delete-tool-${tool.id}`}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
                         {tool.description && (
                           <p className="text-xs text-muted-foreground line-clamp-2">{tool.description}</p>
