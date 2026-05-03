@@ -3194,7 +3194,47 @@ export default function AdminPage() {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Account Details</Label>
-              <Input value={pmForm.account_details} onChange={e => setPmForm(f => ({ ...f, account_details: e.target.value }))} placeholder="Account number, email, or ID" className="font-mono" />
+              <div className="flex gap-2">
+                <Input
+                  value={pmForm.account_details}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setPmForm(f => ({
+                      ...f,
+                      account_details: val,
+                      qr_url: val.trim()
+                        ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(val.trim())}`
+                        : f.qr_url,
+                    }));
+                  }}
+                  placeholder="Account number, email, or ID"
+                  className="font-mono"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  type="button"
+                  className="flex-shrink-0 h-9 text-xs gap-1"
+                  disabled={!pmForm.account_details.trim()}
+                  onClick={() => {
+                    if (pmForm.account_details.trim()) {
+                      setPmForm(f => ({
+                        ...f,
+                        qr_url: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(f.account_details.trim())}`,
+                      }));
+                    }
+                  }}
+                >
+                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+                    <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="17" width="3" height="3" rx="0.5"/>
+                    <rect x="19" y="14" width="2" height="2" rx="0.5"/><rect x="14" y="14" width="2" height="2" rx="0.5"/>
+                    <rect x="17" y="19" width="3" height="2" rx="0.5"/>
+                  </svg>
+                  Gen QR
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground">QR code auto-generates from the account details above</p>
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Instructions for user</Label>
@@ -3202,18 +3242,29 @@ export default function AdminPage() {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">QR Code</Label>
-              <div className="flex gap-2 items-center">
-                <Input value={pmForm.qr_url} onChange={e => setPmForm(f => ({ ...f, qr_url: e.target.value }))} placeholder="https://... or upload below" className="text-xs" />
-                <label className="flex-shrink-0">
-                  <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) void handlePmQrUpload(f); }} />
-                  <Button size="sm" variant="outline" className="h-9 text-xs gap-1" disabled={pmQrUploading} type="button" asChild>
-                    <span><Upload className="w-3 h-3" />{pmQrUploading ? "…" : "Upload"}</span>
-                  </Button>
-                </label>
+              <div className="flex gap-2 items-start">
+                <div className="flex-1 space-y-2">
+                  <Input value={pmForm.qr_url} onChange={e => setPmForm(f => ({ ...f, qr_url: e.target.value }))} placeholder="Auto-generated or paste URL / upload" className="text-xs" />
+                  <label className="flex-shrink-0">
+                    <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) void handlePmQrUpload(f); }} />
+                    <Button size="sm" variant="outline" className="h-8 text-xs gap-1" disabled={pmQrUploading} type="button" asChild>
+                      <span><Upload className="w-3 h-3" />{pmQrUploading ? "Uploading…" : "Upload custom QR image"}</span>
+                    </Button>
+                  </label>
+                </div>
+                {pmForm.qr_url && (
+                  <div className="flex-shrink-0 flex flex-col items-center gap-1">
+                    <img src={pmForm.qr_url} alt="QR preview" className="w-24 h-24 rounded-lg border object-contain bg-white p-1" />
+                    <button
+                      type="button"
+                      onClick={() => setPmForm(f => ({ ...f, qr_url: "" }))}
+                      className="text-[10px] text-muted-foreground hover:text-destructive"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
               </div>
-              {pmForm.qr_url && (
-                <img src={pmForm.qr_url} alt="QR preview" className="w-20 h-20 rounded-lg border object-contain bg-white p-1 mt-1" />
-              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
