@@ -179,7 +179,14 @@ export default function CreateCommunityPage() {
                         )}
                       </div>
                       {plan.description && (
-                        <p className="text-xs text-muted-foreground mb-2">{plan.description}</p>
+                        <ul className="text-xs text-muted-foreground mb-2 space-y-0.5 list-none">
+                          {plan.description.split("\n").filter(l => l.trim()).map((line, i) => (
+                            <li key={i} className="flex items-start gap-1.5">
+                              <span className="mt-0.5 text-primary/60">•</span>
+                              <span>{line.trim()}</span>
+                            </li>
+                          ))}
+                        </ul>
                       )}
                       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">

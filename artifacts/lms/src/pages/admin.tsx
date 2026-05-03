@@ -2733,7 +2733,16 @@ export default function AdminPage() {
                               {!plan.is_active && <Badge variant="outline" className="text-[10px] px-1.5">Inactive</Badge>}
                               {plan.discount_percent > 0 && <Badge variant="secondary" className="text-[10px] px-1.5">{plan.discount_percent}% off</Badge>}
                             </div>
-                            {plan.description && <p className="text-xs text-muted-foreground mb-2">{plan.description}</p>}
+                            {plan.description && (
+                              <ul className="text-xs text-muted-foreground mb-2 space-y-0.5 list-none">
+                                {plan.description.split("\n").filter(l => l.trim()).map((line, i) => (
+                                  <li key={i} className="flex items-start gap-1.5">
+                                    <span className="mt-0.5 text-primary/60">•</span>
+                                    <span>{line.trim()}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
                             <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                               <span className="flex items-center gap-1"><Users className="w-3 h-3" />{plan.max_communities} communit{plan.max_communities === 1 ? "y" : "ies"}</span>
                               <span className="flex items-center gap-1"><Wrench className="w-3 h-3" />{plan.max_tools} tools</span>
@@ -2862,7 +2871,13 @@ export default function AdminPage() {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Description (optional)</Label>
-              <Textarea value={planForm.description} onChange={e => setPlanForm(f => ({ ...f, description: e.target.value }))} placeholder="Short description of this plan" rows={2} />
+              <Textarea
+                value={planForm.description}
+                onChange={e => setPlanForm(f => ({ ...f, description: e.target.value }))}
+                placeholder={"You can create 3 communities\nCan add 7 tools\nCan add 7 courses"}
+                rows={4}
+              />
+              <p className="text-[11px] text-muted-foreground">Each line will appear as a bullet point ( • ) for users.</p>
             </div>
             <div className="flex items-center gap-2">
               <Switch checked={planForm.is_active} onCheckedChange={v => setPlanForm(f => ({ ...f, is_active: v }))} id="plan-active" />
