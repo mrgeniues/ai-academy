@@ -479,14 +479,6 @@ export default function AdminPage() {
     }
   }, [user, fetchPendingCommunities]);
 
-  useEffect(() => {
-    if (user?.role === "admin") {
-      void fetchCommunityPayments();
-      const interval = setInterval(() => { void fetchCommunityPayments(); }, 30_000);
-      return () => clearInterval(interval);
-    }
-  }, [user, fetchCommunityPayments]);
-
   const handleCommunityAction = async (community: PendingCommunity, status: "approved" | "rejected") => {
     setActioningCommunityId(community.id);
     try {
@@ -578,6 +570,17 @@ export default function AdminPage() {
     } catch (err) { toast({ title: (err as Error).message, variant: "destructive" }); }
     finally { setQrUploading(null); }
   };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (user?.role === "admin") {
+      void fetchCommunityPayments();
+      const interval = setInterval(() => { void fetchCommunityPayments(); }, 30_000);
+      return () => clearInterval(interval);
+    }
+  // fetchCommunityPayments is defined above this useEffect
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const handlePaymentAction = async (payment: CommunityPayment, status: "approved" | "rejected") => {
     setActioningPaymentId(payment.id);

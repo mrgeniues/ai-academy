@@ -1,0 +1,204 @@
+You are a senior Next.js and Supabase developer.
+
+Enhance the COMMUNITY CREATION SYSTEM by adding PLANS, PAYMENT FLOW, LIMITS, UPGRADE/DOWNGRADE SYSTEM, and FIX EXISTING ERROR.
+
+IMPORTANT:
+
+* Do NOT modify existing UI design
+* Do NOT remove any features
+* ONLY add required logic
+* Fix current database error
+* Keep system modular
+
+=====================================
+GOAL:
+
+User must select a PAID PLAN before creating a community and system must support limits + upgrade/downgrade.
+
+=====================================
+STEP 1: FIX DATABASE ERROR
+
+Fix:
+"Could not find the table public.communities"
+
+Ensure table exists:
+
+communities:
+
+* id
+* name
+* description
+* owner_id
+* status (pending/approved/rejected)
+* plan_id
+* created_at
+
+=====================================
+STEP 2: PLANS SYSTEM
+
+plans:
+
+* id
+* name (monthly/yearly/lifetime)
+* price
+* max_communities
+* max_tools
+* max_courses   ← NEW
+* discount_percent
+* created_at
+
+=====================================
+STEP 3: ADMIN PANEL CONTROL
+
+Admin can:
+
+* Create / Edit / Delete plans
+* Set:
+
+  * price
+  * max_communities
+  * max_tools
+  * max_courses   ← NEW
+  * discount %
+
+=====================================
+STEP 4: COUPON SYSTEM
+
+coupons:
+
+* id
+* code
+* discount_percent
+* plan_id
+* expiry_date
+* max_usage
+* used_count
+
+=====================================
+STEP 5: PAYMENT SYSTEM
+
+community_payments:
+
+* id
+* user_id
+* plan_id
+* screenshot_url
+* status (pending/approved/rejected)
+* created_at
+
+=====================================
+STEP 6: USER FLOW
+
+User clicks "Create Community":
+
+→ Show plans
+→ Select plan
+→ Apply coupon (optional)
+→ Show payment (QR + accounts)
+→ Upload screenshot
+
+=====================================
+STEP 7: ADMIN APPROVAL
+
+Admin panel:
+
+"Payment Requests"
+
+Admin:
+
+* Approve / Reject
+
+=====================================
+STEP 8: ACCESS CONTROL
+
+If payment approved:
+
+→ Allow community creation
+
+Else:
+
+→ Block access
+
+=====================================
+STEP 9: LIMIT SYSTEM (UPDATED)
+
+Before allowing actions:
+
+Check:
+
+* max_communities
+* max_tools
+* max_courses
+
+If limit exceeded:
+
+→ Block action
+→ Show message:
+
+"Limit reached for your current plan"
+
+=====================================
+STEP 10: UPGRADE / DOWNGRADE SYSTEM
+
+Add "Manage Plan" section for user
+
+User can:
+
+* Upgrade plan
+* Downgrade plan
+
+=====================================
+UPGRADE FLOW:
+
+* User selects higher plan
+* Pays difference or full payment
+* Admin approves
+* Plan updated
+
+=====================================
+DOWNGRADE FLOW:
+
+* User selects lower plan
+* Apply on next cycle (no immediate data loss)
+* Restrict new actions if limits exceeded
+
+=====================================
+STEP 11: PLAN SWITCH LOGIC
+
+On upgrade:
+
+* Increase limits instantly after approval
+
+On downgrade:
+
+* Do NOT delete existing data
+* Only block new additions if over limit
+
+=====================================
+STEP 12: UI UPDATE
+
+* Show plan details
+* Show limits:
+
+Example:
+"Plan: Monthly | Tools: 5 | Courses: 10"
+
+* Show "Create Community (PAID)" in GREEN
+
+=====================================
+STEP 13: SECURITY
+
+* Validate limits server-side
+* Prevent bypass
+* Protect API routes
+
+=====================================
+OUTPUT:
+
+* Plans system with course limit
+* Upgrade/downgrade logic
+* Limit enforcement
+* Payment + approval flow
+* Database fix
+
+Ensure everything works perfectly without breaking existing features.
