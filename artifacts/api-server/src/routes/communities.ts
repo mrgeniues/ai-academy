@@ -207,6 +207,29 @@ router.get("/communities/join/:code", requireAuth, async (req, res): Promise<voi
   res.json({ ...data, memberStatus: member?.status ?? null, isOwner });
 });
 
+// GET /api/communities/all — admin: list every community with owner info
+router.get("/communities/all", requireAuth, async (req, res): Promise<void> => {
+  const { data: me, error: meErr } = await supabase
+    .from("users").select("role").eq("id", req.userId!).single();
+  if (meErr || me?.role !== "admin") {
+    res.status(403).json({ error: "Admin only" });
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("communities")
+    .select("id, name, description, status, created_at, owner_id, users!communities_owner_id_fkey(id, name, email)")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    req.log.error({ error }, "Failed to fetch all communities");
+    res.status(500).json({ error: error.message });
+    return;
+  }
+
+  res.json(data ?? []);
+});
+
 // GET /api/communities — list all approved communities
 router.get("/communities", requireAuth, async (req, res): Promise<void> => {
   const { data, error } = await supabase

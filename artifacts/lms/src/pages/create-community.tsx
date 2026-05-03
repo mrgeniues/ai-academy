@@ -13,7 +13,7 @@ import { useAuth } from "@/lib/auth";
 import {
   Users2, Clock, CheckCircle, XCircle, CreditCard,
   ArrowRight, ArrowLeft, Users, Wrench, BookOpen, Tag, Check,
-  Sparkles, BadgeCheck, Unlock,
+  Sparkles, BadgeCheck, Unlock, Shield, Loader2,
 } from "lucide-react";
 
 const API = "/api";
@@ -48,6 +48,15 @@ type Community = {
   } | null;
 };
 
+type AdminCommunity = {
+  id: number;
+  name: string;
+  description: string | null;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+  users: { id: number; name: string; email: string } | null;
+};
+
 const STATUS_CONFIG = {
   pending:  { label: "Pending Review", icon: Clock,       className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800" },
   approved: { label: "Approved",       icon: CheckCircle, className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border-green-200 dark:border-green-800" },
@@ -57,9 +66,11 @@ const STATUS_CONFIG = {
 type Step = "plan" | "details";
 
 export default function CreateCommunityPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
+
+  const isAdmin = user?.role === "admin";
 
   const [step, setStep]                 = useState<Step>("plan");
   const [plans, setPlans]               = useState<Plan[]>([]);
@@ -74,22 +85,38 @@ export default function CreateCommunityPage() {
   const [loadingList, setLoadingList]     = useState(true);
   const [openedId, setOpenedId]           = useState<number | null>(null);
 
+  // Admin-only state
+  const [allCommunities, setAllCommunities]       = useState<AdminCommunity[]>([]);
+  const [allCommunitiesLoading, setAllCommunitiesLoading] = useState(true);
+  const [adminSearch, setAdminSearch]             = useState("");
+
   useEffect(() => {
+    if (isAdmin) return; // admin doesn't need plans
     fetch(`${API}/plans`)
       .then(r => r.json())
       .then(d => { if (Array.isArray(d)) setPlans(d); })
       .catch(() => {})
       .finally(() => setPlansLoading(false));
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || isAdmin) return;
     fetch(`${API}/communities/mine`, { headers: authH(token) })
       .then(r => r.ok ? r.json() : [])
       .then(d => { if (Array.isArray(d)) setMyCommunities(d); })
       .catch(() => {})
       .finally(() => setLoadingList(false));
-  }, [token]);
+  }, [token, isAdmin]);
+
+  // Fetch all communities for admin
+  useEffect(() => {
+    if (!token || !isAdmin) return;
+    fetch(`${API}/communities/all`, { headers: authH(token) })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => { if (Array.isArray(d)) setAllCommunities(d); })
+      .catch(() => {})
+      .finally(() => setAllCommunitiesLoading(false));
+  }, [token, isAdmin]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,6 +139,125 @@ export default function CreateCommunityPage() {
       setSubmitting(false);
     }
   };
+
+  // ── ADMIN VIEW ───────────────────────────────────────────────────────────
+  if (isAdmin) {
+    const q = adminSearch.toLowerCase().trim();
+    const filtered = allCommunities.filter(c =>
+      !q ||
+      c.name.toLowerCase().includes(q) ||
+      (c.users?.name ?? "").toLowerCase().includes(q) ||
+      (c.users?.email ?? "").toLowerCase().includes(q)
+    );
+
+    const counts = {
+      total:    allCommunities.length,
+      approved: allCommunities.filter(c => c.status === "approved").length,
+      pending:  allCommunities.filter(c => c.status === "pending").length,
+      rejected: allCommunities.filter(c => c.status === "rejected").length,
+    };
+
+    return (
+      <Layout>
+        <div className="p-6 max-w-4xl mx-auto space-y-6">
+
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <Shield className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">All Communities</h1>
+              <p className="text-muted-foreground text-sm">View and access any community dashboard</p>
+            </div>
+          </div>
+
+          {/* Summary stats */}
+          {!allCommunitiesLoading && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: "Total",    value: counts.total,    className: "text-foreground" },
+                { label: "Approved", value: counts.approved, className: "text-green-600 dark:text-green-400" },
+                { label: "Pending",  value: counts.pending,  className: "text-yellow-600 dark:text-yellow-400" },
+                { label: "Rejected", value: counts.rejected, className: "text-red-500" },
+              ].map(s => (
+                <Card key={s.label}>
+                  <CardContent className="py-3 px-4 text-center">
+                    <p className={`text-2xl font-bold ${s.className}`}>{s.value}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{s.label}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* Search */}
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search by community name or owner…"
+              value={adminSearch}
+              onChange={e => setAdminSearch(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-lg border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 transition"
+            />
+          </div>
+
+          {/* Community list */}
+          {allCommunitiesLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
+            </div>
+          ) : filtered.length === 0 ? (
+            <Card>
+              <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                {adminSearch ? "No communities match your search." : "No communities yet."}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {filtered.map(c => {
+                const cfg  = STATUS_CONFIG[c.status] ?? STATUS_CONFIG.pending;
+                const Icon = cfg.icon;
+                return (
+                  <Card
+                    key={c.id}
+                    className={`border transition-all cursor-pointer hover:shadow-md hover:border-primary/40 ${c.status === "approved" ? "hover:bg-primary/5" : ""}`}
+                    onClick={() => {
+                      if (c.status === "approved") navigate(`/community-dashboard/${c.id}`);
+                    }}
+                  >
+                    <CardContent className="py-3 px-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                          <Users2 className="w-4 h-4 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm truncate">{c.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {c.users?.name ?? "Unknown"} · {c.users?.email ?? ""}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border ${cfg.className}`}>
+                            <Icon className="w-3 h-3" /> {cfg.label}
+                          </span>
+                          {c.status === "approved" && (
+                            <span className="text-xs text-primary font-medium flex items-center gap-1">
+                              Open <ArrowRight className="w-3 h-3" />
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </Layout>
+    );
+  }
 
   // Split communities by status — rejected ones are hidden from the UI (auto-purged server-side after 24h)
   const approvedCommunities = myCommunities.filter(c => c.status === "approved");
