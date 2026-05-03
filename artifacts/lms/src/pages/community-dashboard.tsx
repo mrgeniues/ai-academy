@@ -16,7 +16,7 @@ import {
   LayoutDashboard, BookOpen, Wrench, Crown, Users, MessageSquare, User,
   Shield, LogOut, Sun, Moon, Palette, Menu, GraduationCap, PanelLeftClose,
   PanelLeftOpen, ArrowLeft, Send, Trash2, ExternalLink, CheckCircle, Clock,
-  XCircle, Users2, AlertTriangle, Loader2,
+  XCircle, Users2, AlertTriangle, Loader2, Copy, UserCheck, UserX, Link2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -31,11 +31,11 @@ function initials(name: string) {
   return name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
 }
 
-type Section = "dashboard" | "courses" | "tools" | "vip-posts" | "posts" | "messages" | "profile";
+type Section = "dashboard" | "courses" | "tools" | "vip-posts" | "posts" | "messages" | "profile" | "members";
 
 type Community = {
   id: number; name: string; description: string | null;
-  status: string; owner_id: number; isOwner: boolean;
+  status: string; owner_id: number; isOwner: boolean; invite_code?: string | null;
   memberStatus: "approved" | "pending" | "rejected" | null;
   owner: { id: number; name: string; avatar: string | null } | null;
 };
@@ -67,6 +67,7 @@ const NAV_ITEMS: { section: Section; label: string; icon: React.ElementType }[] 
   { section: "vip-posts",  label: "VIP Posts",         icon: Crown },
   { section: "posts",      label: "Community Posts",   icon: Users },
   { section: "messages",   label: "Messages",          icon: MessageSquare },
+  { section: "members",    label: "Members",           icon: UserCheck },
   { section: "profile",    label: "Profile",           icon: User },
 ];
 
@@ -177,6 +178,35 @@ export default function CommunityDashboardPage() {
       method: "DELETE", headers: authH(token),
     });
     fetchPosts();
+  };
+
+  // ── Approve / reject member ───────────────────────────────────────────────
+  const [actingMember, setActingMember] = useState<number | null>(null);
+  const handleMemberStatus = async (userId: number, status: "approved" | "rejected") => {
+    setActingMember(userId);
+    try {
+      const res = await fetch(`${API}/communities/${communityId}/members/${userId}`, {
+        method: "PATCH", headers: jsonH(token),
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        fetchMembers();
+        toast({ title: status === "approved" ? "Member approved" : "Member rejected" });
+      } else {
+        const d = await res.json() as { error?: string };
+        toast({ title: d.error ?? "Failed", variant: "destructive" });
+      }
+    } catch { toast({ title: "Network error", variant: "destructive" }); }
+    finally { setActingMember(null); }
+  };
+
+  // ── Copy invite link ──────────────────────────────────────────────────────
+  const copyInviteLink = () => {
+    if (!community?.invite_code) { toast({ title: "No invite code available", variant: "destructive" }); return; }
+    const url = `${window.location.origin}${import.meta.env.BASE_URL}community/join/${community.invite_code}`;
+    navigator.clipboard.writeText(url)
+      .then(() => toast({ title: "Invite link copied!", description: "Share this link to invite people." }))
+      .catch(() => toast({ title: "Failed to copy", variant: "destructive" }));
   };
 
   // ── Send message ──────────────────────────────────────────────────────────
@@ -363,7 +393,16 @@ export default function CommunityDashboardPage() {
                     <span className="text-xs text-muted-foreground">Owner Dashboard</span>
                   </div>
                 </div>
+                <Button size="sm" variant="outline" onClick={copyInviteLink} className="flex-shrink-0">
+                  <Copy className="w-3.5 h-3.5 mr-1.5" /> Copy Invite Link
+                </Button>
               </div>
+              {community.invite_code && (
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-muted/50 border text-xs text-muted-foreground">
+                  <Link2 className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span className="truncate font-mono">{window.location.origin}{import.meta.env.BASE_URL}community/join/{community.invite_code}</span>
+                </div>
+              )}
             </div>
 
             {/* Stats grid */}
@@ -598,6 +637,98 @@ export default function CommunityDashboardPage() {
             </form>
           </div>
         );
+
+      // ── Members (owner only) ───────────────────────────────────────────
+      case "members": {
+        const pending  = members.filter(m => m.status === "pending");
+        const approved = members.filter(m => m.status === "approved");
+        const rejected = members.filter(m => m.status === "rejected");
+
+        const MemberRow = ({ m, showActions }: { m: typeof members[0]; showActions: boolean }) => (
+          <div className="flex items-center gap-3 p-3 rounded-lg border bg-card">
+            <Avatar className="w-8 h-8 flex-shrink-0">
+              <AvatarImage src={m.users?.avatar ?? undefined} />
+              <AvatarFallback className="text-xs">{m.users?.name ? initials(m.users.name) : "?"}</AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{m.users?.name ?? "Unknown"}</p>
+              <p className="text-xs text-muted-foreground truncate">{m.users?.email}</p>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {m.status === "approved" && (
+                <span className="text-xs font-medium text-green-600 dark:text-green-400 flex items-center gap-1">
+                  <CheckCircle className="w-3.5 h-3.5" /> Approved
+                </span>
+              )}
+              {m.status === "rejected" && (
+                <span className="text-xs font-medium text-red-500 flex items-center gap-1">
+                  <XCircle className="w-3.5 h-3.5" /> Rejected
+                </span>
+              )}
+              {showActions && (
+                <>
+                  <Button size="sm" variant="outline"
+                    className="h-7 px-2 text-xs text-green-600 border-green-300 hover:bg-green-50 dark:hover:bg-green-950/30"
+                    disabled={actingMember === m.user_id}
+                    onClick={() => handleMemberStatus(m.user_id, "approved")}>
+                    {actingMember === m.user_id ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserCheck className="w-3 h-3" />}
+                    <span className="ml-1">Approve</span>
+                  </Button>
+                  <Button size="sm" variant="outline"
+                    className="h-7 px-2 text-xs text-red-500 border-red-300 hover:bg-red-50 dark:hover:bg-red-950/30"
+                    disabled={actingMember === m.user_id}
+                    onClick={() => handleMemberStatus(m.user_id, "rejected")}>
+                    <UserX className="w-3 h-3" />
+                    <span className="ml-1">Reject</span>
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        );
+
+        return (
+          <div className="p-6 space-y-6 max-w-3xl">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold flex items-center gap-2"><UserCheck className="w-5 h-5 text-primary" /> Members</h2>
+              <Button size="sm" variant="outline" onClick={copyInviteLink}>
+                <Copy className="w-3.5 h-3.5 mr-1.5" /> Copy Invite Link
+              </Button>
+            </div>
+
+            {/* Pending approval */}
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                Pending Approval
+                {pending.length > 0 && (
+                  <span className="bg-yellow-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{pending.length}</span>
+                )}
+              </h3>
+              {pending.length === 0 ? (
+                <Card><CardContent className="py-6 text-center text-sm text-muted-foreground">No pending requests.</CardContent></Card>
+              ) : pending.map(m => <MemberRow key={m.id} m={m} showActions />)}
+            </div>
+
+            {/* Approved members */}
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                Approved Members ({approved.length})
+              </h3>
+              {approved.length === 0 ? (
+                <Card><CardContent className="py-6 text-center text-sm text-muted-foreground">No approved members yet.</CardContent></Card>
+              ) : approved.map(m => <MemberRow key={m.id} m={m} showActions={false} />)}
+            </div>
+
+            {/* Rejected */}
+            {rejected.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Rejected ({rejected.length})</h3>
+                {rejected.map(m => <MemberRow key={m.id} m={m} showActions={false} />)}
+              </div>
+            )}
+          </div>
+        );
+      }
 
       // ── Profile ────────────────────────────────────────────────────────
       case "profile":

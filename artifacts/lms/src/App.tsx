@@ -25,6 +25,7 @@ import CreateCommunityPage from "@/pages/create-community";
 import CommunityPanelPage from "@/pages/community-panel";
 import CommunityPaymentPage from "@/pages/community-payment";
 import CommunityDashboardPage from "@/pages/community-dashboard";
+import CommunityJoinPage from "@/pages/community-join";
 import NotFound from "@/pages/not-found";
 import { WhatsAppButton } from "@/components/whatsapp-button";
 import { useEffect, useRef } from "react";
@@ -187,6 +188,9 @@ function Router() {
         </Route>
         <Route path="/community-dashboard/:id">
           <ProtectedRoute component={CommunityDashboardPage} />
+        </Route>
+        <Route path="/community/join/:code">
+          <ProtectedRoute component={CommunityJoinPage} />
         </Route>
         <Route path="/create-community">
           <ProtectedRoute component={CreateCommunityPage} />

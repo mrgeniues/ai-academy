@@ -145,9 +145,16 @@ router.patch("/communities/:id/status", requireAuth, async (req, res): Promise<v
   const parsed = StatusSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "status must be 'approved' or 'rejected'" }); return; }
 
+  // Generate unique invite_code when approving
+  const updatePayload: Record<string, unknown> = { status: parsed.data.status };
+  if (parsed.data.status === "approved") {
+    const code = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+    updatePayload["invite_code"] = code;
+  }
+
   const { data, error } = await supabase
     .from("communities")
-    .update({ status: parsed.data.status })
+    .update(updatePayload)
     .eq("id", id)
     .select()
     .single();
@@ -159,6 +166,36 @@ router.patch("/communities/:id/status", requireAuth, async (req, res): Promise<v
   }
 
   res.json(data);
+});
+
+// GET /api/communities/join/:code — public: look up community by invite code
+router.get("/communities/join/:code", requireAuth, async (req, res): Promise<void> => {
+  const code = req.params["code"] as string;
+  if (!code) { res.status(400).json({ error: "Invalid code" }); return; }
+
+  const { data, error } = await supabase
+    .from("communities")
+    .select("id, name, description, status, owner_id, users!communities_owner_id_fkey(id, name, avatar)")
+    .eq("invite_code", code)
+    .eq("status", "approved")
+    .single();
+
+  if (error || !data) {
+    res.status(404).json({ error: "Invite link not found or community not approved" });
+    return;
+  }
+
+  // Check caller's membership status
+  const { data: member } = await supabase
+    .from("community_members")
+    .select("status")
+    .eq("community_id", data.id)
+    .eq("user_id", req.userId!)
+    .maybeSingle();
+
+  const isOwner = data.owner_id === req.userId;
+
+  res.json({ ...data, memberStatus: member?.status ?? null, isOwner });
 });
 
 // GET /api/communities — list all approved communities

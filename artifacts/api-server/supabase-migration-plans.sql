@@ -123,6 +123,26 @@ CREATE INDEX IF NOT EXISTS payment_methods_sort_order_idx ON payment_methods(sor
 ALTER TABLE community_payments
   ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
 
+-- ── 12b. ADD invite_code TO communities ───────────────────────────
+ALTER TABLE communities
+  ADD COLUMN IF NOT EXISTS invite_code TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS communities_invite_code_idx ON communities(invite_code)
+  WHERE invite_code IS NOT NULL;
+
+-- ── 12c. COMMUNITY_MEMBERS TABLE (if missing) ─────────────────────
+CREATE TABLE IF NOT EXISTS community_members (
+  id           SERIAL PRIMARY KEY,
+  community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status       TEXT NOT NULL DEFAULT 'pending',
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(community_id, user_id)
+);
+ALTER TABLE community_members DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS community_members_community_id_idx ON community_members(community_id);
+CREATE INDEX IF NOT EXISTS community_members_user_id_idx      ON community_members(user_id);
+CREATE INDEX IF NOT EXISTS community_members_status_idx       ON community_members(status);
+
 -- ── 12. SEED DEFAULT PAYMENT METHODS ─────────────────────────────
 INSERT INTO payment_methods (name, instructions, account_details, is_active, sort_order)
 VALUES
