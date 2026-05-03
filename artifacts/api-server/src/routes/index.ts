@@ -17,6 +17,8 @@ import adminActionsRouter from "./admin-actions";
 import communitiesRouter from "./communities";
 import communityPanelRouter from "./community-panel";
 import communityPaymentsRouter from "./community-payments";
+import plansRouter from "./plans";
+import couponsRouter from "./coupons";
 import trackerRouter from "./tracker";
 
 const router: IRouter = Router();
@@ -39,6 +41,8 @@ router.use(adminActionsRouter);
 router.use(communitiesRouter);
 router.use(communityPanelRouter);
 router.use(communityPaymentsRouter);
+router.use(plansRouter);
+router.use(couponsRouter);
 router.use(trackerRouter);
 
 export default router;

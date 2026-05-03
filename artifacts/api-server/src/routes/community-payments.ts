@@ -27,7 +27,7 @@ router.get("/community-payments/settings", async (_req, res): Promise<void> => {
   res.json(data);
 });
 
-// ── PUT /api/community-payments/settings ── admin update settings ─────────────
+// ── PUT /api/community-payments/settings ── admin update settings
 router.put("/community-payments/settings", requireAuth, async (req, res): Promise<void> => {
   const { data: me } = await supabase.from("users").select("role").eq("id", req.userId!).single();
   if (me?.role !== "admin") { res.status(403).json({ error: "Admin only" }); return; }
@@ -66,13 +66,17 @@ router.put("/community-payments/settings", requireAuth, async (req, res): Promis
   res.json(result.data);
 });
 
-// ── POST /api/community-payments ── user submits payment proof ───────────────
+// ── POST /api/community-payments ── user submits payment proof
 router.post("/community-payments", requireAuth, async (req, res): Promise<void> => {
   const Schema = z.object({
-    community_id:   z.number().int().positive(),
-    plan:           z.enum(["monthly", "yearly", "lifetime"]),
-    payment_method: z.enum(["binance", "nayapay"]),
-    screenshot_url: z.string().url(),
+    community_id:     z.number().int().positive(),
+    plan:             z.string().optional().default("custom"),
+    plan_id:          z.number().int().positive().optional().nullable(),
+    coupon_id:        z.number().int().positive().optional().nullable(),
+    payment_method:   z.enum(["binance", "nayapay"]),
+    screenshot_url:   z.string().url(),
+    final_price:      z.number().min(0).optional().nullable(),
+    discount_amount:  z.number().min(0).optional().nullable(),
   });
 
   const parsed = Schema.safeParse(req.body);
@@ -81,7 +85,7 @@ router.post("/community-payments", requireAuth, async (req, res): Promise<void> 
   // Verify community belongs to user
   const { data: community } = await supabase
     .from("communities")
-    .select("id, owner_id, status")
+    .select("id, owner_id, status, plan_id")
     .eq("id", parsed.data.community_id)
     .single();
 
@@ -103,16 +107,43 @@ router.post("/community-payments", requireAuth, async (req, res): Promise<void> 
     res.status(409).json({ error: "A payment is already pending review" }); return;
   }
 
+  // Resolve plan_id from community if not provided
+  const effectivePlanId = parsed.data.plan_id ?? community.plan_id ?? null;
+
+  // Resolve plan name for backward-compat 'plan' field
+  let planName = parsed.data.plan;
+  if (effectivePlanId) {
+    const { data: planRow } = await supabase
+      .from("plans").select("name").eq("id", effectivePlanId).single();
+    if (planRow) planName = planRow.name;
+  }
+
+  // If coupon provided, increment used_count
+  if (parsed.data.coupon_id) {
+    await supabase.rpc("increment_coupon_usage", { coupon_id: parsed.data.coupon_id }).then(() => null);
+  }
+
   const { data, error } = await supabase
     .from("community_payments")
-    .insert({ ...parsed.data, user_id: req.userId!, status: "pending" })
+    .insert({
+      community_id:    parsed.data.community_id,
+      plan:            planName,
+      plan_id:         effectivePlanId,
+      coupon_id:       parsed.data.coupon_id ?? null,
+      payment_method:  parsed.data.payment_method,
+      screenshot_url:  parsed.data.screenshot_url,
+      status:          "pending",
+      user_id:         req.userId!,
+      final_price:     parsed.data.final_price ?? null,
+      discount_amount: parsed.data.discount_amount ?? 0,
+    })
     .select().single();
 
   if (error) { res.status(500).json({ error: error.message }); return; }
   res.status(201).json(data);
 });
 
-// ── GET /api/community-payments/pending ── admin list payments ────────────────
+// ── GET /api/community-payments/pending ── admin list payments
 router.get("/community-payments/pending", requireAuth, async (req, res): Promise<void> => {
   const { data: me } = await supabase.from("users").select("role").eq("id", req.userId!).single();
   if (me?.role !== "admin") { res.status(403).json({ error: "Admin only" }); return; }
@@ -122,10 +153,12 @@ router.get("/community-payments/pending", requireAuth, async (req, res): Promise
   const { data, error } = await supabase
     .from("community_payments")
     .select(`
-      id, plan, payment_method, screenshot_url, status, created_at,
+      id, plan, plan_id, payment_method, screenshot_url, status, created_at,
+      final_price, discount_amount,
       user_id, community_id,
       users!community_payments_user_id_fkey(id, name, email, avatar),
-      communities!community_payments_community_id_fkey(id, name, description)
+      communities!community_payments_community_id_fkey(id, name, description),
+      plans(id, name, price, max_communities, max_tools, max_courses)
     `)
     .eq("status", status)
     .order("created_at", { ascending: false });
@@ -134,7 +167,7 @@ router.get("/community-payments/pending", requireAuth, async (req, res): Promise
   res.json(data ?? []);
 });
 
-// ── GET /api/community-payments/all ── admin list all payments ────────────────
+// ── GET /api/community-payments/all ── admin list all payments
 router.get("/community-payments/all", requireAuth, async (req, res): Promise<void> => {
   const { data: me } = await supabase.from("users").select("role").eq("id", req.userId!).single();
   if (me?.role !== "admin") { res.status(403).json({ error: "Admin only" }); return; }
@@ -142,10 +175,12 @@ router.get("/community-payments/all", requireAuth, async (req, res): Promise<voi
   const { data, error } = await supabase
     .from("community_payments")
     .select(`
-      id, plan, payment_method, screenshot_url, status, created_at,
+      id, plan, plan_id, payment_method, screenshot_url, status, created_at,
+      final_price, discount_amount,
       user_id, community_id,
       users!community_payments_user_id_fkey(id, name, email, avatar),
-      communities!community_payments_community_id_fkey(id, name, description)
+      communities!community_payments_community_id_fkey(id, name, description),
+      plans(id, name, price, max_communities, max_tools, max_courses)
     `)
     .order("created_at", { ascending: false })
     .limit(100);
@@ -154,7 +189,7 @@ router.get("/community-payments/all", requireAuth, async (req, res): Promise<voi
   res.json(data ?? []);
 });
 
-// ── PATCH /api/community-payments/:id/status ── admin approve/reject ──────────
+// ── PATCH /api/community-payments/:id/status ── admin approve/reject
 router.patch("/community-payments/:id/status", requireAuth, async (req, res): Promise<void> => {
   const { data: me } = await supabase.from("users").select("role").eq("id", req.userId!).single();
   if (me?.role !== "admin") { res.status(403).json({ error: "Admin only" }); return; }
@@ -167,13 +202,12 @@ router.patch("/community-payments/:id/status", requireAuth, async (req, res): Pr
 
   const { data: payment, error: fetchErr } = await supabase
     .from("community_payments")
-    .select("id, community_id, status")
+    .select("id, community_id, status, plan_id")
     .eq("id", paymentId)
     .single();
 
   if (fetchErr || !payment) { res.status(404).json({ error: "Payment not found" }); return; }
 
-  // Update payment status
   const { data: updated, error: updateErr } = await supabase
     .from("community_payments")
     .update({ status: parsed.data.status })
@@ -190,7 +224,7 @@ router.patch("/community-payments/:id/status", requireAuth, async (req, res): Pr
       .eq("id", payment.community_id);
   }
 
-  // If rejected → set community back to pending (do not auto-approve)
+  // If rejected → set community back to pending
   if (parsed.data.status === "rejected") {
     await supabase
       .from("communities")
@@ -201,14 +235,14 @@ router.patch("/community-payments/:id/status", requireAuth, async (req, res): Pr
   res.json(updated);
 });
 
-// ── GET /api/community-payments/my/:communityId ── user checks own payment ───
+// ── GET /api/community-payments/my/:communityId ── user checks own payment
 router.get("/community-payments/my/:communityId", requireAuth, async (req, res): Promise<void> => {
   const communityId = parseInt(req.params["communityId"] as string, 10);
   if (isNaN(communityId)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const { data, error } = await supabase
     .from("community_payments")
-    .select("id, plan, payment_method, status, created_at")
+    .select("id, plan, plan_id, payment_method, status, created_at, final_price, plans(id, name, price, max_communities, max_tools, max_courses)")
     .eq("community_id", communityId)
     .eq("user_id", req.userId!)
     .order("created_at", { ascending: false })

@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trash2, Users, BookOpen, MessageSquare, TrendingUp, Shield, Ban, CheckCircle, Clock, Calendar, GraduationCap, Wrench, XCircle, ScrollText, Database, Users2, CreditCard, Upload, ImageIcon, ExternalLink } from "lucide-react";
+import { Trash2, Users, BookOpen, MessageSquare, TrendingUp, Shield, Ban, CheckCircle, Clock, Calendar, GraduationCap, Wrench, XCircle, ScrollText, Database, Users2, CreditCard, Upload, ImageIcon, ExternalLink, Plus, Pencil, Tag, Percent } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -164,6 +164,40 @@ export default function AdminPage() {
   const [psNayapayQr, setPsNayapayQr]               = useState("");
   const [qrUploading, setQrUploading]               = useState<string | null>(null); // 'binance'|'nayapay'
   const [viewScreenshot, setViewScreenshot]         = useState<string | null>(null);
+
+  // Plans state
+  type AdminPlan = {
+    id: number; name: string; price: number; max_communities: number;
+    max_tools: number; max_courses: number; discount_percent: number;
+    description: string | null; is_active: boolean; created_at: string;
+  };
+  const [plans, setPlans]               = useState<AdminPlan[]>([]);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [plansLoaded, setPlansLoaded]   = useState(false);
+  const [planDialog, setPlanDialog]     = useState(false);
+  const [editingPlan, setEditingPlan]   = useState<AdminPlan | null>(null);
+  const [planSaving, setPlanSaving]     = useState(false);
+  const [planForm, setPlanForm]         = useState({
+    name: "", price: "", max_communities: "1", max_tools: "5",
+    max_courses: "5", discount_percent: "0", description: "", is_active: true,
+  });
+
+  // Coupons state
+  type AdminCoupon = {
+    id: number; code: string; discount_percent: number; plan_id: number | null;
+    expiry_date: string | null; max_usage: number; used_count: number;
+    is_active: boolean; created_at: string;
+    plans: { id: number; name: string } | null;
+  };
+  const [coupons, setCoupons]               = useState<AdminCoupon[]>([]);
+  const [couponsLoading, setCouponsLoading] = useState(false);
+  const [couponsLoaded, setCouponsLoaded]   = useState(false);
+  const [couponDialog, setCouponDialog]     = useState(false);
+  const [editingCoupon, setEditingCoupon]   = useState<AdminCoupon | null>(null);
+  const [couponSaving, setCouponSaving]     = useState(false);
+  const [couponForm, setCouponForm]         = useState({
+    code: "", discount_percent: "10", plan_id: "", expiry_date: "", max_usage: "100", is_active: true,
+  });
 
   // Tool requests state
   type PendingToolRequest = {
@@ -596,6 +630,119 @@ export default function AdminPage() {
       setCommunityPayments(prev => prev.map(p => p.id === payment.id ? { ...p, status } : p));
     } catch (err) { toast({ title: (err as Error).message, variant: "destructive" }); }
     finally { setActioningPaymentId(null); }
+  };
+
+  // ── Plans CRUD ────────────────────────────────────────────────────────────
+  const fetchPlans = useCallback(async () => {
+    setPlansLoading(true);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch("/api/plans/all", { headers: { Authorization: `Bearer ${authToken}` } });
+      if (resp.ok) { setPlans(await resp.json() as AdminPlan[]); setPlansLoaded(true); }
+    } catch { /* silent */ } finally { setPlansLoading(false); }
+  }, [token]);
+
+  const openPlanDialog = (plan?: AdminPlan) => {
+    setEditingPlan(plan ?? null);
+    setPlanForm(plan ? {
+      name: plan.name, price: String(plan.price),
+      max_communities: String(plan.max_communities), max_tools: String(plan.max_tools),
+      max_courses: String(plan.max_courses), discount_percent: String(plan.discount_percent),
+      description: plan.description ?? "", is_active: plan.is_active,
+    } : { name: "", price: "", max_communities: "1", max_tools: "5", max_courses: "5", discount_percent: "0", description: "", is_active: true });
+    setPlanDialog(true);
+  };
+
+  const handleSavePlan = async () => {
+    if (!planForm.name.trim() || !planForm.price) {
+      toast({ title: "Name and price are required", variant: "destructive" }); return;
+    }
+    setPlanSaving(true);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const body = {
+        name: planForm.name.trim(), price: parseFloat(planForm.price),
+        max_communities: parseInt(planForm.max_communities, 10),
+        max_tools: parseInt(planForm.max_tools, 10), max_courses: parseInt(planForm.max_courses, 10),
+        discount_percent: parseFloat(planForm.discount_percent || "0"),
+        description: planForm.description.trim() || null, is_active: planForm.is_active,
+      };
+      const url  = editingPlan ? `/api/plans/${editingPlan.id}` : "/api/plans";
+      const meth = editingPlan ? "PUT" : "POST";
+      const resp = await fetch(url, { method: meth, headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` }, body: JSON.stringify(body) });
+      if (!resp.ok) { const d = await resp.json() as { error?: string }; throw new Error(d.error ?? "Failed"); }
+      toast({ title: editingPlan ? "Plan updated" : "Plan created" });
+      setPlanDialog(false);
+      void fetchPlans();
+    } catch (err) { toast({ title: (err as Error).message, variant: "destructive" }); }
+    finally { setPlanSaving(false); }
+  };
+
+  const handleDeletePlan = async (planId: number) => {
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch(`/api/plans/${planId}`, { method: "DELETE", headers: { Authorization: `Bearer ${authToken}` } });
+      if (!resp.ok) throw new Error("Failed to delete");
+      setPlans(prev => prev.filter(p => p.id !== planId));
+      toast({ title: "Plan deleted" });
+    } catch (err) { toast({ title: (err as Error).message, variant: "destructive" }); }
+  };
+
+  // ── Coupons CRUD ───────────────────────────────────────────────────────────
+  const fetchCoupons = useCallback(async () => {
+    setCouponsLoading(true);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch("/api/coupons", { headers: { Authorization: `Bearer ${authToken}` } });
+      if (resp.ok) { setCoupons(await resp.json() as AdminCoupon[]); setCouponsLoaded(true); }
+    } catch { /* silent */ } finally { setCouponsLoading(false); }
+  }, [token]);
+
+  const openCouponDialog = (coupon?: AdminCoupon) => {
+    setEditingCoupon(coupon ?? null);
+    setCouponForm(coupon ? {
+      code: coupon.code, discount_percent: String(coupon.discount_percent),
+      plan_id: coupon.plan_id ? String(coupon.plan_id) : "",
+      expiry_date: coupon.expiry_date ? coupon.expiry_date.slice(0, 10) : "",
+      max_usage: String(coupon.max_usage), is_active: coupon.is_active,
+    } : { code: "", discount_percent: "10", plan_id: "", expiry_date: "", max_usage: "100", is_active: true });
+    setCouponDialog(true);
+  };
+
+  const handleSaveCoupon = async () => {
+    if (!couponForm.code.trim() || !couponForm.discount_percent) {
+      toast({ title: "Code and discount are required", variant: "destructive" }); return;
+    }
+    setCouponSaving(true);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const body = {
+        code: couponForm.code.trim().toUpperCase(),
+        discount_percent: parseFloat(couponForm.discount_percent),
+        plan_id: couponForm.plan_id ? parseInt(couponForm.plan_id, 10) : null,
+        expiry_date: couponForm.expiry_date || null,
+        max_usage: parseInt(couponForm.max_usage, 10),
+        is_active: couponForm.is_active,
+      };
+      const url  = editingCoupon ? `/api/coupons/${editingCoupon.id}` : "/api/coupons";
+      const meth = editingCoupon ? "PUT" : "POST";
+      const resp = await fetch(url, { method: meth, headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` }, body: JSON.stringify(body) });
+      if (!resp.ok) { const d = await resp.json() as { error?: string }; throw new Error(d.error ?? "Failed"); }
+      toast({ title: editingCoupon ? "Coupon updated" : "Coupon created" });
+      setCouponDialog(false);
+      void fetchCoupons();
+    } catch (err) { toast({ title: (err as Error).message, variant: "destructive" }); }
+    finally { setCouponSaving(false); }
+  };
+
+  const handleDeleteCoupon = async (couponId: number) => {
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch(`/api/coupons/${couponId}`, { method: "DELETE", headers: { Authorization: `Bearer ${authToken}` } });
+      if (!resp.ok) throw new Error("Failed to delete");
+      setCoupons(prev => prev.filter(c => c.id !== couponId));
+      toast({ title: "Coupon deleted" });
+    } catch (err) { toast({ title: (err as Error).message, variant: "destructive" }); }
   };
 
   const handleApproveToolRequest = async (request: PendingToolRequest) => {
@@ -1074,7 +1221,7 @@ export default function AdminPage() {
 
         {/* Management tabs */}
         <Tabs defaultValue="pending">
-          <TabsList className="grid grid-cols-10 w-full max-w-4xl">
+          <TabsList className="grid grid-cols-12 w-full max-w-5xl">
             <TabsTrigger value="pending" data-testid="tab-pending">
               Approvals
               {pendingUsers.length > 0 && (
@@ -1135,6 +1282,22 @@ export default function AdminPage() {
             >
               <ScrollText className="w-3.5 h-3.5 mr-1" />
               Log
+            </TabsTrigger>
+            <TabsTrigger
+              value="plans"
+              data-testid="tab-plans"
+              onClick={() => { if (!plansLoaded) void fetchPlans(); }}
+            >
+              <Tag className="w-3.5 h-3.5 mr-1" />
+              Plans
+            </TabsTrigger>
+            <TabsTrigger
+              value="coupons"
+              data-testid="tab-coupons"
+              onClick={() => { if (!couponsLoaded) void fetchCoupons(); }}
+            >
+              <Percent className="w-3.5 h-3.5 mr-1" />
+              Coupons
             </TabsTrigger>
           </TabsList>
 
@@ -2532,8 +2695,249 @@ export default function AdminPage() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* ── PLANS tab ─────────────────────────────────────────────── */}
+          <TabsContent value="plans" className="mt-4 space-y-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Tag className="w-4 h-4" /> Plans Management
+                  </CardTitle>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="ghost" onClick={() => void fetchPlans()} disabled={plansLoading}>
+                      {plansLoading ? "Loading…" : "Refresh"}
+                    </Button>
+                    <Button size="sm" onClick={() => openPlanDialog()}>
+                      <Plus className="w-3.5 h-3.5 mr-1" />Add Plan
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {plansLoading && !plansLoaded ? (
+                  <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-24 w-full rounded-lg" />)}</div>
+                ) : plans.length === 0 ? (
+                  <div className="text-center py-10">
+                    <Tag className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">No plans yet. Create your first plan.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {plans.map(plan => (
+                      <div key={plan.id} className={`p-4 rounded-xl border ${plan.is_active ? "bg-card" : "bg-muted/30 opacity-70"}`}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-semibold text-sm">{plan.name}</span>
+                              {!plan.is_active && <Badge variant="outline" className="text-[10px] px-1.5">Inactive</Badge>}
+                              {plan.discount_percent > 0 && <Badge variant="secondary" className="text-[10px] px-1.5">{plan.discount_percent}% off</Badge>}
+                            </div>
+                            {plan.description && <p className="text-xs text-muted-foreground mb-2">{plan.description}</p>}
+                            <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1"><Users className="w-3 h-3" />{plan.max_communities} communit{plan.max_communities === 1 ? "y" : "ies"}</span>
+                              <span className="flex items-center gap-1"><Wrench className="w-3 h-3" />{plan.max_tools} tools</span>
+                              <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" />{plan.max_courses} courses</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="text-xl font-bold">${plan.price}</span>
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openPlanDialog(plan)}>
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => void handleDeletePlan(plan.id)}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── COUPONS tab ───────────────────────────────────────────── */}
+          <TabsContent value="coupons" className="mt-4 space-y-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Percent className="w-4 h-4" /> Coupons Management
+                  </CardTitle>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="ghost" onClick={() => void fetchCoupons()} disabled={couponsLoading}>
+                      {couponsLoading ? "Loading…" : "Refresh"}
+                    </Button>
+                    <Button size="sm" onClick={() => openCouponDialog()}>
+                      <Plus className="w-3.5 h-3.5 mr-1" />Add Coupon
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {couponsLoading && !couponsLoaded ? (
+                  <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}</div>
+                ) : coupons.length === 0 ? (
+                  <div className="text-center py-10">
+                    <Percent className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">No coupons yet. Create your first coupon.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {coupons.map(coupon => (
+                      <div key={coupon.id} className={`flex items-center justify-between gap-3 p-3 rounded-lg border ${coupon.is_active ? "bg-card" : "bg-muted/30 opacity-60"}`}>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="font-mono font-bold text-sm">{coupon.code}</span>
+                            <Badge variant="secondary" className="text-[10px] px-1.5">{coupon.discount_percent}% off</Badge>
+                            {!coupon.is_active && <Badge variant="outline" className="text-[10px] px-1.5">Inactive</Badge>}
+                          </div>
+                          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                            {coupon.plans && <span>Plan: {coupon.plans.name}</span>}
+                            {!coupon.plans && <span>All plans</span>}
+                            <span>Used: {coupon.used_count}/{coupon.max_usage}</span>
+                            {coupon.expiry_date && <span>Expires: {new Date(coupon.expiry_date).toLocaleDateString()}</span>}
+                          </div>
+                        </div>
+                        <div className="flex gap-1 flex-shrink-0">
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openCouponDialog(coupon)}>
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => void handleDeleteCoupon(coupon.id)}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
         </Tabs>
       </div>
+
+      {/* Plan Create/Edit Dialog */}
+      <Dialog open={planDialog} onOpenChange={setPlanDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Tag className="w-4 h-4" />{editingPlan ? "Edit Plan" : "Create Plan"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Plan Name *</Label>
+              <Input value={planForm.name} onChange={e => setPlanForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Starter, Pro, Business" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Price (USD) *</Label>
+                <div className="relative">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                  <Input className="pl-6" type="number" min="0" step="0.01" value={planForm.price} onChange={e => setPlanForm(f => ({ ...f, price: e.target.value }))} placeholder="9.99" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Discount %</Label>
+                <Input type="number" min="0" max="100" value={planForm.discount_percent} onChange={e => setPlanForm(f => ({ ...f, discount_percent: e.target.value }))} placeholder="0" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs flex items-center gap-1"><Users className="w-3 h-3" />Communities</Label>
+                <Input type="number" min="1" value={planForm.max_communities} onChange={e => setPlanForm(f => ({ ...f, max_communities: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs flex items-center gap-1"><Wrench className="w-3 h-3" />Tools</Label>
+                <Input type="number" min="0" value={planForm.max_tools} onChange={e => setPlanForm(f => ({ ...f, max_tools: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs flex items-center gap-1"><BookOpen className="w-3 h-3" />Courses</Label>
+                <Input type="number" min="0" value={planForm.max_courses} onChange={e => setPlanForm(f => ({ ...f, max_courses: e.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Description (optional)</Label>
+              <Textarea value={planForm.description} onChange={e => setPlanForm(f => ({ ...f, description: e.target.value }))} placeholder="Short description of this plan" rows={2} />
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch checked={planForm.is_active} onCheckedChange={v => setPlanForm(f => ({ ...f, is_active: v }))} id="plan-active" />
+              <Label htmlFor="plan-active" className="text-sm">Active (visible to users)</Label>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setPlanDialog(false)} disabled={planSaving}>Cancel</Button>
+            <Button onClick={() => void handleSavePlan()} disabled={planSaving || !planForm.name.trim() || !planForm.price}>
+              {planSaving ? "Saving…" : editingPlan ? "Update Plan" : "Create Plan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Coupon Create/Edit Dialog */}
+      <Dialog open={couponDialog} onOpenChange={setCouponDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Percent className="w-4 h-4" />{editingCoupon ? "Edit Coupon" : "Create Coupon"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Coupon Code *</Label>
+                <Input
+                  value={couponForm.code}
+                  onChange={e => setCouponForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
+                  placeholder="e.g. WELCOME50"
+                  className="font-mono uppercase"
+                  disabled={!!editingCoupon}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Discount % *</Label>
+                <Input type="number" min="1" max="100" value={couponForm.discount_percent} onChange={e => setCouponForm(f => ({ ...f, discount_percent: e.target.value }))} placeholder="10" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Applies to Plan</Label>
+                <Select value={couponForm.plan_id || "all"} onValueChange={v => setCouponForm(f => ({ ...f, plan_id: v === "all" ? "" : v }))}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="All plans" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All plans</SelectItem>
+                    {plans.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Max Usage</Label>
+                <Input type="number" min="1" value={couponForm.max_usage} onChange={e => setCouponForm(f => ({ ...f, max_usage: e.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Expiry Date (optional)</Label>
+              <Input type="date" value={couponForm.expiry_date} onChange={e => setCouponForm(f => ({ ...f, expiry_date: e.target.value }))} />
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch checked={couponForm.is_active} onCheckedChange={v => setCouponForm(f => ({ ...f, is_active: v }))} id="coupon-active" />
+              <Label htmlFor="coupon-active" className="text-sm">Active</Label>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setCouponDialog(false)} disabled={couponSaving}>Cancel</Button>
+            <Button onClick={() => void handleSaveCoupon()} disabled={couponSaving || !couponForm.code.trim() || !couponForm.discount_percent}>
+              {couponSaving ? "Saving…" : editingCoupon ? "Update Coupon" : "Create Coupon"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Screenshot viewer dialog */}
       <Dialog open={!!viewScreenshot} onOpenChange={open => { if (!open) setViewScreenshot(null); }}>

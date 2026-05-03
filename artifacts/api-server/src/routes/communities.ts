@@ -6,8 +6,9 @@ import { z } from "zod";
 const router: IRouter = Router();
 
 const CreateCommunitySchema = z.object({
-  name: z.string().min(2).max(100),
+  name:        z.string().min(2).max(100),
   description: z.string().max(1000).optional().nullable(),
+  plan_id:     z.number().int().positive().optional().nullable(),
 });
 
 // POST /api/communities — create a new community (status = pending)
@@ -18,15 +19,44 @@ router.post("/communities", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { name, description } = parsed.data;
+  const { name, description, plan_id } = parsed.data;
+  const userId = req.userId!;
+
+  // ── Limit check ──────────────────────────────────────────────────────────
+  if (plan_id) {
+    // Fetch the plan to get max_communities
+    const { data: plan } = await supabase
+      .from("plans")
+      .select("max_communities")
+      .eq("id", plan_id)
+      .single();
+
+    if (plan) {
+      // Count how many APPROVED communities this user already has
+      const { count } = await supabase
+        .from("communities")
+        .select("id", { count: "exact", head: true })
+        .eq("owner_id", userId)
+        .eq("status", "approved");
+
+      if ((count ?? 0) >= plan.max_communities) {
+        res.status(403).json({
+          error: `Limit reached for your current plan. Your plan allows ${plan.max_communities} communit${plan.max_communities === 1 ? "y" : "ies"}.`,
+          code: "PLAN_LIMIT_EXCEEDED",
+        });
+        return;
+      }
+    }
+  }
 
   const { data, error } = await supabase
     .from("communities")
     .insert({
-      name: name.trim(),
+      name:        name.trim(),
       description: description?.trim() ?? null,
-      owner_id: req.userId!,
-      status: "pending",
+      owner_id:    userId,
+      status:      "pending",
+      plan_id:     plan_id ?? null,
     })
     .select()
     .single();
@@ -44,7 +74,7 @@ router.post("/communities", requireAuth, async (req, res): Promise<void> => {
 router.get("/communities/mine", requireAuth, async (req, res): Promise<void> => {
   const { data, error } = await supabase
     .from("communities")
-    .select("*")
+    .select("*, plans(id, name, price, max_communities, max_tools, max_courses)")
     .eq("owner_id", req.userId!)
     .order("created_at", { ascending: false });
 
@@ -68,7 +98,7 @@ router.get("/communities/pending", requireAuth, async (req, res): Promise<void> 
 
   const { data, error } = await supabase
     .from("communities")
-    .select("id, name, description, status, created_at, owner_id, users!communities_owner_id_fkey(id, name, email)")
+    .select("id, name, description, status, created_at, owner_id, plan_id, users!communities_owner_id_fkey(id, name, email), plans(id, name, price)")
     .eq("status", "pending")
     .order("created_at", { ascending: true });
 
@@ -117,7 +147,7 @@ router.patch("/communities/:id/status", requireAuth, async (req, res): Promise<v
 router.get("/communities", requireAuth, async (req, res): Promise<void> => {
   const { data, error } = await supabase
     .from("communities")
-    .select("id, name, description, status, created_at, owner_id")
+    .select("id, name, description, status, created_at, owner_id, plan_id, plans(id, name)")
     .eq("status", "approved")
     .order("created_at", { ascending: false });
 
@@ -128,6 +158,40 @@ router.get("/communities", requireAuth, async (req, res): Promise<void> => {
   }
 
   res.json(data ?? []);
+});
+
+// GET /api/communities/my-plan — user: get their active plan info
+router.get("/communities/my-plan", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId!;
+
+  // Find the latest approved community_payment with a plan
+  const { data: payment } = await supabase
+    .from("community_payments")
+    .select("id, plan_id, status, created_at, final_price, plans(id, name, price, max_communities, max_tools, max_courses, description)")
+    .eq("user_id", userId)
+    .eq("status", "approved")
+    .not("plan_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!payment) {
+    res.json({ plan: null, usage: null });
+    return;
+  }
+
+  // Count usage
+  const { count: communityCount } = await supabase
+    .from("communities")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_id", userId)
+    .eq("status", "approved");
+
+  res.json({
+    plan:    payment.plans,
+    payment: { id: payment.id, final_price: payment.final_price, created_at: payment.created_at },
+    usage:   { communities: communityCount ?? 0 },
+  });
 });
 
 export default router;
