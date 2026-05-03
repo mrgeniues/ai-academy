@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import {
   Users2, Clock, CheckCircle, XCircle, CreditCard,
-  ArrowRight, ArrowLeft, Users, Wrench, BookOpen, Tag,
+  ArrowRight, ArrowLeft, Users, Wrench, BookOpen, Tag, Check,
 } from "lucide-react";
 
 const API = "/api";
@@ -113,7 +113,7 @@ export default function CreateCommunityPage() {
 
   return (
     <Layout>
-      <div className="p-6 max-w-2xl mx-auto space-y-6">
+      <div className={`p-6 mx-auto space-y-6 transition-all ${step === "plan" ? "max-w-5xl" : "max-w-2xl"}`}>
 
         {/* Header */}
         <div className="flex items-center gap-3">
@@ -148,9 +148,11 @@ export default function CreateCommunityPage() {
 
         {/* ── STEP 1: Plan selection ── */}
         {step === "plan" && (
-          <div className="space-y-3">
+          <div className="space-y-6">
             {plansLoading ? (
-              [...Array(3)].map((_, i) => <Skeleton key={i} className="h-28 w-full rounded-xl" />)
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-72 w-full rounded-2xl" />)}
+              </div>
             ) : plans.length === 0 ? (
               <Card>
                 <CardContent className="py-8 text-center text-muted-foreground text-sm">
@@ -158,64 +160,95 @@ export default function CreateCommunityPage() {
                 </CardContent>
               </Card>
             ) : (
-              plans.map(plan => (
-                <button
-                  key={plan.id}
-                  onClick={() => setSelectedPlan(plan)}
-                  className={`w-full text-left p-4 rounded-xl border transition-all ${
-                    selectedPlan?.id === plan.id
-                      ? "border-primary bg-primary/5 ring-1 ring-primary"
-                      : "border-border bg-card hover:border-primary/40 hover:bg-accent/30"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-bold text-sm">{plan.name}</span>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {plans.map((plan, idx) => {
+                  const isSelected = selectedPlan?.id === plan.id;
+                  const isPopular = idx === 1;
+                  const features = [
+                    `${plan.max_communities} communit${plan.max_communities === 1 ? "y" : "ies"}`,
+                    `${plan.max_tools} tools`,
+                    `${plan.max_courses} courses`,
+                    ...(plan.description
+                      ? plan.description.split("\n").filter(l => l.trim()).map(l => l.trim())
+                      : []),
+                  ];
+                  return (
+                    <div
+                      key={plan.id}
+                      onClick={() => setSelectedPlan(plan)}
+                      className={`relative flex flex-col rounded-2xl border p-6 cursor-pointer transition-all duration-200 ${
+                        isSelected
+                          ? "border-primary ring-2 ring-primary bg-primary/5"
+                          : "border-border bg-card hover:border-primary/50 hover:shadow-md"
+                      }`}
+                    >
+                      {/* Most Popular badge */}
+                      {isPopular && (
+                        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                          <Badge className="bg-primary text-primary-foreground px-3 py-1 text-xs font-semibold shadow">
+                            Most Popular
+                          </Badge>
+                        </div>
+                      )}
+
+                      {/* Plan name + discount */}
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-xs font-extrabold uppercase tracking-widest text-primary">
+                          {plan.name}
+                        </span>
                         {plan.discount_percent > 0 && (
-                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                          <Badge variant="secondary" className="text-[10px] px-1.5">
                             {plan.discount_percent}% off
                           </Badge>
                         )}
                       </div>
-                      {plan.description && (
-                        <ul className="text-xs text-muted-foreground mb-2 space-y-0.5 list-none">
-                          {plan.description.split("\n").filter(l => l.trim()).map((line, i) => (
-                            <li key={i} className="flex items-start gap-1.5">
-                              <span className="mt-0.5 text-primary/60">•</span>
-                              <span>{line.trim()}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Users className="w-3 h-3" />{plan.max_communities} communit{plan.max_communities === 1 ? "y" : "ies"}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Wrench className="w-3 h-3" />{plan.max_tools} tools
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <BookOpen className="w-3 h-3" />{plan.max_courses} courses
-                        </span>
+
+                      {/* Price */}
+                      <div className="mb-5">
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-4xl font-bold tracking-tight">${plan.price}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">one-time payment</p>
                       </div>
+
+                      {/* Select button */}
+                      <Button
+                        variant={isSelected ? "default" : "outline"}
+                        className="w-full mb-5"
+                        onClick={e => { e.stopPropagation(); setSelectedPlan(plan); }}
+                      >
+                        {isSelected
+                          ? <><Check className="w-4 h-4 mr-1.5" />Selected</>
+                          : "Select Plan"
+                        }
+                      </Button>
+
+                      {/* Divider */}
+                      <div className="border-t mb-4" />
+
+                      {/* Feature list */}
+                      <ul className="space-y-2.5 flex-1">
+                        {features.map((feat, i) => (
+                          <li key={i} className="flex items-start gap-2.5 text-sm">
+                            <Check className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                            <span>{feat}</span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
-                    <div className="text-right flex-shrink-0">
-                      <div className="text-2xl font-bold">${plan.price}</div>
-                      <div className="text-xs text-muted-foreground">one-time</div>
-                    </div>
-                  </div>
-                </button>
-              ))
+                  );
+                })}
+              </div>
             )}
 
             <Button
-              className="w-full mt-2"
+              className="w-full"
               disabled={!selectedPlan}
               onClick={() => setStep("details")}
               data-testid="button-continue-plan"
             >
-              Continue with {selectedPlan ? selectedPlan.name : "selected plan"} <ArrowRight className="w-4 h-4 ml-1" />
+              Continue with {selectedPlan ? selectedPlan.name : "selected plan"}
+              <ArrowRight className="w-4 h-4 ml-1.5" />
             </Button>
           </div>
         )}
