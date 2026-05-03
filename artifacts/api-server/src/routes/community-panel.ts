@@ -9,7 +9,7 @@ const router: IRouter = Router();
 async function getMembership(communityId: number, userId: number) {
   const { data: community } = await supabase
     .from("communities")
-    .select("id, name, description, status, owner_id")
+    .select("id, name, description, status, owner_id, invite_code")
     .eq("id", communityId)
     .single();
 
@@ -41,11 +41,21 @@ router.get("/communities/:id/panel", requireAuth, async (req, res): Promise<void
   if (!community) { res.status(404).json({ error: "Community not found" }); return; }
   if (community.status !== "approved") { res.status(403).json({ error: "Community not yet approved" }); return; }
 
+  // Lazy-generate a unique invite_code if this community doesn't have one yet
+  let inviteCode = (community as Record<string, unknown>)["invite_code"] as string | null ?? null;
+  if (!inviteCode) {
+    inviteCode = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+    await supabase
+      .from("communities")
+      .update({ invite_code: inviteCode })
+      .eq("id", id);
+  }
+
   // owner info
   const { data: owner } = await supabase
     .from("users").select("id, name, avatar").eq("id", community.owner_id).single();
 
-  res.json({ ...community, isOwner, memberStatus, owner });
+  res.json({ ...community, invite_code: inviteCode, isOwner, memberStatus, owner });
 });
 
 // ── POST /api/communities/:id/join ── request to join ───────────────────────
