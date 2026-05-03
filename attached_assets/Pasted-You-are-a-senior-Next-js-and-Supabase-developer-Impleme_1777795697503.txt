@@ -1,0 +1,126 @@
+You are a senior Next.js and Supabase developer.
+
+Implement a COMMUNITY MASTER INVITE URL system.
+
+IMPORTANT:
+
+* Do NOT modify existing UI
+* Do NOT add extra features
+* ONLY add invite URL functionality
+* Keep system secure
+
+=====================================
+GOAL:
+
+Each community must have a unique MASTER URL.
+
+This URL will allow external users to join the community.
+
+=====================================
+STEP 1: DATABASE UPDATE
+
+In communities table add:
+
+* invite_code (unique string)
+
+=====================================
+STEP 2: GENERATE INVITE CODE
+
+When community is approved:
+
+* Generate unique code
+
+Example:
+abc123xyz
+
+=====================================
+STEP 3: CREATE URL FORMAT
+
+https://yourdomain.com/community/join/{invite_code}
+
+=====================================
+STEP 4: JOIN PAGE
+
+Create route:
+
+/community/join/[invite_code]
+
+=====================================
+STEP 5: JOIN FLOW
+
+When external user opens link:
+
+---
+
+IF user NOT logged in:
+
+→ Redirect to login/signup
+
+---
+
+AFTER LOGIN:
+
+* Fetch community using invite_code
+
+=====================================
+STEP 6: ACCESS CONTROL
+
+After finding community:
+
+* Check if community is approved
+
+=====================================
+STEP 7: JOIN REQUEST SYSTEM
+
+User should NOT auto join
+
+Instead:
+
+* Create join request
+
+Create table:
+
+community_members:
+
+* id
+* community_id
+* user_id
+* status (pending/approved/rejected)
+* created_at
+
+=====================================
+STEP 8: OWNER APPROVAL
+
+Community owner can:
+
+* Approve / Reject members
+
+=====================================
+STEP 9: UI
+
+Inside community dashboard:
+
+Add:
+
+"Copy Invite Link"
+
+Use:
+
+navigator.clipboard.writeText(url)
+
+=====================================
+STEP 10: SECURITY
+
+* Invite code must be unique
+* Validate before joining
+* Prevent direct access without approval
+
+=====================================
+OUTPUT:
+
+* Invite code generation logic
+* Join page
+* Member request system
+* Copy link functionality
+
+Ensure no bugs and no changes to existing features.

@@ -1,0 +1,135 @@
+You are a senior Next.js and Supabase developer.
+
+Enhance the COMMUNITY SYSTEM with STRICT OWNER-LEVEL CONTROL and APPROVAL FLOW.
+
+IMPORTANT:
+
+* Do NOT modify UI design
+* Do NOT add extra features
+* ONLY enforce access control, approval routing, and data isolation
+* Maintain existing architecture
+
+=====================================
+GOAL:
+
+Ensure that ALL community-related actions are controlled ONLY by the COMMUNITY OWNER, not the main platform admin.
+
+=====================================
+STEP 1: APPROVAL FLOW SPLIT
+
+CASE A: User joins via COMMUNITY INVITE LINK
+
+→ Approval must go to:
+COMMUNITY OWNER (not main admin)
+
+---
+
+CASE B: User joins via MAIN WEBSITE (general signup)
+
+→ Approval goes to:
+MAIN ADMIN
+
+=====================================
+STEP 2: COMMUNITY OWNER ADMIN PANEL
+
+Inside each community dashboard:
+
+Show ADMIN PANEL only for:
+
+→ community owner
+
+Features:
+
+* Approve / Reject community members
+* Approve / Reject course enrollments (within that community)
+* Manage community users
+
+=====================================
+STEP 3: ACCESS CONTROL
+
+Only allow access if:
+
+user_id == community.owner_id
+
+Else:
+
+→ Hide admin panel completely
+
+=====================================
+STEP 4: COMMUNITY-SPECIFIC DATA ISOLATION
+
+All data MUST be filtered by:
+
+community_id
+
+=====================================
+APPLIES TO:
+
+* courses
+* tools
+* VIP posts
+* community posts
+* messages
+* enrollments
+* members
+
+=====================================
+RULE:
+
+Data from one community MUST NEVER appear in another community
+
+=====================================
+STEP 5: COMMUNITY OWNER PERMISSIONS
+
+Inside their own community, owner can:
+
+* Add courses
+* Add AI tools
+* Create VIP posts
+* Create community posts
+* Manage messages
+* Manage users
+
+=====================================
+STEP 6: JOIN REQUEST SYSTEM
+
+When user joins via invite link:
+
+→ Insert into community_members:
+
+status = pending
+
+→ Show in COMMUNITY OWNER PANEL
+
+=====================================
+STEP 7: ENROLLMENT APPROVAL
+
+When a user enrolls in a course inside a community:
+
+→ Approval request goes to:
+
+COMMUNITY OWNER (not platform admin)
+
+=====================================
+STEP 8: SECURITY
+
+* Validate all actions server-side
+* Check community ownership before every admin action
+* Protect all API routes
+
+=====================================
+STEP 9: VISIBILITY RULE
+
+* Community data only visible inside that community dashboard
+* NOT visible in global LMS
+* NOT visible to other users
+
+=====================================
+OUTPUT:
+
+* Approval routing logic (owner vs admin)
+* Community owner admin panel permissions
+* Data isolation enforcement
+* Secure access control
+
+Ensure system works without leaks or bugs.
