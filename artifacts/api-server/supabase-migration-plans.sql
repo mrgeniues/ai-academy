@@ -103,3 +103,29 @@ ON CONFLICT DO NOTHING;
 INSERT INTO community_payment_settings (monthly_price, yearly_price, lifetime_price)
 VALUES (9.99, 79.99, 199.99)
 ON CONFLICT DO NOTHING;
+
+-- ── 10. PAYMENT METHODS TABLE (dynamic, admin-managed) ───────────
+CREATE TABLE IF NOT EXISTS payment_methods (
+  id              SERIAL PRIMARY KEY,
+  name            TEXT NOT NULL,
+  instructions    TEXT,
+  account_details TEXT,
+  qr_url          TEXT,
+  is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order      INTEGER NOT NULL DEFAULT 0,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE payment_methods DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS payment_methods_is_active_idx ON payment_methods(is_active);
+CREATE INDEX IF NOT EXISTS payment_methods_sort_order_idx ON payment_methods(sort_order);
+
+-- ── 11. ADD rejection_reason TO community_payments ────────────────
+ALTER TABLE community_payments
+  ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+
+-- ── 12. SEED DEFAULT PAYMENT METHODS ─────────────────────────────
+INSERT INTO payment_methods (name, instructions, account_details, is_active, sort_order)
+VALUES
+  ('Binance Pay', 'Send the exact amount to our Binance Pay account and take a screenshot of the transfer confirmation.', NULL, TRUE, 0),
+  ('NayaPay',     'Send the exact amount to our NayaPay account and take a screenshot of the transaction confirmation.', NULL, TRUE, 1)
+ON CONFLICT DO NOTHING;

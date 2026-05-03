@@ -12,12 +12,16 @@ import { useToast } from "@/hooks/use-toast";
 import {
   CheckCircle, Clock, Upload, CreditCard, Copy, ExternalLink,
   ImageIcon, Loader2, AlertCircle, ArrowLeft, Tag, Users,
-  Wrench, BookOpen, Percent,
+  Wrench, BookOpen, Percent, XCircle,
 } from "lucide-react";
 
 const API = "/api";
-function authH(token: string | null) { return token ? { Authorization: `Bearer ${token}` } : {}; }
-function jsonH(token: string | null) { return { "Content-Type": "application/json", ...authH(token) }; }
+function authH(token: string | null): Record<string, string> {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+function jsonH(token: string | null): Record<string, string> {
+  return { "Content-Type": "application/json", ...authH(token) };
+}
 
 type Plan = {
   id: number; name: string; price: number;
@@ -30,23 +34,21 @@ type Community = {
   plans: Plan | null;
 };
 
-type PaymentSettings = {
-  binance_account: string | null; binance_qr_url: string | null;
-  nayapay_account: string | null; nayapay_qr_url: string | null;
+type PaymentMethod = {
+  id: number; name: string;
+  instructions: string | null;
+  account_details: string | null;
+  qr_url: string | null;
 };
 
 type CouponValidation = { id: number; code: string; discount_percent: number; valid: boolean } | null;
+
 type ExistingPayment = {
   id: number; plan: string | null; plan_id: number | null;
   payment_method: string; status: string; created_at: string;
-  final_price: number | null;
+  final_price: number | null; rejection_reason: string | null;
   plans: Plan | null;
 } | null;
-
-const METHOD_CONFIG = {
-  binance:  { label: "Binance Pay",  color: "text-yellow-600",  bg: "bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 dark:border-yellow-800" },
-  nayapay:  { label: "NayaPay",      color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800" },
-};
 
 type Step = "coupon" | "method" | "pay" | "done";
 
@@ -59,13 +61,13 @@ export default function CommunityPaymentPage() {
 
   const [community, setCommunity]           = useState<Community | null>(null);
   const [communityLoading, setCL]           = useState(true);
-  const [settings, setSettings]             = useState<PaymentSettings | null>(null);
-  const [settingsLoading, setSL]            = useState(true);
+  const [payMethods, setPayMethods]         = useState<PaymentMethod[]>([]);
+  const [methodsLoading, setML]             = useState(true);
   const [existingPayment, setEP]            = useState<ExistingPayment>(null);
   const [epLoading, setEPL]                 = useState(true);
 
   const [step, setStep]                     = useState<Step>("coupon");
-  const [selectedMethod, setMethod]         = useState<"binance" | "nayapay" | null>(null);
+  const [selectedMethod, setMethod]         = useState<PaymentMethod | null>(null);
 
   const [couponCode, setCouponCode]         = useState("");
   const [couponValidating, setCouponVal]    = useState(false);
@@ -92,13 +94,13 @@ export default function CommunityPaymentPage() {
       .finally(() => setCL(false));
   }, [token, communityId]);
 
-  // Fetch payment settings (binance/nayapay info)
+  // Fetch dynamic payment methods
   useEffect(() => {
-    fetch(`${API}/community-payments/settings`)
+    fetch(`${API}/payment-methods`)
       .then(r => r.json())
-      .then(d => { if (!d.error) setSettings(d); })
+      .then(d => { if (Array.isArray(d)) setPayMethods(d); })
       .catch(() => {})
-      .finally(() => setSL(false));
+      .finally(() => setML(false));
   }, []);
 
   // Check for existing payment
@@ -114,23 +116,17 @@ export default function CommunityPaymentPage() {
 
   const validateCoupon = async () => {
     if (!couponCode.trim() || !community?.plan_id) return;
-    setCouponVal(true);
-    setCouponError(null);
-    setCoupon(null);
+    setCouponVal(true); setCouponError(null); setCoupon(null);
     try {
       const res = await fetch(`${API}/coupons/validate`, {
-        method: "POST",
-        headers: jsonH(token),
+        method: "POST", headers: jsonH(token),
         body: JSON.stringify({ code: couponCode.trim(), plan_id: community.plan_id }),
       });
       const d = await res.json() as { error?: string; id?: number; code?: string; discount_percent?: number; valid?: boolean };
       if (!res.ok) { setCouponError(d.error ?? "Invalid coupon"); return; }
       setCoupon({ id: d.id!, code: d.code!, discount_percent: d.discount_percent!, valid: true });
-    } catch {
-      setCouponError("Failed to validate coupon");
-    } finally {
-      setCouponVal(false);
-    }
+    } catch { setCouponError("Failed to validate coupon"); }
+    finally { setCouponVal(false); }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -158,26 +154,24 @@ export default function CommunityPaymentPage() {
       screenshotUrl = upData.url!;
     } catch (err) {
       toast({ title: err instanceof Error ? err.message : "Upload failed", variant: "destructive" });
-      setUploading(false);
-      return;
+      setUploading(false); return;
     }
-    setUploading(false);
-    setSubmitting(true);
+    setUploading(false); setSubmitting(true);
 
-    const basePrice       = plan?.price ?? 0;
-    const discountAmount  = coupon ? (basePrice * coupon.discount_percent) / 100 : 0;
-    const finalPrice      = Math.max(0, basePrice - discountAmount);
+    const basePrice      = plan?.price ?? 0;
+    const discountAmount = coupon ? (basePrice * coupon.discount_percent) / 100 : 0;
+    const finalPrice     = Math.max(0, basePrice - discountAmount);
 
     try {
       const res = await fetch(`${API}/community-payments`, {
-        method: "POST",
-        headers: jsonH(token),
+        method: "POST", headers: jsonH(token),
         body: JSON.stringify({
           community_id:    communityId,
           plan:            plan?.name ?? "custom",
           plan_id:         community?.plan_id ?? null,
           coupon_id:       coupon?.id ?? null,
-          payment_method:  selectedMethod,
+          payment_method:  selectedMethod.name,
+          payment_method_id: selectedMethod.id,
           screenshot_url:  screenshotUrl,
           final_price:     finalPrice,
           discount_amount: discountAmount,
@@ -188,9 +182,7 @@ export default function CommunityPaymentPage() {
       setStep("done");
     } catch (err) {
       toast({ title: err instanceof Error ? err.message : "Submission failed", variant: "destructive" });
-    } finally {
-      setSubmitting(false);
-    }
+    } finally { setSubmitting(false); }
   };
 
   const copyToClipboard = (text: string) => {
@@ -198,7 +190,7 @@ export default function CommunityPaymentPage() {
     toast({ title: "Copied!" });
   };
 
-  const isLoading = communityLoading || settingsLoading || epLoading;
+  const isLoading = communityLoading || methodsLoading || epLoading;
 
   if (isLoading) {
     return (
@@ -212,67 +204,96 @@ export default function CommunityPaymentPage() {
     );
   }
 
-  const plan         = community?.plans ?? null;
-  const basePrice    = plan?.price ?? 0;
-  const discount     = coupon ? (basePrice * coupon.discount_percent) / 100 : 0;
-  const finalPrice   = Math.max(0, basePrice - discount);
-
-  const account = selectedMethod ? (selectedMethod === "binance" ? settings?.binance_account : settings?.nayapay_account) ?? null : null;
-  const qrUrl   = selectedMethod ? (selectedMethod === "binance" ? settings?.binance_qr_url  : settings?.nayapay_qr_url)  ?? null : null;
-  const hasMethod = (m: "binance" | "nayapay") =>
-    m === "binance"
-      ? !!(settings?.binance_account || settings?.binance_qr_url)
-      : !!(settings?.nayapay_account || settings?.nayapay_qr_url);
+  const plan       = community?.plans ?? null;
+  const basePrice  = plan?.price ?? 0;
+  const discount   = coupon ? (basePrice * coupon.discount_percent) / 100 : 0;
+  const finalPrice = Math.max(0, basePrice - discount);
 
   const STEPS: Step[] = ["coupon", "method", "pay"];
   const STEP_LABELS: Record<Step, string> = { coupon: "Coupon", method: "Payment Method", pay: "Pay & Upload", done: "" };
 
-  // ── Already submitted or approved ────────────────────────────────────────
+  // ── Already submitted / approved / rejected ───────────────────────────────
   if (existingPayment && step !== "done") {
     return (
       <Layout>
         <div className="p-6 max-w-lg mx-auto space-y-6">
           <button onClick={() => navigate("/create-community")} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="w-4 h-4" />Back
+            <ArrowLeft className="w-4 h-4" />Back to My Communities
           </button>
-          <Card>
-            <CardContent className="pt-8 pb-8 text-center space-y-4">
-              {existingPayment.status === "approved" ? (
-                <>
-                  <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto">
-                    <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
-                  </div>
-                  <h2 className="text-xl font-bold">Payment Approved!</h2>
-                  <p className="text-sm text-muted-foreground">Your community is now live.</p>
-                  <Button onClick={() => navigate(`/community/${communityId}`)}>Open Community</Button>
-                </>
-              ) : existingPayment.status === "rejected" ? (
-                <>
-                  <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto">
-                    <AlertCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
-                  </div>
+
+          {existingPayment.status === "approved" && (
+            <Card className="border-green-200 dark:border-green-800">
+              <CardContent className="pt-8 pb-8 text-center space-y-4">
+                <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto">
+                  <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-green-700 dark:text-green-400">Payment Approved!</h2>
+                  <p className="text-sm text-muted-foreground mt-1">Your community is now live and ready to use.</p>
+                </div>
+                <Button onClick={() => navigate(`/community/${communityId}`)}>Open Community</Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {existingPayment.status === "rejected" && (
+            <Card className="border-destructive/30">
+              <CardContent className="pt-8 pb-8 text-center space-y-4">
+                <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto">
+                  <XCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
+                </div>
+                <div>
                   <h2 className="text-xl font-bold">Payment Rejected</h2>
-                  <p className="text-sm text-muted-foreground">Please resubmit with a valid payment screenshot.</p>
-                  <Button onClick={() => { setEP(null); setStep("coupon"); }}>Try Again</Button>
-                </>
-              ) : (
-                <>
-                  <div className="w-16 h-16 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center mx-auto">
-                    <Clock className="w-8 h-8 text-yellow-600 dark:text-yellow-400" />
+                  <p className="text-sm text-muted-foreground mt-1">Your payment submission was not approved.</p>
+                </div>
+                {existingPayment.rejection_reason && (
+                  <div className="mx-auto max-w-xs p-3 rounded-xl bg-destructive/5 border border-destructive/20 text-left">
+                    <p className="text-xs font-semibold text-destructive mb-1 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" /> Reason from admin:
+                    </p>
+                    <p className="text-sm text-foreground">{existingPayment.rejection_reason}</p>
                   </div>
-                  <h2 className="text-xl font-bold">Payment Under Review</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Your <strong>{existingPayment.plans?.name ?? existingPayment.plan ?? "plan"}</strong> payment
-                    via <strong>{existingPayment.payment_method}</strong> is being verified.
-                    {existingPayment.final_price != null && (
-                      <span> Amount: <strong>${existingPayment.final_price.toFixed(2)}</strong></span>
-                    )}
+                )}
+                <Button onClick={() => { setEP(null); setStep("coupon"); }}>
+                  Try Again
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {existingPayment.status === "pending" && (
+            <Card className="border-yellow-200 dark:border-yellow-800">
+              <CardContent className="pt-8 pb-8 text-center space-y-4">
+                <div className="w-16 h-16 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center mx-auto">
+                  <Clock className="w-8 h-8 text-yellow-600 dark:text-yellow-400" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold">Your Request is Under Review</h2>
+                  <p className="text-sm text-muted-foreground mt-1 max-w-xs mx-auto">
+                    We've received your payment screenshot and our team is reviewing it. You'll have access to your community once approved.
                   </p>
-                  <Badge variant="outline" className="text-yellow-600 border-yellow-300">Pending Verification</Badge>
-                </>
-              )}
-            </CardContent>
-          </Card>
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                  <Badge variant="outline" className="text-yellow-600 border-yellow-400 gap-1.5 px-3 py-1">
+                    <Clock className="w-3.5 h-3.5" /> Pending Verification
+                  </Badge>
+                  {existingPayment.final_price != null && (
+                    <p className="text-xs text-muted-foreground">
+                      Amount submitted: <strong>${existingPayment.final_price.toFixed(2)}</strong> via <strong>{existingPayment.payment_method}</strong>
+                    </p>
+                  )}
+                </div>
+                <div className="p-3 rounded-xl bg-muted/50 text-left space-y-1.5 text-xs text-muted-foreground max-w-xs mx-auto">
+                  <p>✓ Screenshot received</p>
+                  <p>⏳ Admin verification in progress</p>
+                  <p className="opacity-50">○ Community access granted</p>
+                </div>
+                <Button variant="outline" onClick={() => navigate("/create-community")}>
+                  Back to My Communities
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </Layout>
     );
@@ -283,16 +304,25 @@ export default function CommunityPaymentPage() {
     return (
       <Layout>
         <div className="p-6 max-w-lg mx-auto">
-          <Card>
+          <Card className="border-yellow-200 dark:border-yellow-800">
             <CardContent className="pt-10 pb-10 text-center space-y-4">
               <div className="w-16 h-16 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center mx-auto">
                 <Clock className="w-8 h-8 text-yellow-600 dark:text-yellow-400" />
               </div>
-              <h2 className="text-xl font-bold">Payment Submitted!</h2>
-              <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-                Your screenshot is under admin review. Your community will go live once verified.
-              </p>
-              <Badge variant="outline" className="text-yellow-600 border-yellow-300">Awaiting Verification</Badge>
+              <div>
+                <h2 className="text-xl font-bold">Payment Submitted!</h2>
+                <p className="text-sm text-muted-foreground mt-1 max-w-xs mx-auto">
+                  Your screenshot is under admin review. Your community will go live once verified.
+                </p>
+              </div>
+              <div className="p-3 rounded-xl bg-muted/50 text-left space-y-1.5 text-xs text-muted-foreground max-w-xs mx-auto">
+                <p>✓ Screenshot received</p>
+                <p>⏳ Admin verification in progress</p>
+                <p className="opacity-50">○ Community access granted</p>
+              </div>
+              <Badge variant="outline" className="text-yellow-600 border-yellow-400 gap-1.5 px-3 py-1">
+                <Clock className="w-3.5 h-3.5" /> Awaiting Verification
+              </Badge>
               <div className="pt-2">
                 <Button variant="outline" onClick={() => navigate("/create-community")}>Back to My Communities</Button>
               </div>
@@ -320,7 +350,7 @@ export default function CommunityPaymentPage() {
           </div>
         </div>
 
-        {/* Plan summary card */}
+        {/* Plan summary */}
         {plan && (
           <div className="flex items-center gap-3 p-3 rounded-xl bg-primary/5 border border-primary/20">
             <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -390,15 +420,11 @@ export default function CommunityPaymentPage() {
                     <span className="text-green-700 dark:text-green-400 font-medium">
                       {coupon.code} — {coupon.discount_percent}% off applied!
                     </span>
-                    <button
-                      onClick={() => { setCoupon(null); setCouponCode(""); }}
-                      className="ml-auto text-xs text-muted-foreground hover:text-foreground"
-                    >
+                    <button onClick={() => { setCoupon(null); setCouponCode(""); }} className="ml-auto text-xs text-muted-foreground hover:text-foreground">
                       Remove
                     </button>
                   </div>
                 )}
-
                 {couponError && (
                   <p className="text-xs text-destructive flex items-center gap-1">
                     <AlertCircle className="w-3.5 h-3.5" /> {couponError}
@@ -426,7 +452,6 @@ export default function CommunityPaymentPage() {
                 )}
               </CardContent>
             </Card>
-
             <Button className="w-full" onClick={() => setStep("method")} data-testid="button-continue-coupon">
               Continue → Payment Method
             </Button>
@@ -436,36 +461,40 @@ export default function CommunityPaymentPage() {
         {/* ── STEP 2: Payment method ── */}
         {step === "method" && (
           <div className="space-y-3">
-            {(["binance", "nayapay"] as const).map(m => {
-              const cfg = METHOD_CONFIG[m];
-              const available = hasMethod(m);
-              return (
+            {payMethods.length === 0 ? (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground text-sm">
+                  No payment methods configured yet. Please contact the admin.
+                </CardContent>
+              </Card>
+            ) : (
+              payMethods.map(m => (
                 <button
-                  key={m}
-                  onClick={() => available && setMethod(m)}
-                  disabled={!available}
+                  key={m.id}
+                  onClick={() => setMethod(m)}
                   className={`w-full text-left p-4 rounded-xl border transition-all ${
-                    !available ? "opacity-40 cursor-not-allowed border-border"
-                      : selectedMethod === m
-                        ? "border-primary bg-primary/5 ring-1 ring-primary"
-                        : "border-border bg-card hover:border-primary/40 hover:bg-accent/30"
+                    selectedMethod?.id === m.id
+                      ? "border-primary bg-primary/5 ring-1 ring-primary"
+                      : "border-border bg-card hover:border-primary/40 hover:bg-accent/30"
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-lg ${cfg.bg} flex items-center justify-center`}>
-                        <CreditCard className={`w-4 h-4 ${cfg.color}`} />
+                      <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <CreditCard className="w-4 h-4 text-primary" />
                       </div>
                       <div>
-                        <span className="font-semibold text-sm">{cfg.label}</span>
-                        {!available && <p className="text-xs text-muted-foreground">Not configured</p>}
+                        <span className="font-semibold text-sm block">{m.name}</span>
+                        {m.account_details && (
+                          <span className="text-xs text-muted-foreground font-mono">{m.account_details}</span>
+                        )}
                       </div>
                     </div>
-                    {selectedMethod === m && <CheckCircle className="w-4 h-4 text-primary" />}
+                    {selectedMethod?.id === m.id && <CheckCircle className="w-4 h-4 text-primary flex-shrink-0" />}
                   </div>
                 </button>
-              );
-            })}
+              ))
+            )}
             <div className="flex gap-2 mt-2">
               <Button variant="outline" className="flex-1" onClick={() => setStep("coupon")}>← Back</Button>
               <Button className="flex-1" disabled={!selectedMethod} onClick={() => setStep("pay")}>Continue →</Button>
@@ -497,40 +526,49 @@ export default function CommunityPaymentPage() {
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Method</span>
-                  <span className="font-medium">{METHOD_CONFIG[selectedMethod].label}</span>
+                  <span className="font-medium">{selectedMethod.name}</span>
                 </div>
               </CardContent>
             </Card>
 
             {/* Payment details */}
-            <Card className={`border ${METHOD_CONFIG[selectedMethod].bg}`}>
+            <Card className="border-primary/20 bg-primary/5">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">Send ${finalPrice.toFixed(2)} to:</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {account && (
+                {selectedMethod.account_details && (
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <p className="text-xs text-muted-foreground">Account / ID</p>
-                      <p className="font-mono text-sm font-semibold">{account}</p>
+                      <p className="font-mono text-sm font-semibold">{selectedMethod.account_details}</p>
                     </div>
-                    <button onClick={() => copyToClipboard(account)}
-                      className="p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-colors" title="Copy">
+                    <button
+                      onClick={() => copyToClipboard(selectedMethod.account_details!)}
+                      className="p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                      title="Copy"
+                    >
                       <Copy className="w-4 h-4" />
                     </button>
                   </div>
                 )}
-                {qrUrl && (
+                {selectedMethod.qr_url && (
                   <div className="space-y-2">
                     <p className="text-xs text-muted-foreground">Scan QR Code</p>
-                    <img src={qrUrl} alt="QR Code" className="w-40 h-40 rounded-xl border object-contain bg-white p-1" />
-                    <a href={qrUrl} target="_blank" rel="noopener noreferrer"
+                    <img src={selectedMethod.qr_url} alt="QR Code" className="w-40 h-40 rounded-xl border object-contain bg-white p-1" />
+                    <a href={selectedMethod.qr_url} target="_blank" rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
                       Open full size <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>
                 )}
-                {!account && !qrUrl && (
+                {selectedMethod.instructions && (
+                  <div className="p-3 rounded-lg bg-muted/50 border text-sm text-muted-foreground">
+                    <p className="text-xs font-semibold text-foreground mb-1">Instructions:</p>
+                    {selectedMethod.instructions}
+                  </div>
+                )}
+                {!selectedMethod.account_details && !selectedMethod.qr_url && !selectedMethod.instructions && (
                   <p className="text-sm text-muted-foreground">Payment details not configured. Contact admin.</p>
                 )}
               </CardContent>
@@ -558,8 +596,10 @@ export default function CommunityPaymentPage() {
                     </button>
                   </div>
                 ) : (
-                  <button onClick={() => fileRef.current?.click()}
-                    className="w-full border-2 border-dashed rounded-xl p-8 flex flex-col items-center gap-2 hover:border-primary/50 hover:bg-accent/30 transition-all">
+                  <button
+                    onClick={() => fileRef.current?.click()}
+                    className="w-full border-2 border-dashed rounded-xl p-8 flex flex-col items-center gap-2 hover:border-primary/50 hover:bg-accent/30 transition-all"
+                  >
                     <ImageIcon className="w-8 h-8 text-muted-foreground" />
                     <span className="text-sm text-muted-foreground">Click to upload payment screenshot</span>
                     <span className="text-xs text-muted-foreground">PNG, JPG, WEBP accepted</span>

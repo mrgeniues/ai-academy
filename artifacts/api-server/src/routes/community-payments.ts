@@ -69,14 +69,15 @@ router.put("/community-payments/settings", requireAuth, async (req, res): Promis
 // ── POST /api/community-payments ── user submits payment proof
 router.post("/community-payments", requireAuth, async (req, res): Promise<void> => {
   const Schema = z.object({
-    community_id:     z.number().int().positive(),
-    plan:             z.string().optional().default("custom"),
-    plan_id:          z.number().int().positive().optional().nullable(),
-    coupon_id:        z.number().int().positive().optional().nullable(),
-    payment_method:   z.enum(["binance", "nayapay"]),
-    screenshot_url:   z.string().url(),
-    final_price:      z.number().min(0).optional().nullable(),
-    discount_amount:  z.number().min(0).optional().nullable(),
+    community_id:       z.number().int().positive(),
+    plan:               z.string().optional().default("custom"),
+    plan_id:            z.number().int().positive().optional().nullable(),
+    coupon_id:          z.number().int().positive().optional().nullable(),
+    payment_method:     z.string().min(1).max(200),
+    payment_method_id:  z.number().int().positive().optional().nullable(),
+    screenshot_url:     z.string().url(),
+    final_price:        z.number().min(0).optional().nullable(),
+    discount_amount:    z.number().min(0).optional().nullable(),
   });
 
   const parsed = Schema.safeParse(req.body);
@@ -197,7 +198,10 @@ router.patch("/community-payments/:id/status", requireAuth, async (req, res): Pr
   const paymentId = parseInt(req.params["id"] as string, 10);
   if (isNaN(paymentId)) { res.status(400).json({ error: "Invalid id" }); return; }
 
-  const parsed = z.object({ status: z.enum(["approved", "rejected"]) }).safeParse(req.body);
+  const parsed = z.object({
+    status: z.enum(["approved", "rejected"]),
+    rejection_reason: z.string().max(1000).nullable().optional(),
+  }).safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "status must be approved or rejected" }); return; }
 
   const { data: payment, error: fetchErr } = await supabase
@@ -208,9 +212,14 @@ router.patch("/community-payments/:id/status", requireAuth, async (req, res): Pr
 
   if (fetchErr || !payment) { res.status(404).json({ error: "Payment not found" }); return; }
 
+  const updatePayload: Record<string, unknown> = { status: parsed.data.status };
+  if (parsed.data.status === "rejected" && parsed.data.rejection_reason) {
+    updatePayload["rejection_reason"] = parsed.data.rejection_reason;
+  }
+
   const { data: updated, error: updateErr } = await supabase
     .from("community_payments")
-    .update({ status: parsed.data.status })
+    .update(updatePayload)
     .eq("id", paymentId)
     .select().single();
 
@@ -242,7 +251,7 @@ router.get("/community-payments/my/:communityId", requireAuth, async (req, res):
 
   const { data, error } = await supabase
     .from("community_payments")
-    .select("id, plan, plan_id, payment_method, status, created_at, final_price, plans(id, name, price, max_communities, max_tools, max_courses)")
+    .select("id, plan, plan_id, payment_method, status, created_at, final_price, rejection_reason, plans(id, name, price, max_communities, max_tools, max_courses)")
     .eq("community_id", communityId)
     .eq("user_id", req.userId!)
     .order("created_at", { ascending: false })

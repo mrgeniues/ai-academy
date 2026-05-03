@@ -182,6 +182,26 @@ export default function AdminPage() {
     max_courses: "5", discount_percent: "0", description: "", is_active: true,
   });
 
+  // Payment Methods state
+  type PaymentMethod = {
+    id: number; name: string; instructions: string | null;
+    account_details: string | null; qr_url: string | null;
+    is_active: boolean; sort_order: number; created_at: string;
+  };
+  const [payMethods, setPayMethods]             = useState<PaymentMethod[]>([]);
+  const [payMethodsLoading, setPayMethodsLoading] = useState(false);
+  const [payMethodsLoaded, setPayMethodsLoaded] = useState(false);
+  const [pmDialog, setPmDialog]                 = useState(false);
+  const [editingPm, setEditingPm]               = useState<PaymentMethod | null>(null);
+  const [pmSaving, setPmSaving]                 = useState(false);
+  const [pmForm, setPmForm]                     = useState({
+    name: "", instructions: "", account_details: "", qr_url: "", is_active: true, sort_order: "0",
+  });
+  const [pmQrUploading, setPmQrUploading]       = useState(false);
+  // Rejection reason state
+  const [rejectingPaymentId, setRejectingPaymentId] = useState<number | null>(null);
+  const [rejectionReason, setRejectionReason]       = useState("");
+
   // Coupons state
   type AdminCoupon = {
     id: number; code: string; discount_percent: number; plan_id: number | null;
@@ -616,20 +636,90 @@ export default function AdminPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  const handlePaymentAction = async (payment: CommunityPayment, status: "approved" | "rejected") => {
+  const handlePaymentAction = async (payment: CommunityPayment, status: "approved" | "rejected", reason?: string) => {
     setActioningPaymentId(payment.id);
     try {
       const authToken = token ?? localStorage.getItem("lms_token");
       const resp = await fetch(`/api/community-payments/${payment.id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, rejection_reason: reason ?? null }),
       });
       if (!resp.ok) { const d = await resp.json() as { error?: string }; throw new Error(d.error ?? "Failed"); }
       toast({ title: status === "approved" ? "Payment approved — community is now live!" : "Payment rejected" });
       setCommunityPayments(prev => prev.map(p => p.id === payment.id ? { ...p, status } : p));
+      setRejectingPaymentId(null);
+      setRejectionReason("");
     } catch (err) { toast({ title: (err as Error).message, variant: "destructive" }); }
     finally { setActioningPaymentId(null); }
+  };
+
+  // ── Payment Methods CRUD ───────────────────────────────────────────────────
+  const fetchPayMethods = async () => {
+    setPayMethodsLoading(true);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const resp = await fetch("/api/payment-methods/all", { headers: { Authorization: `Bearer ${authToken}` } });
+      if (resp.ok) { setPayMethods(await resp.json() as PaymentMethod[]); setPayMethodsLoaded(true); }
+    } catch { /* silent */ } finally { setPayMethodsLoading(false); }
+  };
+
+  const openPmDialog = (pm?: PaymentMethod) => {
+    setEditingPm(pm ?? null);
+    setPmForm(pm ? {
+      name: pm.name, instructions: pm.instructions ?? "",
+      account_details: pm.account_details ?? "", qr_url: pm.qr_url ?? "",
+      is_active: pm.is_active, sort_order: String(pm.sort_order),
+    } : { name: "", instructions: "", account_details: "", qr_url: "", is_active: true, sort_order: "0" });
+    setPmDialog(true);
+  };
+
+  const handleSavePm = async () => {
+    if (!pmForm.name.trim()) { toast({ title: "Name is required", variant: "destructive" }); return; }
+    setPmSaving(true);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const body = {
+        name: pmForm.name.trim(),
+        instructions: pmForm.instructions.trim() || null,
+        account_details: pmForm.account_details.trim() || null,
+        qr_url: pmForm.qr_url.trim() || null,
+        is_active: pmForm.is_active,
+        sort_order: parseInt(pmForm.sort_order || "0", 10),
+      };
+      const url  = editingPm ? `/api/payment-methods/${editingPm.id}` : "/api/payment-methods";
+      const meth = editingPm ? "PUT" : "POST";
+      const resp = await fetch(url, { method: meth, headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` }, body: JSON.stringify(body) });
+      if (!resp.ok) { const d = await resp.json() as { error?: string }; throw new Error(d.error ?? "Failed"); }
+      toast({ title: editingPm ? "Payment method updated" : "Payment method created" });
+      setPmDialog(false);
+      void fetchPayMethods();
+    } catch (err) { toast({ title: (err as Error).message, variant: "destructive" }); }
+    finally { setPmSaving(false); }
+  };
+
+  const handleDeletePm = async (id: number) => {
+    if (!window.confirm("Delete this payment method?")) return;
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      await fetch(`/api/payment-methods/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${authToken}` } });
+      setPayMethods(prev => prev.filter(m => m.id !== id));
+      toast({ title: "Payment method deleted" });
+    } catch { toast({ title: "Delete failed", variant: "destructive" }); }
+  };
+
+  const handlePmQrUpload = async (file: File) => {
+    setPmQrUploading(true);
+    try {
+      const authToken = token ?? localStorage.getItem("lms_token");
+      const fd = new FormData(); fd.append("file", file);
+      const resp = await fetch("/api/upload", { method: "POST", headers: { Authorization: `Bearer ${authToken}` }, body: fd });
+      const d = await resp.json() as { url?: string; error?: string };
+      if (!resp.ok || !d.url) throw new Error(d.error ?? "Upload failed");
+      setPmForm(f => ({ ...f, qr_url: d.url! }));
+      toast({ title: "QR uploaded" });
+    } catch (err) { toast({ title: (err as Error).message, variant: "destructive" }); }
+    finally { setPmQrUploading(false); }
   };
 
   // ── Plans CRUD ────────────────────────────────────────────────────────────
@@ -1298,6 +1388,14 @@ export default function AdminPage() {
             >
               <Percent className="w-3.5 h-3.5 mr-1" />
               Coupons
+            </TabsTrigger>
+            <TabsTrigger
+              value="pay-methods"
+              data-testid="tab-pay-methods"
+              onClick={() => { if (!payMethodsLoaded) void fetchPayMethods(); }}
+            >
+              <CreditCard className="w-3.5 h-3.5 mr-1" />
+              Pay Methods
             </TabsTrigger>
           </TabsList>
 
@@ -2485,21 +2583,45 @@ export default function AdminPage() {
                           </div>
                         </div>
                         {payment.status === "pending" && (
-                          <div className="flex gap-2 flex-shrink-0">
-                            <Button size="sm" variant="outline"
-                              className="text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-950/30 h-7 text-xs"
-                              disabled={actioningPaymentId === payment.id}
-                              onClick={() => void handlePaymentAction(payment, "approved")}
-                            >
-                              <CheckCircle className="w-3 h-3 mr-1" />Approve
-                            </Button>
-                            <Button size="sm" variant="outline"
-                              className="text-destructive border-destructive/20 hover:bg-destructive/5 h-7 text-xs"
-                              disabled={actioningPaymentId === payment.id}
-                              onClick={() => void handlePaymentAction(payment, "rejected")}
-                            >
-                              <XCircle className="w-3 h-3 mr-1" />Reject
-                            </Button>
+                          <div className="flex flex-col gap-2 flex-shrink-0 items-end">
+                            <div className="flex gap-2">
+                              <Button size="sm" variant="outline"
+                                className="text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-950/30 h-7 text-xs"
+                                disabled={actioningPaymentId === payment.id}
+                                onClick={() => void handlePaymentAction(payment, "approved")}
+                              >
+                                <CheckCircle className="w-3 h-3 mr-1" />Approve
+                              </Button>
+                              <Button size="sm" variant="outline"
+                                className="text-destructive border-destructive/20 hover:bg-destructive/5 h-7 text-xs"
+                                disabled={actioningPaymentId === payment.id}
+                                onClick={() => {
+                                  if (rejectingPaymentId === payment.id) {
+                                    setRejectingPaymentId(null); setRejectionReason("");
+                                  } else {
+                                    setRejectingPaymentId(payment.id); setRejectionReason("");
+                                  }
+                                }}
+                              >
+                                <XCircle className="w-3 h-3 mr-1" />Reject
+                              </Button>
+                            </div>
+                            {rejectingPaymentId === payment.id && (
+                              <div className="flex flex-col gap-1.5 w-56">
+                                <Input
+                                  className="h-7 text-xs"
+                                  placeholder="Reason for rejection (optional)"
+                                  value={rejectionReason}
+                                  onChange={e => setRejectionReason(e.target.value)}
+                                />
+                                <Button size="sm" variant="destructive" className="h-7 text-xs w-full"
+                                  disabled={actioningPaymentId === payment.id}
+                                  onClick={() => void handlePaymentAction(payment, "rejected", rejectionReason.trim() || undefined)}
+                                >
+                                  {actioningPaymentId === payment.id ? "Rejecting…" : "Confirm Reject"}
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -2768,6 +2890,79 @@ export default function AdminPage() {
           </TabsContent>
 
           {/* ── COUPONS tab ───────────────────────────────────────────── */}
+          {/* ── Pay Methods tab ───────────────────────────────────────── */}
+          <TabsContent value="pay-methods" className="mt-4 space-y-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <CreditCard className="w-4 h-4" /> Payment Methods
+                  </CardTitle>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="ghost" onClick={() => void fetchPayMethods()} disabled={payMethodsLoading}>
+                      {payMethodsLoading ? "Loading…" : "Refresh"}
+                    </Button>
+                    <Button size="sm" onClick={() => openPmDialog()}>
+                      <Plus className="w-3.5 h-3.5 mr-1" />Add Method
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  These are the payment options users see when completing their community payment.
+                </p>
+              </CardHeader>
+              <CardContent>
+                {payMethodsLoading && !payMethodsLoaded ? (
+                  <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-20 w-full rounded-lg" />)}</div>
+                ) : payMethods.length === 0 ? (
+                  <div className="text-center py-10">
+                    <CreditCard className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">No payment methods yet. Add your first method.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {payMethods.map(pm => (
+                      <div key={pm.id} className={`p-4 rounded-xl border ${pm.is_active ? "bg-card" : "bg-muted/30 opacity-60"}`}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <CreditCard className="w-4 h-4 text-primary flex-shrink-0" />
+                              <span className="font-semibold text-sm">{pm.name}</span>
+                              {!pm.is_active && <Badge variant="outline" className="text-[10px] px-1.5">Inactive</Badge>}
+                              <Badge variant="secondary" className="text-[10px] px-1.5">Order {pm.sort_order}</Badge>
+                            </div>
+                            {pm.account_details && (
+                              <p className="text-xs text-muted-foreground font-mono mb-1">{pm.account_details}</p>
+                            )}
+                            {pm.instructions && (
+                              <p className="text-xs text-muted-foreground line-clamp-2">{pm.instructions}</p>
+                            )}
+                            {pm.qr_url && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <img src={pm.qr_url} alt="QR" className="w-12 h-12 rounded-lg border object-contain bg-white p-0.5" />
+                                <a href={pm.qr_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
+                                  <ExternalLink className="w-3 h-3" />View QR
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex gap-1.5 flex-shrink-0">
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openPmDialog(pm)}>
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => void handleDeletePm(pm.id)}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="coupons" className="mt-4 space-y-4">
             <Card>
               <CardHeader className="pb-2">
@@ -2949,6 +3144,65 @@ export default function AdminPage() {
             <Button variant="outline" onClick={() => setCouponDialog(false)} disabled={couponSaving}>Cancel</Button>
             <Button onClick={() => void handleSaveCoupon()} disabled={couponSaving || !couponForm.code.trim() || !couponForm.discount_percent}>
               {couponSaving ? "Saving…" : editingCoupon ? "Update Coupon" : "Create Coupon"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pay Methods dialog */}
+      <Dialog open={pmDialog} onOpenChange={setPmDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CreditCard className="w-4 h-4" />
+              {editingPm ? "Edit Payment Method" : "Add Payment Method"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Method Name *</Label>
+              <Input value={pmForm.name} onChange={e => setPmForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Binance Pay, NayaPay, Bank Transfer" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Account Details</Label>
+              <Input value={pmForm.account_details} onChange={e => setPmForm(f => ({ ...f, account_details: e.target.value }))} placeholder="Account number, email, or ID" className="font-mono" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Instructions for user</Label>
+              <Textarea value={pmForm.instructions} onChange={e => setPmForm(f => ({ ...f, instructions: e.target.value }))} placeholder="Send the exact amount and take a screenshot of the confirmation..." rows={3} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">QR Code</Label>
+              <div className="flex gap-2 items-center">
+                <Input value={pmForm.qr_url} onChange={e => setPmForm(f => ({ ...f, qr_url: e.target.value }))} placeholder="https://... or upload below" className="text-xs" />
+                <label className="flex-shrink-0">
+                  <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) void handlePmQrUpload(f); }} />
+                  <Button size="sm" variant="outline" className="h-9 text-xs gap-1" disabled={pmQrUploading} type="button" asChild>
+                    <span><Upload className="w-3 h-3" />{pmQrUploading ? "…" : "Upload"}</span>
+                  </Button>
+                </label>
+              </div>
+              {pmForm.qr_url && (
+                <img src={pmForm.qr_url} alt="QR preview" className="w-20 h-20 rounded-lg border object-contain bg-white p-1 mt-1" />
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Sort Order</Label>
+                <Input type="number" min="0" value={pmForm.sort_order} onChange={e => setPmForm(f => ({ ...f, sort_order: e.target.value }))} />
+              </div>
+              <div className="flex items-end pb-1">
+                <div className="flex items-center gap-2">
+                  <Switch checked={pmForm.is_active} onCheckedChange={v => setPmForm(f => ({ ...f, is_active: v }))} id="pm-active" />
+                  <Label htmlFor="pm-active" className="text-sm">Active</Label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setPmDialog(false)} disabled={pmSaving}>Cancel</Button>
+            <Button onClick={() => void handleSavePm()} disabled={pmSaving || !pmForm.name.trim()}>
+              {pmSaving ? "Saving…" : editingPm ? "Update Method" : "Add Method"}
             </Button>
           </DialogFooter>
         </DialogContent>
