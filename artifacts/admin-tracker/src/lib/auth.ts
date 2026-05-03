@@ -50,3 +50,14 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   if (!res.ok) throw new Error((d as { error?: string }).error ?? `HTTP ${res.status}`);
   return d;
 }
+
+export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`/api${path}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(body),
+  });
+  const d = await res.json() as T & { error?: string };
+  if (!res.ok) throw new Error((d as { error?: string }).error ?? `HTTP ${res.status}`);
+  return d;
+}

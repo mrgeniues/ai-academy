@@ -207,7 +207,7 @@ router.get("/communities/join/:code", requireAuth, async (req, res): Promise<voi
   res.json({ ...data, memberStatus: member?.status ?? null, isOwner });
 });
 
-// GET /api/communities/all — admin: list every community with owner info
+// GET /api/communities/all — admin: list every community with owner info + member counts
 router.get("/communities/all", requireAuth, async (req, res): Promise<void> => {
   const { data: me, error: meErr } = await supabase
     .from("users").select("role").eq("id", req.userId!).single();
@@ -218,7 +218,12 @@ router.get("/communities/all", requireAuth, async (req, res): Promise<void> => {
 
   const { data, error } = await supabase
     .from("communities")
-    .select("id, name, description, status, created_at, owner_id, users!communities_owner_id_fkey(id, name, email)")
+    .select(`
+      id, name, description, status, created_at, owner_id, plan_id,
+      owner:users!communities_owner_id_fkey(id, name, email),
+      plans(id, name, price),
+      community_members(count)
+    `)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -227,7 +232,26 @@ router.get("/communities/all", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(data ?? []);
+  // Flatten member count and pending count
+  const enriched = await Promise.all((data ?? []).map(async (c: Record<string, unknown>) => {
+    const { count: pendingCount } = await supabase
+      .from("community_members")
+      .select("*", { count: "exact", head: true })
+      .eq("community_id", (c as { id: number }).id)
+      .eq("status", "pending");
+
+    const members = c["community_members"] as { count: number }[] | null;
+    const memberCount = Array.isArray(members) && members[0] ? members[0].count : 0;
+
+    return {
+      ...c,
+      member_count: memberCount,
+      pending_count: pendingCount ?? 0,
+      community_members: undefined,
+    };
+  }));
+
+  res.json(enriched);
 });
 
 // GET /api/communities — list all approved communities

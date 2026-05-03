@@ -3,12 +3,14 @@ import { getToken, getUser, clearAuth, type TrackerUser } from "@/lib/auth";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Users from "@/pages/Users";
+import Communities from "@/pages/Communities";
 
-type Tab = "dashboard" | "users";
+type Tab = "dashboard" | "users" | "communities";
 
 const NAV: { id: Tab; label: string; icon: string }[] = [
-  { id: "dashboard", label: "Dashboard", icon: "📊" },
-  { id: "users",     label: "Users",     icon: "👥" },
+  { id: "dashboard",   label: "Dashboard",   icon: "📊" },
+  { id: "users",       label: "Users",       icon: "👥" },
+  { id: "communities", label: "Communities", icon: "🏘️" },
 ];
 
 function Layout({ user, onLogout }: { user: TrackerUser; onLogout: () => void }) {
@@ -56,8 +58,9 @@ function Layout({ user, onLogout }: { user: TrackerUser; onLogout: () => void })
 
       {/* Page */}
       <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-6">
-        {tab === "dashboard" && <Dashboard />}
-        {tab === "users"     && <Users />}
+        {tab === "dashboard"   && <Dashboard />}
+        {tab === "users"       && <Users />}
+        {tab === "communities" && <Communities />}
       </main>
 
       {/* Footer */}

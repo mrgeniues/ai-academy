@@ -1,0 +1,111 @@
+You are a senior Next.js and Supabase developer.
+
+Fix the JOIN APPROVAL ROUTING logic for community invite system.
+
+IMPORTANT:
+
+* Do NOT change UI
+* Do NOT add new features
+* ONLY fix approval routing logic
+* Keep existing system intact
+
+=====================================
+GOAL:
+
+When a user joins via COMMUNITY INVITE LINK:
+
+→ Approval request must go to COMMUNITY OWNER
+→ NOT to main platform admin
+
+=====================================
+CURRENT ISSUE:
+
+All new users (even from invite link) are going to:
+
+→ main admin approval system ❌
+
+=====================================
+STEP 1: DETECT JOIN SOURCE
+
+When user lands via:
+
+/community/join/[invite_code]
+
+→ Identify this as COMMUNITY JOIN FLOW
+
+=====================================
+STEP 2: FETCH COMMUNITY
+
+Using invite_code:
+
+→ Get community_id
+→ Get owner_id
+
+=====================================
+STEP 3: MODIFY SIGNUP FLOW
+
+When user signs up via invite link:
+
+DO NOT send to global user approval
+
+Instead:
+
+→ Directly create user account (normal signup)
+
+→ Then create entry in:
+
+community_members table:
+
+* community_id
+* user_id
+* status = pending
+
+=====================================
+STEP 4: REMOVE GLOBAL APPROVAL FOR THIS CASE
+
+IMPORTANT:
+
+If signup is from invite link:
+
+→ Skip main admin approval system completely
+
+=====================================
+STEP 5: COMMUNITY OWNER APPROVAL
+
+Show request in:
+
+Community Owner Dashboard → Members
+
+Under:
+
+"Pending Approval"
+
+=====================================
+STEP 6: ACCESS RULE
+
+Until approved:
+
+→ User cannot access community content
+
+=====================================
+STEP 7: FALLBACK
+
+If user signs up normally (NOT via invite link):
+
+→ Keep existing admin approval system
+
+=====================================
+STEP 8: SECURITY
+
+* Validate invite_code
+* Ensure correct community mapping
+* Prevent bypass
+
+=====================================
+OUTPUT:
+
+* Updated signup logic
+* Correct routing of approval
+* Community_members insertion logic
+
+Ensure no other system is affected.
