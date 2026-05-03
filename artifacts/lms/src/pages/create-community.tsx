@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import {
   Users2, Clock, CheckCircle, XCircle, CreditCard,
-  ArrowRight, ArrowLeft, Users, Wrench, BookOpen, Tag, Check,
+  ArrowRight, ArrowLeft, Users, Wrench, BookOpen, Tag, Check, Sparkles, BadgeCheck,
 } from "lucide-react";
 
 const API = "/api";
@@ -191,6 +191,13 @@ export default function CreateCommunityPage() {
                         </div>
                       )}
 
+                      {/* Paid pill — top right corner */}
+                      <div className="absolute top-4 right-4">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-gradient-to-r from-violet-500 to-purple-600 text-white shadow-sm">
+                          <Sparkles className="w-3 h-3" /> Paid
+                        </span>
+                      </div>
+
                       {/* Plan name + discount */}
                       <div className="flex items-center gap-2 mb-3">
                         <span className="text-xs font-extrabold uppercase tracking-widest text-primary">
@@ -208,7 +215,7 @@ export default function CreateCommunityPage() {
                         <div className="flex items-baseline gap-1">
                           <span className="text-4xl font-bold tracking-tight">${plan.price}</span>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">one-time payment</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">one-time · secure payment</p>
                       </div>
 
                       {/* Select button */}
@@ -366,10 +373,12 @@ export default function CreateCommunityPage() {
                             {c.description && (
                               <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{c.description}</p>
                             )}
-                            <div className="flex items-center gap-2 mt-1">
+                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                               <p className="text-xs text-muted-foreground">{new Date(c.created_at).toLocaleDateString()}</p>
                               {c.plans && (
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0">{c.plans.name}</Badge>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gradient-to-r from-violet-500 to-purple-600 text-white">
+                                  <Sparkles className="w-2.5 h-2.5" /> Paid · {c.plans.name}
+                                </span>
                               )}
                             </div>
                           </div>
@@ -381,10 +390,15 @@ export default function CreateCommunityPage() {
                             {c.status === "pending" && (
                               <button
                                 onClick={() => navigate(`/community-payment/${c.id}`)}
-                                className="text-xs text-primary hover:underline"
+                                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
                               >
-                                Complete payment →
+                                <CreditCard className="w-3 h-3" /> Complete payment →
                               </button>
+                            )}
+                            {c.status === "approved" && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-600 dark:text-green-400">
+                                <BadgeCheck className="w-3.5 h-3.5" /> Payment verified
+                              </span>
                             )}
                           </div>
                         </div>
