@@ -13,7 +13,7 @@ import { useAuth } from "@/lib/auth";
 import {
   Users2, Clock, CheckCircle, XCircle, CreditCard,
   ArrowRight, ArrowLeft, Users, Wrench, BookOpen, Tag, Check,
-  Sparkles, BadgeCheck, Unlock, Lock,
+  Sparkles, BadgeCheck, Unlock, ChevronLeft,
 } from "lucide-react";
 
 const API = "/api";
@@ -72,6 +72,7 @@ export default function CreateCommunityPage() {
 
   const [myCommunities, setMyCommunities] = useState<Community[]>([]);
   const [loadingList, setLoadingList]     = useState(true);
+  const [openedId, setOpenedId]           = useState<number | null>(null);
 
   useEffect(() => {
     fetch(`${API}/plans`)
@@ -170,8 +171,9 @@ export default function CreateCommunityPage() {
                         </div>
                       </div>
                     </div>
-                    <Button size="sm" onClick={() => navigate(`/community/${c.id}`)}>
-                      Open Community <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                    <Button size="sm" onClick={() => setOpenedId(openedId === c.id ? null : c.id)}>
+                      {openedId === c.id ? "Close" : "Open Community"}
+                      <ArrowRight className="w-3.5 h-3.5 ml-1" />
                     </Button>
                   </div>
                 </div>
@@ -211,6 +213,88 @@ export default function CreateCommunityPage() {
                     </div>
                   </div>
                 )}
+
+                {/* ── Inline community panel (shown when "Open Community" clicked) ── */}
+                {openedId === c.id && (() => {
+                  const plan = c.plans;
+                  const maxSlots    = plan?.max_communities ?? 0;
+                  const usedSlots   = myCommunities.length;
+                  const remaining   = Math.max(0, maxSlots - usedSlots);
+                  const limitReached = remaining === 0;
+
+                  return (
+                    <div className="border-t border-green-200 dark:border-green-800 p-5 space-y-5 bg-muted/30">
+
+                      {/* Plan usage bar */}
+                      {plan && (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="font-semibold flex items-center gap-1.5">
+                              <Users className="w-4 h-4 text-primary" /> Plan Usage
+                            </span>
+                            <span className="font-bold tabular-nums">
+                              {usedSlots} / {maxSlots} Communities Used
+                            </span>
+                          </div>
+                          <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${limitReached ? "bg-red-500" : "bg-green-500"}`}
+                              style={{ width: `${maxSlots > 0 ? Math.min(100, (usedSlots / maxSlots) * 100) : 0}%` }}
+                            />
+                          </div>
+                          {limitReached ? (
+                            <p className="text-xs font-medium text-red-600 dark:text-red-400 flex items-center gap-1">
+                              <XCircle className="w-3.5 h-3.5" /> Community limit reached for your plan
+                            </p>
+                          ) : (
+                            <p className="text-xs font-medium text-green-600 dark:text-green-400 flex items-center gap-1">
+                              <CheckCircle className="w-3.5 h-3.5" /> You can create {remaining} more communit{remaining === 1 ? "y" : "ies"}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* All communities list */}
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">All My Communities</p>
+
+                        {/* Approved */}
+                        {approvedCommunities.map(ac => (
+                          <div key={ac.id} className="flex items-start justify-between gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800">
+                            <div className="min-w-0">
+                              <p className="font-semibold text-sm truncate">{ac.name}</p>
+                              {ac.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{ac.description}</p>}
+                            </div>
+                            <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border flex-shrink-0 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border-green-200 dark:border-green-800">
+                              <CheckCircle className="w-3 h-3" /> Approved
+                            </span>
+                          </div>
+                        ))}
+
+                        {/* Pending / Rejected */}
+                        {otherCommunities.map(oc => {
+                          const cfg  = STATUS_CONFIG[oc.status] ?? STATUS_CONFIG.pending;
+                          const Icon = cfg.icon;
+                          return (
+                            <div key={oc.id} className="flex items-start justify-between gap-3 p-3 rounded-lg bg-card border">
+                              <div className="min-w-0">
+                                <p className="font-semibold text-sm truncate">{oc.name}</p>
+                                {oc.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{oc.description}</p>}
+                              </div>
+                              <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border flex-shrink-0 ${cfg.className}`}>
+                                <Icon className="w-3 h-3" /> {cfg.label}
+                              </span>
+                            </div>
+                          );
+                        })}
+
+                        {myCommunities.length === 0 && (
+                          <p className="text-sm text-muted-foreground text-center py-3">No communities yet.</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             );
           })}
