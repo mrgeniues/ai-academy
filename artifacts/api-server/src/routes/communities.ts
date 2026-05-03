@@ -87,7 +87,7 @@ router.get("/communities/mine", requireAuth, async (req, res): Promise<void> => 
   res.json(data ?? []);
 });
 
-// GET /api/communities/pending — admin: list all pending communities with owner info
+// GET /api/communities/pending — admin: list all pending communities with owner + payment info
 router.get("/communities/pending", requireAuth, async (req, res): Promise<void> => {
   const { data: me, error: meErr } = await supabase
     .from("users").select("role").eq("id", req.userId!).single();
@@ -98,7 +98,15 @@ router.get("/communities/pending", requireAuth, async (req, res): Promise<void> 
 
   const { data, error } = await supabase
     .from("communities")
-    .select("id, name, description, status, created_at, owner_id, plan_id, users!communities_owner_id_fkey(id, name, email), plans(id, name, price)")
+    .select(`
+      id, name, description, status, created_at, owner_id, plan_id,
+      users!communities_owner_id_fkey(id, name, email, avatar),
+      plans(id, name, price),
+      community_payments(
+        id, screenshot_url, payment_method, payment_method_id,
+        final_price, discount_amount, status, created_at
+      )
+    `)
     .eq("status", "pending")
     .order("created_at", { ascending: true });
 
@@ -108,7 +116,17 @@ router.get("/communities/pending", requireAuth, async (req, res): Promise<void> 
     return;
   }
 
-  res.json(data ?? []);
+  // Attach the most recent payment to each community for convenience
+  const enriched = (data ?? []).map((c: Record<string, unknown>) => {
+    const payments = Array.isArray(c["community_payments"]) ? c["community_payments"] : [];
+    const latestPayment = payments.length > 0
+      ? payments.reduce((a: Record<string, unknown>, b: Record<string, unknown>) =>
+          new Date(a["created_at"] as string) > new Date(b["created_at"] as string) ? a : b)
+      : null;
+    return { ...c, latest_payment: latestPayment };
+  });
+
+  res.json(enriched);
 });
 
 // PATCH /api/communities/:id/status — admin: approve or reject a community

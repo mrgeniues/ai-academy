@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trash2, Users, BookOpen, MessageSquare, TrendingUp, Shield, Ban, CheckCircle, Clock, Calendar, GraduationCap, Wrench, XCircle, ScrollText, Database, Users2, CreditCard, Upload, ImageIcon, ExternalLink, Plus, Pencil, Tag, Percent } from "lucide-react";
+import { Trash2, Users, BookOpen, MessageSquare, TrendingUp, Shield, Ban, CheckCircle, Clock, Calendar, GraduationCap, Wrench, XCircle, ScrollText, Database, Users2, User, CreditCard, Upload, ImageIcon, ExternalLink, Plus, Pencil, Tag, Percent } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -122,6 +122,16 @@ export default function AdminPage() {
   const [auditLogEndDate, setAuditLogEndDate] = useState("");
 
   // Community requests state
+  type PendingCommunityPayment = {
+    id: number;
+    screenshot_url: string;
+    payment_method: string | null;
+    payment_method_id: number | null;
+    final_price: number | null;
+    discount_amount: number | null;
+    status: string;
+    created_at: string;
+  };
   type PendingCommunity = {
     id: number;
     name: string;
@@ -129,7 +139,10 @@ export default function AdminPage() {
     status: string;
     created_at: string;
     owner_id: number;
-    users: { id: number; name: string; email: string } | null;
+    plan_id: number | null;
+    users: { id: number; name: string; email: string; avatar: string | null } | null;
+    plans: { id: number; name: string; price: number } | null;
+    latest_payment: PendingCommunityPayment | null;
   };
   const [pendingCommunities, setPendingCommunities] = useState<PendingCommunity[]>([]);
   const [communitiesLoading, setCommunitiesLoading] = useState(true);
@@ -1794,60 +1807,151 @@ export default function AdminPage() {
                     <p className="font-medium">No pending community requests</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {pendingCommunities.map(community => (
-                      <div
-                        key={community.id}
-                        className="flex items-start justify-between gap-4 p-4 rounded-lg border bg-card hover:bg-accent/30 transition-colors"
-                        data-testid={`community-request-${community.id}`}
-                      >
-                        <div className="flex items-start gap-3 min-w-0">
-                          <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                            <Users2 className="w-4 h-4 text-primary" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-semibold text-sm truncate">{community.name}</p>
-                            {community.description && (
-                              <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{community.description}</p>
-                            )}
-                            <div className="flex items-center gap-3 mt-1 flex-wrap">
-                              <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                <Shield className="w-3 h-3" />
-                                {community.users?.name ?? "Unknown"} &middot; {community.users?.email}
-                              </span>
-                              <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                {formatDistanceToNow(new Date(community.created_at), { addSuffix: true })}
-                              </span>
+                  <div className="space-y-4">
+                    {pendingCommunities.map(community => {
+                      const pmt = community.latest_payment;
+                      return (
+                        <div
+                          key={community.id}
+                          className="rounded-xl border bg-card overflow-hidden"
+                          data-testid={`community-request-${community.id}`}
+                        >
+                          {/* ── Header row ── */}
+                          <div className="flex items-start justify-between gap-4 p-4 pb-3">
+                            <div className="flex items-start gap-3 min-w-0">
+                              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                {community.users?.avatar
+                                  ? <img src={community.users.avatar} className="w-9 h-9 rounded-full object-cover" />
+                                  : <Users2 className="w-4 h-4 text-primary" />
+                                }
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-semibold text-sm">{community.name}</p>
+                                {community.description && (
+                                  <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{community.description}</p>
+                                )}
+                                <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <User className="w-3 h-3" />
+                                    <strong className="text-foreground">{community.users?.name ?? "Unknown"}</strong>
+                                  </span>
+                                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <span className="opacity-60">✉</span>
+                                    {community.users?.email}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <Clock className="w-3 h-3" />
+                                    {formatDistanceToNow(new Date(community.created_at), { addSuffix: true })}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex gap-2 flex-shrink-0">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-green-600 border-green-200 hover:bg-green-50 hover:border-green-300 dark:hover:bg-green-950/30"
+                                disabled={actioningCommunityId === community.id}
+                                onClick={() => void handleCommunityAction(community, "approved")}
+                                data-testid={`button-approve-community-${community.id}`}
+                              >
+                                <CheckCircle className="w-3.5 h-3.5 mr-1" />Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-destructive border-destructive/20 hover:bg-destructive/5 hover:border-destructive/30"
+                                disabled={actioningCommunityId === community.id}
+                                onClick={() => void handleCommunityAction(community, "rejected")}
+                                data-testid={`button-reject-community-${community.id}`}
+                              >
+                                <XCircle className="w-3.5 h-3.5 mr-1" />Reject
+                              </Button>
                             </div>
                           </div>
+
+                          {/* ── Payment details strip ── */}
+                          <div className="border-t bg-muted/30 px-4 py-3 flex flex-wrap gap-x-6 gap-y-2 items-start">
+                            {/* Plan */}
+                            {community.plans && (
+                              <div className="flex items-center gap-1.5 text-xs">
+                                <Tag className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                                <span className="text-muted-foreground">Plan:</span>
+                                <span className="font-semibold">{community.plans.name}</span>
+                                <span className="text-muted-foreground">(${community.plans.price})</span>
+                              </div>
+                            )}
+                            {/* Amount paid */}
+                            {pmt?.final_price != null && (
+                              <div className="flex items-center gap-1.5 text-xs">
+                                <CreditCard className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+                                <span className="text-muted-foreground">Amount paid:</span>
+                                <span className="font-semibold text-green-600">${pmt.final_price.toFixed(2)}</span>
+                                {pmt.discount_amount && pmt.discount_amount > 0 && (
+                                  <span className="text-muted-foreground">(−${pmt.discount_amount.toFixed(2)} discount)</span>
+                                )}
+                              </div>
+                            )}
+                            {/* Payment method */}
+                            {pmt?.payment_method && (
+                              <div className="flex items-center gap-1.5 text-xs">
+                                <span className="text-muted-foreground">Via:</span>
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 capitalize">{pmt.payment_method}</Badge>
+                              </div>
+                            )}
+                            {/* Payment status */}
+                            {pmt && (
+                              <div className="flex items-center gap-1.5 text-xs">
+                                <span className="text-muted-foreground">Payment:</span>
+                                <span className={`font-semibold capitalize ${pmt.status === "approved" ? "text-green-600" : pmt.status === "rejected" ? "text-destructive" : "text-yellow-600"}`}>
+                                  {pmt.status}
+                                </span>
+                              </div>
+                            )}
+                            {!pmt && (
+                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground italic">
+                                <CreditCard className="w-3.5 h-3.5" /> No payment submitted yet
+                              </div>
+                            )}
+                          </div>
+
+                          {/* ── Screenshot ── */}
+                          {pmt?.screenshot_url && (
+                            <div className="border-t px-4 py-3 space-y-2">
+                              <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                                <ImageIcon className="w-3.5 h-3.5" /> Payment Screenshot
+                              </p>
+                              <div className="flex items-start gap-3">
+                                <button
+                                  onClick={() => setViewScreenshot(pmt.screenshot_url)}
+                                  className="group relative flex-shrink-0"
+                                  title="Click to view full size"
+                                >
+                                  <img
+                                    src={pmt.screenshot_url}
+                                    alt="Payment screenshot"
+                                    className="w-32 h-24 rounded-lg border object-cover group-hover:opacity-80 transition-opacity"
+                                  />
+                                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30 rounded-lg">
+                                    <ExternalLink className="w-5 h-5 text-white" />
+                                  </div>
+                                </button>
+                                <div className="space-y-1 text-xs text-muted-foreground">
+                                  <p>Screenshot submitted as proof of payment.</p>
+                                  <p className="text-[10px]">Submitted {formatDistanceToNow(new Date(pmt.created_at), { addSuffix: true })}</p>
+                                  <button
+                                    onClick={() => setViewScreenshot(pmt.screenshot_url)}
+                                    className="inline-flex items-center gap-1 text-primary hover:underline text-xs mt-1"
+                                  >
+                                    <ExternalLink className="w-3 h-3" /> View full size
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <div className="flex gap-2 flex-shrink-0">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-green-600 border-green-200 hover:bg-green-50 hover:border-green-300 dark:hover:bg-green-950/30"
-                            disabled={actioningCommunityId === community.id}
-                            onClick={() => void handleCommunityAction(community, "approved")}
-                            data-testid={`button-approve-community-${community.id}`}
-                          >
-                            <CheckCircle className="w-3.5 h-3.5 mr-1" />
-                            Approve
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-destructive border-destructive/20 hover:bg-destructive/5 hover:border-destructive/30"
-                            disabled={actioningCommunityId === community.id}
-                            onClick={() => void handleCommunityAction(community, "rejected")}
-                            data-testid={`button-reject-community-${community.id}`}
-                          >
-                            <XCircle className="w-3.5 h-3.5 mr-1" />
-                            Reject
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
