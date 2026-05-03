@@ -72,6 +72,15 @@ router.post("/communities", requireAuth, async (req, res): Promise<void> => {
 
 // GET /api/communities/mine — list communities owned by current user
 router.get("/communities/mine", requireAuth, async (req, res): Promise<void> => {
+  // Auto-purge rejected communities older than 24 hours
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  await supabase
+    .from("communities")
+    .delete()
+    .eq("owner_id", req.userId!)
+    .eq("status", "rejected")
+    .lt("created_at", cutoff);
+
   const { data, error } = await supabase
     .from("communities")
     .select("*, plans(id, name, price, max_communities, max_tools, max_courses)")

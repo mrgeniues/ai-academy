@@ -113,9 +113,9 @@ export default function CreateCommunityPage() {
     }
   };
 
-  // Split communities by status
+  // Split communities by status — rejected ones are hidden from the UI (auto-purged server-side after 24h)
   const approvedCommunities = myCommunities.filter(c => c.status === "approved");
-  const otherCommunities    = myCommunities.filter(c => c.status !== "approved");
+  const otherCommunities    = myCommunities.filter(c => c.status === "pending");
 
   // If at least one community is approved, show the Active view instead of plan selection
   const hasApproved = approvedCommunities.length > 0;
@@ -270,7 +270,7 @@ export default function CreateCommunityPage() {
                           </div>
                         ))}
 
-                        {/* Pending / Rejected */}
+                        {/* Pending */}
                         {otherCommunities.map(oc => {
                           const cfg  = STATUS_CONFIG[oc.status] ?? STATUS_CONFIG.pending;
                           const Icon = cfg.icon;
