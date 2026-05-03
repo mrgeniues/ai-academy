@@ -39,6 +39,14 @@ export default function CommunityJoinPage() {
   const [notFound, setNotFound]   = useState(false);
   const [joining, setJoining]     = useState(false);
 
+  // Unauthenticated: redirect to signup/login with invite code preserved
+  useEffect(() => {
+    if (!code) return;
+    if (!token) {
+      navigate(`/signup?invite=${encodeURIComponent(code)}`);
+    }
+  }, [code, token, navigate]);
+
   useEffect(() => {
     if (!code || !token) return;
     setLoading(true);

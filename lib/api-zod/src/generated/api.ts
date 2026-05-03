@@ -21,6 +21,7 @@ export const SignupBody = zod.object({
   email: zod.string(),
   password: zod.string(),
   name: zod.string(),
+  invite_code: zod.string().optional(),
 });
 
 /**

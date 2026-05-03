@@ -10,4 +10,6 @@ export interface SignupBody {
   email: string;
   password: string;
   name: string;
+  /** Optional community invite code — bypasses global admin approval and auto-adds to community as pending member */
+  invite_code?: string;
 }

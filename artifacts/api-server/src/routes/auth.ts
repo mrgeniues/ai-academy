@@ -88,7 +88,7 @@ router.post("/auth/signup", async (req, res): Promise<void> => {
     return;
   }
 
-  const { email, password, name } = parsed.data;
+  const { email, password, name, invite_code } = parsed.data;
 
   if (!email.toLowerCase().endsWith("@gmail.com")) {
     res.status(400).json({ error: "Only Gmail accounts are allowed (@gmail.com)" });
@@ -106,17 +106,43 @@ router.post("/auth/signup", async (req, res): Promise<void> => {
     return;
   }
 
+  // Validate invite_code if provided — resolve community before creating user
+  let inviteCommunityId: number | null = null;
+  if (invite_code) {
+    const { data: comm } = await supabase
+      .from("communities")
+      .select("id, status")
+      .eq("invite_code", invite_code)
+      .eq("status", "approved")
+      .maybeSingle();
+
+    if (comm) {
+      inviteCommunityId = comm.id;
+    }
+    // Invalid invite code is silently ignored — user created normally
+  }
+
   const passwordHash = await bcrypt.hash(password, 10);
+
+  // If signing up via valid invite link: skip global admin approval
+  const isApproved = inviteCommunityId !== null;
 
   const { data: user, error } = await supabase
     .from("users")
-    .insert({ email, password_hash: passwordHash, name, role: "member", is_approved: false })
+    .insert({ email, password_hash: passwordHash, name, role: "member", is_approved: isApproved })
     .select()
     .single();
 
   if (error || !user) {
     res.status(500).json({ error: "Failed to create user" });
     return;
+  }
+
+  // Auto-insert into community_members as pending (awaiting owner approval)
+  if (inviteCommunityId !== null) {
+    await supabase
+      .from("community_members")
+      .insert({ community_id: inviteCommunityId, user_id: user.id, status: "pending" });
   }
 
   await supabase

@@ -1,13 +1,12 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useSignup } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
-import { GraduationCap, Eye, EyeOff } from "lucide-react";
+import { GraduationCap, Eye, EyeOff, Users2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -27,15 +26,25 @@ type FormData = z.infer<typeof schema>;
 export default function SignupPage() {
   const { user, login, isLoading } = useAuth();
   const [, setLocation] = useLocation();
-  const signupMutation = useSignup();
   const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Read invite code from ?invite= query param
+  const inviteCode = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("invite") ?? ""
+    : "";
 
   useEffect(() => {
     if (!isLoading && user) {
-      setLocation("/dashboard");
+      // If they landed here via invite link, send them back to join page
+      if (inviteCode) {
+        setLocation(`/community/join/${encodeURIComponent(inviteCode)}`);
+      } else {
+        setLocation("/dashboard");
+      }
     }
-  }, [user, isLoading, setLocation]);
+  }, [user, isLoading, setLocation, inviteCode]);
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -43,16 +52,31 @@ export default function SignupPage() {
   });
 
   const onSubmit = async (data: FormData) => {
+    setSubmitting(true);
     try {
-      const response = await signupMutation.mutateAsync({ data });
-      login(response.token);
+      // Call API directly so we can include invite_code
+      const body: Record<string, string> = { email: data.email, password: data.password, name: data.name };
+      if (inviteCode) body["invite_code"] = inviteCode;
+
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json() as { token?: string; error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Failed to create account");
+
+      login(json.token!);
+      // redirect handled by useEffect above
     } catch (err: unknown) {
-      const error = err as { data?: { error?: string }; message?: string };
+      const error = err as { message?: string };
       toast({
         title: "Sign up failed",
-        description: error?.data?.error || error?.message || "Failed to create account",
+        description: error?.message || "Failed to create account",
         variant: "destructive",
       });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -105,7 +129,17 @@ export default function SignupPage() {
           </div>
 
           <h1 className="text-2xl font-bold mb-1">Create your account</h1>
-          <p className="text-muted-foreground text-sm mb-8">Join the community and start learning</p>
+          <p className="text-muted-foreground text-sm mb-8">
+            {inviteCode ? "Create an account to join the community" : "Join the community and start learning"}
+          </p>
+
+          {/* Invite code banner */}
+          {inviteCode && (
+            <div className="flex items-center gap-2 mb-6 p-3 rounded-xl bg-primary/5 border border-primary/20 text-sm">
+              <Users2 className="w-4 h-4 text-primary shrink-0" />
+              <span className="text-primary font-medium">You've been invited to join a community. Sign up to continue.</span>
+            </div>
+          )}
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -169,9 +203,9 @@ export default function SignupPage() {
                 data-testid="button-signup"
                 type="submit"
                 className="w-full"
-                disabled={signupMutation.isPending}
+                disabled={submitting}
               >
-                {signupMutation.isPending ? "Creating account..." : "Create account"}
+                {submitting ? "Creating account..." : "Create account"}
               </Button>
             </form>
           </Form>
