@@ -61,3 +61,14 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   if (!res.ok) throw new Error((d as { error?: string }).error ?? `HTTP ${res.status}`);
   return d;
 }
+
+export async function apiDelete(path: string): Promise<void> {
+  const res = await fetch(`/api${path}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(d.error ?? `HTTP ${res.status}`);
+  }
+}

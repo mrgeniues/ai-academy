@@ -23,6 +23,14 @@ function NativeTabLayout() {
         <Icon sf={{ default: "person.3", selected: "person.3.fill" }} />
         <Label>Community</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="messages">
+        <Icon sf={{ default: "message", selected: "message.fill" }} />
+        <Label>Messages</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="tools">
+        <Icon sf={{ default: "bolt", selected: "bolt.fill" }} />
+        <Label>Tools</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
         <Icon sf={{ default: "person", selected: "person.fill" }} />
         <Label>Profile</Label>
@@ -64,6 +72,9 @@ function ClassicTabLayout() {
               style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}
             />
           ) : null,
+        tabBarLabelStyle: {
+          fontSize: 10,
+        },
       }}
     >
       <Tabs.Screen
@@ -72,9 +83,9 @@ function ClassicTabLayout() {
           title: "Home",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="house" tintColor={color} size={24} />
+              <SymbolView name="house" tintColor={color} size={22} />
             ) : (
-              <Feather name="home" size={22} color={color} />
+              <Feather name="home" size={21} color={color} />
             ),
         }}
       />
@@ -84,9 +95,9 @@ function ClassicTabLayout() {
           title: "Courses",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="book" tintColor={color} size={24} />
+              <SymbolView name="book" tintColor={color} size={22} />
             ) : (
-              <Feather name="book-open" size={22} color={color} />
+              <Feather name="book-open" size={21} color={color} />
             ),
         }}
       />
@@ -96,9 +107,33 @@ function ClassicTabLayout() {
           title: "Community",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="person.3" tintColor={color} size={24} />
+              <SymbolView name="person.3" tintColor={color} size={22} />
             ) : (
-              <Feather name="users" size={22} color={color} />
+              <Feather name="users" size={21} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="messages"
+        options={{
+          title: "Messages",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="message" tintColor={color} size={22} />
+            ) : (
+              <Feather name="message-circle" size={21} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="tools"
+        options={{
+          title: "Tools",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="bolt" tintColor={color} size={22} />
+            ) : (
+              <Feather name="zap" size={21} color={color} />
             ),
         }}
       />
@@ -108,9 +143,9 @@ function ClassicTabLayout() {
           title: "Profile",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="person" tintColor={color} size={24} />
+              <SymbolView name="person" tintColor={color} size={22} />
             ) : (
-              <Feather name="user" size={22} color={color} />
+              <Feather name="user" size={21} color={color} />
             ),
         }}
       />
