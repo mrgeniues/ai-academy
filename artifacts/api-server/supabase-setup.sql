@@ -346,18 +346,25 @@ INSERT INTO community_payment_settings DEFAULT VALUES ON CONFLICT DO NOTHING;
 -- COMMUNITY PAYMENTS
 -- ────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS community_payments (
-  id             SERIAL PRIMARY KEY,
-  user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  community_id   INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
-  plan           TEXT NOT NULL,           -- 'monthly' | 'yearly' | 'lifetime'
-  payment_method TEXT,                    -- 'binance' | 'nayapay'
-  screenshot_url TEXT NOT NULL,
-  status         TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'approved' | 'rejected'
-  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                SERIAL PRIMARY KEY,
+  user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  community_id      INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  plan              TEXT,
+  plan_id           INTEGER REFERENCES plans(id) ON DELETE SET NULL,
+  coupon_id         INTEGER REFERENCES coupons(id) ON DELETE SET NULL,
+  payment_method    TEXT,
+  payment_method_id INTEGER REFERENCES payment_methods(id) ON DELETE SET NULL,
+  screenshot_url    TEXT,
+  status            TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'approved' | 'rejected'
+  final_price       NUMERIC(10,2),
+  discount_amount   NUMERIC(10,2) DEFAULT 0,
+  rejection_reason  TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE community_payments DISABLE ROW LEVEL SECURITY;
-CREATE INDEX IF NOT EXISTS community_payments_status_idx ON community_payments(status);
-CREATE INDEX IF NOT EXISTS community_payments_user_id_idx ON community_payments(user_id);
+CREATE INDEX IF NOT EXISTS community_payments_status_idx      ON community_payments(status);
+CREATE INDEX IF NOT EXISTS community_payments_user_id_idx     ON community_payments(user_id);
+CREATE INDEX IF NOT EXISTS community_payments_community_id_idx ON community_payments(community_id);
 
 -- ────────────────────────────────────────────────────────────────
 -- COMMUNITY MEMBERS
@@ -424,6 +431,66 @@ ALTER TABLE community_messages DISABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS community_messages_community_id_idx ON community_messages(community_id);
 
 -- ────────────────────────────────────────────────────────────────
+-- PLANS  (community subscription tiers)
+-- ────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS plans (
+  id               SERIAL PRIMARY KEY,
+  name             TEXT NOT NULL,
+  price            NUMERIC(10,2) NOT NULL DEFAULT 0,
+  max_communities  INTEGER NOT NULL DEFAULT 1,
+  max_tools        INTEGER NOT NULL DEFAULT 0,
+  max_courses      INTEGER NOT NULL DEFAULT 0,
+  discount_percent NUMERIC(5,2) NOT NULL DEFAULT 0,
+  description      TEXT,
+  is_active        BOOLEAN NOT NULL DEFAULT true,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE plans DISABLE ROW LEVEL SECURITY;
+
+
+-- ────────────────────────────────────────────────────────────────
+-- COUPONS
+-- ────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS coupons (
+  id               SERIAL PRIMARY KEY,
+  code             TEXT NOT NULL UNIQUE,
+  discount_percent NUMERIC(5,2) NOT NULL DEFAULT 0,
+  max_uses         INTEGER,
+  used_count       INTEGER NOT NULL DEFAULT 0,
+  is_active        BOOLEAN NOT NULL DEFAULT true,
+  expires_at       TIMESTAMPTZ,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE coupons DISABLE ROW LEVEL SECURITY;
+
+
+-- ────────────────────────────────────────────────────────────────
+-- PAYMENT METHODS  (admin-defined Binance/NayaPay accounts etc.)
+-- ────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS payment_methods (
+  id             SERIAL PRIMARY KEY,
+  name           TEXT NOT NULL,
+  account_number TEXT,
+  qr_url         TEXT,
+  description    TEXT,
+  is_active      BOOLEAN NOT NULL DEFAULT true,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE payment_methods DISABLE ROW LEVEL SECURITY;
+
+
+-- ────────────────────────────────────────────────────────────────
+-- SETTINGS  (key-value store used by the server)
+-- ────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS settings (
+  key        TEXT PRIMARY KEY,
+  value      TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE settings DISABLE ROW LEVEL SECURITY;
+
+
+-- ────────────────────────────────────────────────────────────────
 -- COMMUNITIES
 -- ────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS communities (
@@ -432,11 +499,14 @@ CREATE TABLE IF NOT EXISTS communities (
   description TEXT,
   owner_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   status      TEXT NOT NULL DEFAULT 'pending',   -- 'pending' | 'approved' | 'rejected'
+  invite_code TEXT UNIQUE,
+  plan_id     INTEGER REFERENCES plans(id) ON DELETE SET NULL,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE communities DISABLE ROW LEVEL SECURITY;
-CREATE INDEX IF NOT EXISTS communities_owner_id_idx ON communities(owner_id);
-CREATE INDEX IF NOT EXISTS communities_status_idx ON communities(status);
+CREATE INDEX IF NOT EXISTS communities_owner_id_idx    ON communities(owner_id);
+CREATE INDEX IF NOT EXISTS communities_status_idx      ON communities(status);
+CREATE INDEX IF NOT EXISTS communities_invite_code_idx ON communities(invite_code);
 
 
 -- ================================================================
@@ -512,3 +582,37 @@ INSERT INTO posts (user_id, content)
 SELECT id, 'Platform update: progress tracking and community features are now live. Keep learning!'
 FROM users WHERE email = 'admin@lms.com'
 ON CONFLICT DO NOTHING;
+
+
+-- ================================================================
+-- MIGRATIONS — run these if your database already exists
+-- (safe to run on a fresh DB too — IF NOT EXISTS / IF NOT NULL)
+-- ================================================================
+
+-- communities: invite_code (auto-generated when a community is approved)
+ALTER TABLE communities ADD COLUMN IF NOT EXISTS invite_code TEXT UNIQUE;
+CREATE INDEX IF NOT EXISTS communities_invite_code_idx ON communities(invite_code);
+
+-- communities: plan_id (links to a subscription plan)
+ALTER TABLE communities ADD COLUMN IF NOT EXISTS plan_id INTEGER REFERENCES plans(id) ON DELETE SET NULL;
+
+-- community_payments: plan_id
+ALTER TABLE community_payments ADD COLUMN IF NOT EXISTS plan_id           INTEGER REFERENCES plans(id) ON DELETE SET NULL;
+-- community_payments: coupon_id
+ALTER TABLE community_payments ADD COLUMN IF NOT EXISTS coupon_id         INTEGER REFERENCES coupons(id) ON DELETE SET NULL;
+-- community_payments: payment_method_id
+ALTER TABLE community_payments ADD COLUMN IF NOT EXISTS payment_method_id INTEGER REFERENCES payment_methods(id) ON DELETE SET NULL;
+-- community_payments: final_price & discount_amount
+ALTER TABLE community_payments ADD COLUMN IF NOT EXISTS final_price      NUMERIC(10,2);
+ALTER TABLE community_payments ADD COLUMN IF NOT EXISTS discount_amount  NUMERIC(10,2) DEFAULT 0;
+-- community_payments: rejection_reason
+ALTER TABLE community_payments ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+
+
+-- ================================================================
+-- STORED PROCEDURE — atomically increment coupon usage count
+-- ================================================================
+CREATE OR REPLACE FUNCTION increment_coupon_usage(coupon_id INTEGER)
+RETURNS void AS $$
+  UPDATE coupons SET used_count = used_count + 1 WHERE id = coupon_id;
+$$ LANGUAGE sql;
