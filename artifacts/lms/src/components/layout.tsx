@@ -104,6 +104,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {navItems.map(({ href, label, icon: Icon }) => {
           const isActive = location === href || location.startsWith(href + "/");
           const showBadge = label === "Messages" && unreadCount > 0;
+          const showPaid  = label === "Create Community";
           return (
             <Link
               key={href}
@@ -124,6 +125,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   isActive ? "bg-white/25 text-white" : "bg-primary text-white"
                 )}>
                   {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
+              {showPaid && (
+                <span className={cn(
+                  "ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none",
+                  isActive
+                    ? "bg-white/20 text-white"
+                    : "bg-green-500/15 text-green-500 dark:text-green-400"
+                )}>
+                  Paid
                 </span>
               )}
             </Link>
