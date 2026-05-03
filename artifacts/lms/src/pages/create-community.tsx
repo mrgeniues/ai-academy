@@ -12,7 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import {
   Users2, Clock, CheckCircle, XCircle, CreditCard,
-  ArrowRight, ArrowLeft, Users, Wrench, BookOpen, Tag, Check, Sparkles, BadgeCheck,
+  ArrowRight, ArrowLeft, Users, Wrench, BookOpen, Tag, Check,
+  Sparkles, BadgeCheck, Unlock, Lock,
 } from "lucide-react";
 
 const API = "/api";
@@ -37,7 +38,14 @@ type Community = {
   description: string | null;
   status: "pending" | "approved" | "rejected";
   created_at: string;
-  plans?: { name: string; price: number } | null;
+  plans?: {
+    id: number;
+    name: string;
+    price: number;
+    max_communities: number;
+    max_tools: number;
+    max_courses: number;
+  } | null;
 };
 
 const STATUS_CONFIG = {
@@ -58,9 +66,9 @@ export default function CreateCommunityPage() {
   const [plansLoading, setPlansLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
 
-  const [name, setName]                 = useState("");
-  const [description, setDescription]   = useState("");
-  const [submitting, setSubmitting]     = useState(false);
+  const [name, setName]             = useState("");
+  const [description, setDescription] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const [myCommunities, setMyCommunities] = useState<Community[]>([]);
   const [loadingList, setLoadingList]     = useState(true);
@@ -91,17 +99,10 @@ export default function CreateCommunityPage() {
       const res = await fetch(`${API}/communities`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authH(token) },
-        body: JSON.stringify({
-          name:        name.trim(),
-          description: description.trim() || null,
-          plan_id:     selectedPlan.id,
-        }),
+        body: JSON.stringify({ name: name.trim(), description: description.trim() || null, plan_id: selectedPlan.id }),
       });
-      const data = await res.json() as { id?: number; error?: string; code?: string };
-      if (!res.ok) {
-        toast({ title: data.error ?? "Failed to submit", variant: "destructive" });
-        return;
-      }
+      const data = await res.json() as { id?: number; error?: string };
+      if (!res.ok) { toast({ title: data.error ?? "Failed to submit", variant: "destructive" }); return; }
       toast({ title: "Community created!", description: "Complete your payment to activate it." });
       navigate(`/community-payment/${data.id}`);
     } catch {
@@ -111,6 +112,157 @@ export default function CreateCommunityPage() {
     }
   };
 
+  // Split communities by status
+  const approvedCommunities = myCommunities.filter(c => c.status === "approved");
+  const otherCommunities    = myCommunities.filter(c => c.status !== "approved");
+
+  // If at least one community is approved, show the Active view instead of plan selection
+  const hasApproved = approvedCommunities.length > 0;
+
+  // ── ACTIVE COMMUNITY VIEW ────────────────────────────────────────────────
+  if (!loadingList && hasApproved) {
+    return (
+      <Layout>
+        <div className="p-6 max-w-3xl mx-auto space-y-6">
+
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center flex-shrink-0">
+              <Unlock className="w-5 h-5 text-green-500" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">My Community</h1>
+              <p className="text-muted-foreground text-sm">Your plan is active — features are unlocked</p>
+            </div>
+          </div>
+
+          {/* Approved community cards */}
+          {approvedCommunities.map(c => {
+            const plan = c.plans;
+            const features = plan ? [
+              { icon: Users,    label: "Communities",  value: plan.max_communities, unit: "community" },
+              { icon: Wrench,   label: "AI Tools",     value: plan.max_tools,       unit: "tool" },
+              { icon: BookOpen, label: "Courses",      value: plan.max_courses,     unit: "course" },
+            ] : [];
+
+            return (
+              <div key={c.id} className="rounded-2xl border border-green-200 dark:border-green-800 overflow-hidden bg-card">
+
+                {/* Community header */}
+                <div className="p-5 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/20 border-b border-green-200 dark:border-green-800">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-green-500/15 flex items-center justify-center flex-shrink-0">
+                        <Users2 className="w-5 h-5 text-green-600" />
+                      </div>
+                      <div>
+                        <h2 className="font-bold text-lg leading-tight">{c.name}</h2>
+                        {c.description && <p className="text-sm text-muted-foreground mt-0.5">{c.description}</p>}
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          {plan && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-gradient-to-r from-violet-500 to-purple-600 text-white">
+                              <Sparkles className="w-3 h-3" /> {plan.name} Plan · ${plan.price}
+                            </span>
+                          )}
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-600 dark:text-green-400">
+                            <BadgeCheck className="w-4 h-4" /> Payment Verified
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <Button size="sm" onClick={() => navigate(`/community/${c.id}`)}>
+                      Open Community <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Unlocked features */}
+                {plan && (
+                  <div className="p-5 space-y-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <Unlock className="w-3.5 h-3.5 text-green-500" /> Features Unlocked with {plan.name} Plan
+                    </p>
+                    <div className="grid grid-cols-3 gap-3">
+                      {features.map(({ icon: Icon, label, value }) => (
+                        <div key={label} className="flex flex-col items-center gap-1.5 p-4 rounded-xl bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 text-center">
+                          <div className="w-8 h-8 rounded-lg bg-green-500/15 flex items-center justify-center">
+                            <Icon className="w-4 h-4 text-green-600 dark:text-green-400" />
+                          </div>
+                          <span className="text-2xl font-bold text-green-600 dark:text-green-400">{value}</span>
+                          <span className="text-xs text-muted-foreground font-medium">{label}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Feature checklist */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                      {[
+                        { icon: Users,    text: `Create up to ${plan.max_communities} communit${plan.max_communities === 1 ? "y" : "ies"}` },
+                        { icon: Wrench,   text: `Access up to ${plan.max_tools} AI tools` },
+                        { icon: BookOpen, text: `Publish up to ${plan.max_courses} courses` },
+                      ].map(({ icon: Icon, text }) => (
+                        <div key={text} className="flex items-center gap-2 text-sm">
+                          <div className="w-5 h-5 rounded-full bg-green-500/15 flex items-center justify-center flex-shrink-0">
+                            <Check className="w-3 h-3 text-green-600" />
+                          </div>
+                          <span className="text-muted-foreground">{text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Pending / rejected submissions */}
+          {otherCommunities.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Other Submissions</h2>
+              <div className="space-y-2">
+                {otherCommunities.map(c => {
+                  const cfg = STATUS_CONFIG[c.status] ?? STATUS_CONFIG.pending;
+                  const Icon = cfg.icon;
+                  return (
+                    <Card key={c.id} className="border">
+                      <CardContent className="py-3 px-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm truncate">{c.name}</p>
+                            {c.description && <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{c.description}</p>}
+                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                              <p className="text-xs text-muted-foreground">{new Date(c.created_at).toLocaleDateString()}</p>
+                              {c.plans && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gradient-to-r from-violet-500 to-purple-600 text-white">
+                                  <Sparkles className="w-2.5 h-2.5" /> Paid · {c.plans.name}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-1.5">
+                            <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border flex-shrink-0 ${cfg.className}`}>
+                              <Icon className="w-3 h-3" />{cfg.label}
+                            </span>
+                            {c.status === "pending" && (
+                              <button onClick={() => navigate(`/community-payment/${c.id}`)} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                                <CreditCard className="w-3 h-3" /> Complete payment →
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </Layout>
+    );
+  }
+
+  // ── PLAN SELECTION / CREATION FLOW ───────────────────────────────────────
   return (
     <Layout>
       <div className={`p-6 mx-auto space-y-6 transition-all ${step === "plan" ? "max-w-5xl" : "max-w-2xl"}`}>
@@ -163,8 +315,8 @@ export default function CreateCommunityPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {plans.map((plan, idx) => {
                   const isSelected = selectedPlan?.id === plan.id;
-                  const isPopular = idx === 1;
-                  const features = [
+                  const isPopular  = idx === 1;
+                  const features   = [
                     `${plan.max_communities} communit${plan.max_communities === 1 ? "y" : "ies"}`,
                     `${plan.max_tools} tools`,
                     `${plan.max_courses} courses`,
@@ -182,7 +334,6 @@ export default function CreateCommunityPage() {
                           : "border-border bg-card hover:border-primary/50 hover:shadow-md"
                       }`}
                     >
-                      {/* Most Popular badge */}
                       {isPopular && (
                         <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
                           <Badge className="bg-primary text-primary-foreground px-3 py-1 text-xs font-semibold shadow">
@@ -191,26 +342,20 @@ export default function CreateCommunityPage() {
                         </div>
                       )}
 
-                      {/* Paid pill — top right corner */}
+                      {/* Paid pill */}
                       <div className="absolute top-4 right-4">
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-gradient-to-r from-violet-500 to-purple-600 text-white shadow-sm">
                           <Sparkles className="w-3 h-3" /> Paid
                         </span>
                       </div>
 
-                      {/* Plan name + discount */}
                       <div className="flex items-center gap-2 mb-3">
-                        <span className="text-xs font-extrabold uppercase tracking-widest text-primary">
-                          {plan.name}
-                        </span>
+                        <span className="text-xs font-extrabold uppercase tracking-widest text-primary">{plan.name}</span>
                         {plan.discount_percent > 0 && (
-                          <Badge variant="secondary" className="text-[10px] px-1.5">
-                            {plan.discount_percent}% off
-                          </Badge>
+                          <Badge variant="secondary" className="text-[10px] px-1.5">{plan.discount_percent}% off</Badge>
                         )}
                       </div>
 
-                      {/* Price */}
                       <div className="mb-5">
                         <div className="flex items-baseline gap-1">
                           <span className="text-4xl font-bold tracking-tight">${plan.price}</span>
@@ -218,22 +363,16 @@ export default function CreateCommunityPage() {
                         <p className="text-xs text-muted-foreground mt-0.5">one-time · secure payment</p>
                       </div>
 
-                      {/* Select button */}
                       <Button
                         variant={isSelected ? "default" : "outline"}
                         className="w-full mb-5"
                         onClick={e => { e.stopPropagation(); setSelectedPlan(plan); }}
                       >
-                        {isSelected
-                          ? <><Check className="w-4 h-4 mr-1.5" />Selected</>
-                          : "Select Plan"
-                        }
+                        {isSelected ? <><Check className="w-4 h-4 mr-1.5" />Selected</> : "Select Plan"}
                       </Button>
 
-                      {/* Divider */}
                       <div className="border-t mb-4" />
 
-                      {/* Feature list */}
                       <ul className="space-y-2.5 flex-1">
                         {features.map((feat, i) => (
                           <li key={i} className="flex items-start gap-2.5 text-sm">
@@ -248,12 +387,7 @@ export default function CreateCommunityPage() {
               </div>
             )}
 
-            <Button
-              className="w-full"
-              disabled={!selectedPlan}
-              onClick={() => setStep("details")}
-              data-testid="button-continue-plan"
-            >
+            <Button className="w-full" disabled={!selectedPlan} onClick={() => setStep("details")} data-testid="button-continue-plan">
               Continue with {selectedPlan ? selectedPlan.name : "selected plan"}
               <ArrowRight className="w-4 h-4 ml-1.5" />
             </Button>
@@ -263,7 +397,6 @@ export default function CreateCommunityPage() {
         {/* ── STEP 2: Community details ── */}
         {step === "details" && selectedPlan && (
           <div className="space-y-4">
-            {/* Selected plan summary */}
             <div className="flex items-center gap-3 p-3 rounded-xl bg-primary/5 border border-primary/20">
               <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
                 <Tag className="w-4 h-4 text-primary" />
@@ -274,15 +407,8 @@ export default function CreateCommunityPage() {
                   {selectedPlan.max_communities} communit{selectedPlan.max_communities === 1 ? "y" : "ies"} · {selectedPlan.max_tools} tools · {selectedPlan.max_courses} courses
                 </p>
               </div>
-              <div className="text-right">
-                <span className="text-lg font-bold">${selectedPlan.price}</span>
-              </div>
-              <button
-                onClick={() => setStep("plan")}
-                className="ml-2 text-xs text-primary hover:underline flex-shrink-0"
-              >
-                Change
-              </button>
+              <div className="text-right"><span className="text-lg font-bold">${selectedPlan.price}</span></div>
+              <button onClick={() => setStep("plan")} className="ml-2 text-xs text-primary hover:underline flex-shrink-0">Change</button>
             </div>
 
             <Card>
@@ -294,9 +420,7 @@ export default function CreateCommunityPage() {
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="community-name">
-                      Community Name <span className="text-destructive">*</span>
-                    </Label>
+                    <Label htmlFor="community-name">Community Name <span className="text-destructive">*</span></Label>
                     <Input
                       id="community-name"
                       placeholder="e.g. AI Enthusiasts, Python Learners…"
@@ -307,11 +431,8 @@ export default function CreateCommunityPage() {
                     />
                     <p className="text-xs text-muted-foreground text-right">{name.length}/100</p>
                   </div>
-
                   <div className="space-y-1.5">
-                    <Label htmlFor="community-description">
-                      Description <span className="text-muted-foreground text-xs">(optional)</span>
-                    </Label>
+                    <Label htmlFor="community-description">Description <span className="text-muted-foreground text-xs">(optional)</span></Label>
                     <Textarea
                       id="community-description"
                       placeholder="What is this community about?"
@@ -323,27 +444,15 @@ export default function CreateCommunityPage() {
                     />
                     <p className="text-xs text-muted-foreground text-right">{description.length}/1000</p>
                   </div>
-
                   <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground">
                     <CreditCard className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                     <span>After submission you'll be taken to the payment page. Your community goes live once payment is verified.</span>
                   </div>
-
                   <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() => setStep("plan")}
-                    >
+                    <Button type="button" variant="outline" className="flex-1" onClick={() => setStep("plan")}>
                       <ArrowLeft className="w-4 h-4 mr-1" /> Back
                     </Button>
-                    <Button
-                      type="submit"
-                      className="flex-1"
-                      disabled={submitting || !name.trim()}
-                      data-testid="button-submit-community"
-                    >
+                    <Button type="submit" className="flex-1" disabled={submitting || !name.trim()} data-testid="button-submit-community">
                       {submitting ? "Creating…" : "Create & Pay →"}
                     </Button>
                   </div>
@@ -353,61 +462,58 @@ export default function CreateCommunityPage() {
           </div>
         )}
 
-        {/* My submissions */}
-        {myCommunities.length > 0 && (
+        {/* Pending / rejected submissions */}
+        {!loadingList && otherCommunities.length > 0 && (
           <div className="space-y-3">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">My Submissions</h2>
-            {loadingList ? (
-              [...Array(2)].map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)
-            ) : (
-              <div className="space-y-2">
-                {myCommunities.map(c => {
-                  const cfg = STATUS_CONFIG[c.status] ?? STATUS_CONFIG.pending;
-                  const Icon = cfg.icon;
-                  return (
-                    <Card key={c.id} className="border">
-                      <CardContent className="py-3 px-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="font-medium text-sm truncate">{c.name}</p>
-                            {c.description && (
-                              <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{c.description}</p>
-                            )}
-                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                              <p className="text-xs text-muted-foreground">{new Date(c.created_at).toLocaleDateString()}</p>
-                              {c.plans && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gradient-to-r from-violet-500 to-purple-600 text-white">
-                                  <Sparkles className="w-2.5 h-2.5" /> Paid · {c.plans.name}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-end gap-1.5">
-                            <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border flex-shrink-0 ${cfg.className}`}>
-                              <Icon className="w-3 h-3" />
-                              {cfg.label}
-                            </span>
-                            {c.status === "pending" && (
-                              <button
-                                onClick={() => navigate(`/community-payment/${c.id}`)}
-                                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                              >
-                                <CreditCard className="w-3 h-3" /> Complete payment →
-                              </button>
-                            )}
-                            {c.status === "approved" && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-600 dark:text-green-400">
-                                <BadgeCheck className="w-3.5 h-3.5" /> Payment verified
+            <div className="space-y-2">
+              {otherCommunities.map(c => {
+                const cfg  = STATUS_CONFIG[c.status] ?? STATUS_CONFIG.pending;
+                const Icon = cfg.icon;
+                return (
+                  <Card key={c.id} className="border">
+                    <CardContent className="py-3 px-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm truncate">{c.name}</p>
+                          {c.description && <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{c.description}</p>}
+                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                            <p className="text-xs text-muted-foreground">{new Date(c.created_at).toLocaleDateString()}</p>
+                            {c.plans && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gradient-to-r from-violet-500 to-purple-600 text-white">
+                                <Sparkles className="w-2.5 h-2.5" /> Paid · {c.plans.name}
                               </span>
                             )}
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            )}
+                        <div className="flex flex-col items-end gap-1.5">
+                          <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border flex-shrink-0 ${cfg.className}`}>
+                            <Icon className="w-3 h-3" />{cfg.label}
+                          </span>
+                          {c.status === "pending" && (
+                            <button onClick={() => navigate(`/community-payment/${c.id}`)} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                              <CreditCard className="w-3 h-3" /> Complete payment →
+                            </button>
+                          )}
+                          {c.status === "approved" && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-600 dark:text-green-400">
+                              <BadgeCheck className="w-3.5 h-3.5" /> Payment verified
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Loading skeleton for submissions */}
+        {loadingList && (
+          <div className="space-y-2">
+            {[1, 2].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
           </div>
         )}
       </div>
