@@ -1331,7 +1331,7 @@ export default function AdminPage() {
                 <Badge variant="destructive" className="ml-1.5 text-xs px-1.5 py-0 h-4">{pendingCommunities.length}</Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="payments" data-testid="tab-payments">
+            <TabsTrigger value="payments" data-testid="tab-payments" onClick={() => { if (!payMethodsLoaded) void fetchPayMethods(); }}>
               <CreditCard className="w-3.5 h-3.5 mr-1" />
               Pay
               {communityPayments.filter(p => p.status === "pending").length > 0 && (
@@ -2483,52 +2483,81 @@ export default function AdminPage() {
                     </div>
                   </div>
 
-                  {/* Binance */}
-                  <div className="space-y-3 p-3 rounded-xl bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800">
-                    <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-400 uppercase tracking-wide">Binance Pay</p>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Account ID / Email</Label>
-                      <Input className="h-8 text-sm" value={psBinanceAcc} onChange={e => setPsBinanceAcc(e.target.value)} placeholder="binance@example.com or UID" />
+                  {/* Dynamic Payment Methods */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Payment Methods</p>
+                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={() => openPmDialog()}>
+                        <Plus className="w-3 h-3" /> Add Method
+                      </Button>
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs">QR Code</Label>
-                      {psBinanceQr && (
-                        <div className="flex items-center gap-3">
-                          <img src={psBinanceQr} alt="Binance QR" className="w-16 h-16 rounded-lg border object-contain bg-white p-1" />
-                          <a href={psBinanceQr} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1"><ExternalLink className="w-3 h-3" />View</a>
-                        </div>
-                      )}
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) void handleQrUpload("binance", f); }} />
-                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" disabled={qrUploading === "binance"} type="button" asChild>
-                          <span><Upload className="w-3 h-3" />{qrUploading === "binance" ? "Uploading…" : psBinanceQr ? "Replace QR" : "Upload QR"}</span>
-                        </Button>
-                      </label>
-                    </div>
-                  </div>
 
-                  {/* NayaPay */}
-                  <div className="space-y-3 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800">
-                    <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">NayaPay</p>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Account Number / ID</Label>
-                      <Input className="h-8 text-sm" value={psNayapayAcc} onChange={e => setPsNayapayAcc(e.target.value)} placeholder="03XX-XXXXXXX" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs">QR Code</Label>
-                      {psNayapayQr && (
-                        <div className="flex items-center gap-3">
-                          <img src={psNayapayQr} alt="NayaPay QR" className="w-16 h-16 rounded-lg border object-contain bg-white p-1" />
-                          <a href={psNayapayQr} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1"><ExternalLink className="w-3 h-3" />View</a>
-                        </div>
-                      )}
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) void handleQrUpload("nayapay", f); }} />
-                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" disabled={qrUploading === "nayapay"} type="button" asChild>
-                          <span><Upload className="w-3 h-3" />{qrUploading === "nayapay" ? "Uploading…" : psNayapayQr ? "Replace QR" : "Upload QR"}</span>
+                    {payMethodsLoading ? (
+                      <div className="space-y-2">{[1,2].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}</div>
+                    ) : payMethods.length === 0 ? (
+                      <div className="flex flex-col items-center gap-2 py-8 rounded-xl border border-dashed text-center">
+                        <CreditCard className="w-7 h-7 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">No payment methods yet.</p>
+                        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openPmDialog()}>
+                          <Plus className="w-3.5 h-3.5" /> Add your first method
                         </Button>
-                      </label>
-                    </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {payMethods.map((pm, idx) => {
+                          const colors = [
+                            "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800",
+                            "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800",
+                            "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",
+                            "bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800",
+                            "bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800",
+                          ];
+                          const textColors = [
+                            "text-yellow-700 dark:text-yellow-400",
+                            "text-emerald-700 dark:text-emerald-400",
+                            "text-blue-700 dark:text-blue-400",
+                            "text-purple-700 dark:text-purple-400",
+                            "text-orange-700 dark:text-orange-400",
+                          ];
+                          const color = colors[idx % colors.length];
+                          const textColor = textColors[idx % textColors.length];
+                          return (
+                            <div key={pm.id} className={`p-3 rounded-xl border ${color} ${!pm.is_active ? "opacity-50" : ""}`}>
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <p className={`text-xs font-semibold uppercase tracking-wide ${textColor}`}>{pm.name}</p>
+                                    {!pm.is_active && <Badge variant="outline" className="text-[10px] px-1">Inactive</Badge>}
+                                  </div>
+                                  {pm.account_details && (
+                                    <p className="text-xs text-muted-foreground font-mono">{pm.account_details}</p>
+                                  )}
+                                  {pm.instructions && (
+                                    <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{pm.instructions}</p>
+                                  )}
+                                  {pm.qr_url && (
+                                    <div className="flex items-center gap-2 mt-1.5">
+                                      <img src={pm.qr_url} alt="QR" className="w-10 h-10 rounded border object-contain bg-white p-0.5" />
+                                      <a href={pm.qr_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
+                                        <ExternalLink className="w-3 h-3" />View QR
+                                      </a>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex gap-1 flex-shrink-0">
+                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openPmDialog(pm)} title="Edit">
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </Button>
+                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => void handleDeletePm(pm.id)} title="Delete">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
 
                   <Button onClick={() => void handleSavePaymentSettings()} disabled={psSaving} className="w-full">
