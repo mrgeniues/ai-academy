@@ -24,6 +24,7 @@ import ToolDetailPage from "@/pages/tool-detail";
 import CreateCommunityPage from "@/pages/create-community";
 import CommunityPanelPage from "@/pages/community-panel";
 import CommunityPaymentPage from "@/pages/community-payment";
+import CommunityDashboardPage from "@/pages/community-dashboard";
 import NotFound from "@/pages/not-found";
 import { WhatsAppButton } from "@/components/whatsapp-button";
 import { useEffect, useRef } from "react";
@@ -183,6 +184,9 @@ function Router() {
         </Route>
         <Route path="/community-payment/:id">
           <ProtectedRoute component={CommunityPaymentPage} />
+        </Route>
+        <Route path="/community-dashboard/:id">
+          <ProtectedRoute component={CommunityDashboardPage} />
         </Route>
         <Route path="/create-community">
           <ProtectedRoute component={CreateCommunityPage} />

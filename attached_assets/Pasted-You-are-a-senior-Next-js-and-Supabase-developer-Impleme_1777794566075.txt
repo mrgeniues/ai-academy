@@ -1,0 +1,107 @@
+You are a senior Next.js and Supabase developer.
+
+Implement a COMMUNITY-SPECIFIC DASHBOARD when user clicks on an APPROVED COMMUNITY.
+
+IMPORTANT:
+
+* Do NOT modify existing LMS UI
+* Do NOT change design
+* ONLY add a new isolated dashboard
+* Do NOT affect main system
+
+=====================================
+GOAL:
+
+When user clicks on an APPROVED community:
+
+→ Open a dedicated COMMUNITY DASHBOARD
+
+=====================================
+STEP 1: ROUTING
+
+Create route:
+
+/community-dashboard/[community_id]
+
+=====================================
+STEP 2: ACCESS CONTROL
+
+Only allow access if:
+
+* user is logged in
+* AND user is owner of that community
+
+If not:
+
+→ Show "Access Denied"
+
+=====================================
+STEP 3: DASHBOARD UI
+
+Design MUST match existing LMS UI:
+
+Sidebar + Content layout
+
+=====================================
+SIDEBAR OPTIONS (INSIDE COMMUNITY DASHBOARD):
+
+* Dashboard
+* Courses
+* AI Tools
+* VIP Posts
+* Community Posts
+* Messages
+* Profile
+* Admin
+
+=====================================
+STEP 4: DATA ISOLATION
+
+VERY IMPORTANT:
+
+All data inside this dashboard must be filtered by:
+
+community_id
+
+=====================================
+EXAMPLES:
+
+* courses → only this community courses
+* tools → only this community tools
+* posts → only this community posts
+* messages → only this community messages
+
+=====================================
+STEP 5: CLICK LOGIC
+
+When user clicks:
+
+"Approved Community"
+
+→ Redirect to:
+
+/community-dashboard/{community_id}
+
+=====================================
+STEP 6: SECURITY
+
+* Prevent other users from accessing this dashboard
+* Validate owner_id on backend
+* Protect API routes
+
+=====================================
+STEP 7: UI NOTE
+
+* Keep same colors, layout, spacing
+* Just change data context (community-based)
+
+=====================================
+OUTPUT:
+
+* Dynamic route
+* Community dashboard layout
+* Sidebar navigation
+* Access control logic
+* Data filtering by community_id
+
+Ensure everything works perfectly without affecting existing system.

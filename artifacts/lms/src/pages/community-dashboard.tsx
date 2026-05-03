@@ -1,0 +1,688 @@
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useRoute, Link, useLocation } from "wouter";
+import { useAuth } from "@/lib/auth";
+import { useTheme } from "@/lib/theme";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
+import { formatDistanceToNow } from "date-fns";
+import { motion } from "framer-motion";
+import {
+  LayoutDashboard, BookOpen, Wrench, Crown, Users, MessageSquare, User,
+  Shield, LogOut, Sun, Moon, Palette, Menu, GraduationCap, PanelLeftClose,
+  PanelLeftOpen, ArrowLeft, Send, Trash2, ExternalLink, CheckCircle, Clock,
+  XCircle, Users2, AlertTriangle, Loader2,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+
+const API = "/api";
+function authH(token: string | null): Record<string, string> {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+function jsonH(token: string | null) {
+  return { "Content-Type": "application/json", ...authH(token) };
+}
+function initials(name: string) {
+  return name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+}
+
+type Section = "dashboard" | "courses" | "tools" | "vip-posts" | "posts" | "messages" | "profile";
+
+type Community = {
+  id: number; name: string; description: string | null;
+  status: string; owner_id: number; isOwner: boolean;
+  memberStatus: "approved" | "pending" | "rejected" | null;
+  owner: { id: number; name: string; avatar: string | null } | null;
+};
+type CommunityPost = {
+  id: number; content: string; created_at: string; user_id: number;
+  users: { id: number; name: string; avatar: string | null } | null;
+};
+type CommunityMessage = {
+  id: number; content: string; created_at: string; sender_id: number;
+  users: { id: number; name: string; avatar: string | null } | null;
+};
+type CourseRow = {
+  id: number; course_id: number; created_at: string;
+  courses: { id: number; title: string; description: string | null; thumbnail: string | null } | null;
+};
+type ToolRow = {
+  id: number; tool_id: number; created_at: string;
+  tools: { id: number; title: string; description: string | null; image_url: string | null; tool_url: string | null } | null;
+};
+type Member = {
+  id: number; status: string; created_at: string; user_id: number;
+  users: { id: number; name: string; email: string; avatar: string | null } | null;
+};
+
+const NAV_ITEMS: { section: Section; label: string; icon: React.ElementType }[] = [
+  { section: "dashboard",  label: "Dashboard",        icon: LayoutDashboard },
+  { section: "courses",    label: "Courses",           icon: BookOpen },
+  { section: "tools",      label: "AI Tools",          icon: Wrench },
+  { section: "vip-posts",  label: "VIP Posts",         icon: Crown },
+  { section: "posts",      label: "Community Posts",   icon: Users },
+  { section: "messages",   label: "Messages",          icon: MessageSquare },
+  { section: "profile",    label: "Profile",           icon: User },
+];
+
+export default function CommunityDashboardPage() {
+  const [, params] = useRoute("/community-dashboard/:id");
+  const communityId = parseInt(params?.id ?? "0", 10);
+  const { token, user, logout } = useAuth();
+  const { theme, setTheme } = useTheme();
+  const { toast } = useToast();
+  const [, navigate] = useLocation();
+
+  const [section, setSection] = useState<Section>("dashboard");
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem("sidebar-collapsed") === "true"; } catch { return false; }
+  });
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const [community, setCommunity] = useState<Community | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [accessDenied, setAccessDenied] = useState(false);
+
+  const [members, setMembers] = useState<Member[]>([]);
+  const [posts, setPosts] = useState<CommunityPost[]>([]);
+  const [postsLoading, setPostsLoading] = useState(false);
+  const [newPost, setNewPost] = useState("");
+  const [posting, setPosting] = useState(false);
+  const [messages, setMessages] = useState<CommunityMessage[]>([]);
+  const [msgLoading, setMsgLoading] = useState(false);
+  const [newMsg, setNewMsg] = useState("");
+  const [sending, setSending] = useState(false);
+  const [courses, setCourses] = useState<CourseRow[]>([]);
+  const [tools, setTools] = useState<ToolRow[]>([]);
+  const msgEndRef = useRef<HTMLDivElement>(null);
+
+  // ── Fetch community + verify owner access ────────────────────────────────
+  useEffect(() => {
+    if (!communityId || !token) return;
+    setLoading(true);
+    fetch(`${API}/communities/${communityId}/panel`, { headers: authH(token) })
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) { setAccessDenied(true); return; }
+        if (!d.isOwner) { setAccessDenied(true); return; }
+        setCommunity(d);
+      })
+      .catch(() => setAccessDenied(true))
+      .finally(() => setLoading(false));
+  }, [communityId, token]);
+
+  // ── Data fetchers ─────────────────────────────────────────────────────────
+  const fetchPosts = useCallback(() => {
+    setPostsLoading(true);
+    fetch(`${API}/communities/${communityId}/posts`, { headers: authH(token) })
+      .then(r => r.json()).then(d => { if (Array.isArray(d)) setPosts(d); })
+      .catch(() => {}).finally(() => setPostsLoading(false));
+  }, [communityId, token]);
+
+  const fetchMessages = useCallback(() => {
+    setMsgLoading(true);
+    fetch(`${API}/communities/${communityId}/messages`, { headers: authH(token) })
+      .then(r => r.json()).then(d => { if (Array.isArray(d)) setMessages(d); })
+      .catch(() => {}).finally(() => setMsgLoading(false));
+  }, [communityId, token]);
+
+  const fetchCourses = useCallback(() => {
+    fetch(`${API}/communities/${communityId}/courses`, { headers: authH(token) })
+      .then(r => r.json()).then(d => { if (Array.isArray(d)) setCourses(d); })
+      .catch(() => {});
+  }, [communityId, token]);
+
+  const fetchTools = useCallback(() => {
+    fetch(`${API}/communities/${communityId}/tools`, { headers: authH(token) })
+      .then(r => r.json()).then(d => { if (Array.isArray(d)) setTools(d); })
+      .catch(() => {});
+  }, [communityId, token]);
+
+  const fetchMembers = useCallback(() => {
+    fetch(`${API}/communities/${communityId}/members`, { headers: authH(token) })
+      .then(r => r.json()).then(d => { if (Array.isArray(d)) setMembers(d); })
+      .catch(() => {});
+  }, [communityId, token]);
+
+  useEffect(() => {
+    if (!community) return;
+    fetchPosts(); fetchMessages(); fetchCourses(); fetchTools(); fetchMembers();
+  }, [community]);
+
+  useEffect(() => { msgEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  // ── Post community message ────────────────────────────────────────────────
+  const submitPost = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPost.trim()) return;
+    setPosting(true);
+    try {
+      const res = await fetch(`${API}/communities/${communityId}/posts`, {
+        method: "POST", headers: jsonH(token),
+        body: JSON.stringify({ content: newPost.trim() }),
+      });
+      if (res.ok) { setNewPost(""); fetchPosts(); }
+      else toast({ title: "Failed to post", variant: "destructive" });
+    } catch { toast({ title: "Network error", variant: "destructive" }); }
+    finally { setPosting(false); }
+  };
+
+  const deletePost = async (postId: number) => {
+    await fetch(`${API}/communities/${communityId}/posts/${postId}`, {
+      method: "DELETE", headers: authH(token),
+    });
+    fetchPosts();
+  };
+
+  // ── Send message ──────────────────────────────────────────────────────────
+  const sendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMsg.trim()) return;
+    setSending(true);
+    try {
+      const res = await fetch(`${API}/communities/${communityId}/messages`, {
+        method: "POST", headers: jsonH(token),
+        body: JSON.stringify({ content: newMsg.trim() }),
+      });
+      if (res.ok) { setNewMsg(""); fetchMessages(); }
+    } catch {}
+    finally { setSending(false); }
+  };
+
+  const toggleCollapsed = () => {
+    setCollapsed(v => {
+      const next = !v;
+      try { localStorage.setItem("sidebar-collapsed", String(next)); } catch {}
+      return next;
+    });
+  };
+
+  const userInitials = user?.name
+    ? user.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
+    : "?";
+
+  // ── SIDEBAR ───────────────────────────────────────────────────────────────
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full">
+      {/* Logo + back */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-sidebar-border">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
+            <GraduationCap className="w-4 h-4 text-white" />
+          </div>
+          <span className="font-bold text-sm text-sidebar-foreground tracking-tight whitespace-nowrap truncate max-w-[110px]">
+            {community?.name ?? "Community"}
+          </span>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            onClick={toggleCollapsed}
+            className="hidden md:flex p-1 rounded-md text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+          >
+            <PanelLeftClose className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Back to My Community */}
+      <div className="px-3 pt-3">
+        <button
+          onClick={() => navigate("/create-community")}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to My Community
+        </button>
+      </div>
+
+      {/* Nav */}
+      <nav className="flex-1 px-3 py-3 space-y-1">
+        {NAV_ITEMS.map(({ section: s, label, icon: Icon }) => {
+          const isActive = section === s;
+          return (
+            <button
+              key={s}
+              onClick={() => { setSection(s); setSidebarOpen(false); }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                isActive
+                  ? "bg-primary text-white shadow-sm"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              }`}
+            >
+              <Icon className="w-4 h-4 flex-shrink-0" />
+              <span className="flex-1 text-left">{label}</span>
+            </button>
+          );
+        })}
+
+        {user?.role === "admin" && (
+          <Link
+            href="/admin"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all"
+          >
+            <Shield className="w-4 h-4 flex-shrink-0" />
+            <span>Admin</span>
+          </Link>
+        )}
+      </nav>
+
+      {/* Footer */}
+      <div className="px-3 py-4 border-t border-sidebar-border space-y-2">
+        <button
+          onClick={() => {
+            const next = theme === "light" ? "dark" : theme === "dark" ? "purple" : "light";
+            setTheme(next);
+          }}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all"
+        >
+          {theme === "dark" ? <Sun className="w-4 h-4" /> : theme === "purple" ? <Palette className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          {theme === "dark" ? "Light mode" : theme === "purple" ? "Light mode" : "Dark mode"}
+        </button>
+
+        <div className="flex items-center gap-3 px-3 py-2">
+          <Avatar className="w-8 h-8 flex-shrink-0">
+            <AvatarImage src={user?.avatar ?? undefined} />
+            <AvatarFallback className="text-xs bg-primary/20 text-primary">{userInitials}</AvatarFallback>
+          </Avatar>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-sidebar-foreground truncate">{user?.name}</p>
+            <Badge variant="outline" className="text-xs border-sidebar-border text-sidebar-foreground/60 mt-0.5">
+              {user?.role}
+            </Badge>
+          </div>
+        </div>
+
+        <button
+          onClick={() => { logout(); navigate("/login"); }}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all"
+        >
+          <LogOut className="w-4 h-4" /> Sign out
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── LOADING STATE ─────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // ── ACCESS DENIED ─────────────────────────────────────────────────────────
+  if (accessDenied || !community) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <Card className="max-w-sm w-full mx-4">
+          <CardContent className="py-10 text-center space-y-4">
+            <div className="w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-7 h-7 text-red-500" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold">Access Denied</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                You don't have permission to access this community dashboard.
+              </p>
+            </div>
+            <Button onClick={() => navigate("/create-community")} className="w-full">
+              <ArrowLeft className="w-4 h-4 mr-1.5" /> Back to My Community
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // ── SECTION CONTENT ───────────────────────────────────────────────────────
+  const renderContent = () => {
+    switch (section) {
+
+      // ── Dashboard ──────────────────────────────────────────────────────
+      case "dashboard":
+        return (
+          <div className="p-6 space-y-6 max-w-4xl">
+            {/* Community header */}
+            <div className="rounded-2xl border bg-card p-6 space-y-3">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <Users2 className="w-6 h-6 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-xl font-bold">{community.name}</h2>
+                  {community.description && <p className="text-sm text-muted-foreground mt-0.5">{community.description}</p>}
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                      <CheckCircle className="w-3 h-3" /> Approved
+                    </span>
+                    <span className="text-xs text-muted-foreground">Owner Dashboard</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Stats grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {[
+                { label: "Members",  value: members.filter(m => m.status === "approved").length, icon: Users },
+                { label: "Posts",    value: posts.length,   icon: MessageSquare },
+                { label: "Courses",  value: courses.length, icon: BookOpen },
+                { label: "AI Tools", value: tools.length,   icon: Wrench },
+              ].map(({ label, value, icon: Icon }) => (
+                <Card key={label}>
+                  <CardContent className="py-4 px-4 flex flex-col items-center text-center gap-1">
+                    <Icon className="w-5 h-5 text-primary" />
+                    <span className="text-2xl font-bold">{value}</span>
+                    <span className="text-xs text-muted-foreground">{label}</span>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {/* Recent posts */}
+            {posts.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Recent Posts</h3>
+                {posts.slice(0, 3).map(p => (
+                  <Card key={p.id}>
+                    <CardContent className="py-3 px-4 flex items-start gap-3">
+                      <Avatar className="w-8 h-8 flex-shrink-0">
+                        <AvatarImage src={p.users?.avatar ?? undefined} />
+                        <AvatarFallback className="text-xs">{p.users?.name ? initials(p.users.name) : "?"}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{p.users?.name ?? "Unknown"}</p>
+                        <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">{p.content}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{formatDistanceToNow(new Date(p.created_at), { addSuffix: true })}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+
+      // ── Courses ────────────────────────────────────────────────────────
+      case "courses":
+        return (
+          <div className="p-6 space-y-4 max-w-4xl">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold flex items-center gap-2"><BookOpen className="w-5 h-5 text-primary" /> Courses</h2>
+              <span className="text-sm text-muted-foreground">{courses.length} linked</span>
+            </div>
+            {courses.length === 0 ? (
+              <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No courses linked to this community yet.</CardContent></Card>
+            ) : (
+              <div className="grid sm:grid-cols-2 gap-4">
+                {courses.map(row => row.courses && (
+                  <Card key={row.id} className="overflow-hidden">
+                    {row.courses.thumbnail && (
+                      <div className="h-36 overflow-hidden bg-muted">
+                        <img src={row.courses.thumbnail} alt={row.courses.title} className="w-full h-full object-cover" />
+                      </div>
+                    )}
+                    <CardContent className="py-3 px-4">
+                      <p className="font-semibold text-sm">{row.courses.title}</p>
+                      {row.courses.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{row.courses.description}</p>}
+                      <Link href={`/courses/${row.courses.id}`}>
+                        <Button size="sm" variant="outline" className="mt-3 w-full">
+                          <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> Open Course
+                        </Button>
+                      </Link>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+
+      // ── AI Tools ───────────────────────────────────────────────────────
+      case "tools":
+        return (
+          <div className="p-6 space-y-4 max-w-4xl">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold flex items-center gap-2"><Wrench className="w-5 h-5 text-primary" /> AI Tools</h2>
+              <span className="text-sm text-muted-foreground">{tools.length} linked</span>
+            </div>
+            {tools.length === 0 ? (
+              <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No AI tools linked to this community yet.</CardContent></Card>
+            ) : (
+              <div className="grid sm:grid-cols-2 gap-4">
+                {tools.map(row => row.tools && (
+                  <Card key={row.id}>
+                    <CardContent className="py-4 px-4 flex items-start gap-3">
+                      {row.tools.image_url && (
+                        <img src={row.tools.image_url} alt={row.tools.title} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm">{row.tools.title}</p>
+                        {row.tools.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{row.tools.description}</p>}
+                        {row.tools.tool_url && (
+                          <a href={row.tools.tool_url} target="_blank" rel="noopener noreferrer">
+                            <Button size="sm" variant="outline" className="mt-2">
+                              <ExternalLink className="w-3 h-3 mr-1" /> Open Tool
+                            </Button>
+                          </a>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+
+      // ── VIP Posts ──────────────────────────────────────────────────────
+      case "vip-posts":
+        return (
+          <div className="p-6 space-y-4 max-w-4xl">
+            <h2 className="text-lg font-bold flex items-center gap-2"><Crown className="w-5 h-5 text-primary" /> VIP Posts</h2>
+            <Card>
+              <CardContent className="py-10 text-center space-y-3">
+                <Crown className="w-8 h-8 text-primary mx-auto" />
+                <p className="text-sm text-muted-foreground">VIP Posts are shared across the platform.</p>
+                <Link href="/vip-posts">
+                  <Button variant="outline"><ExternalLink className="w-4 h-4 mr-1.5" /> View VIP Posts</Button>
+                </Link>
+              </CardContent>
+            </Card>
+          </div>
+        );
+
+      // ── Community Posts ────────────────────────────────────────────────
+      case "posts":
+        return (
+          <div className="p-6 space-y-4 max-w-3xl">
+            <h2 className="text-lg font-bold flex items-center gap-2"><Users className="w-5 h-5 text-primary" /> Community Posts</h2>
+
+            {/* Post form */}
+            <form onSubmit={submitPost} className="flex gap-2">
+              <Input
+                placeholder="Share something with the community…"
+                value={newPost}
+                onChange={e => setNewPost(e.target.value)}
+                className="flex-1"
+              />
+              <Button type="submit" disabled={posting || !newPost.trim()}>
+                {posting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              </Button>
+            </form>
+
+            {postsLoading ? (
+              <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}</div>
+            ) : posts.length === 0 ? (
+              <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No posts yet. Be the first to share!</CardContent></Card>
+            ) : (
+              <div className="space-y-3">
+                {posts.map(p => (
+                  <Card key={p.id}>
+                    <CardContent className="py-3 px-4 flex items-start gap-3">
+                      <Avatar className="w-8 h-8 flex-shrink-0">
+                        <AvatarImage src={p.users?.avatar ?? undefined} />
+                        <AvatarFallback className="text-xs">{p.users?.name ? initials(p.users.name) : "?"}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-medium">{p.users?.name ?? "Unknown"}</p>
+                          <p className="text-xs text-muted-foreground flex-shrink-0">{formatDistanceToNow(new Date(p.created_at), { addSuffix: true })}</p>
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-0.5">{p.content}</p>
+                      </div>
+                      {(p.user_id === user?.id || community.isOwner) && (
+                        <button onClick={() => deletePost(p.id)} className="text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+
+      // ── Messages ───────────────────────────────────────────────────────
+      case "messages":
+        return (
+          <div className="p-6 flex flex-col h-full max-w-3xl" style={{ maxHeight: "calc(100vh - 4rem)" }}>
+            <h2 className="text-lg font-bold flex items-center gap-2 mb-4"><MessageSquare className="w-5 h-5 text-primary" /> Community Messages</h2>
+
+            {/* Messages feed */}
+            <div className="flex-1 overflow-y-auto space-y-3 mb-4 min-h-0">
+              {msgLoading ? (
+                <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}</div>
+              ) : messages.length === 0 ? (
+                <Card className="flex-1"><CardContent className="py-10 text-center text-sm text-muted-foreground">No messages yet.</CardContent></Card>
+              ) : (
+                messages.map(m => {
+                  const isMe = m.sender_id === user?.id;
+                  return (
+                    <div key={m.id} className={`flex gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
+                      <Avatar className="w-7 h-7 flex-shrink-0">
+                        <AvatarImage src={m.users?.avatar ?? undefined} />
+                        <AvatarFallback className="text-[10px]">{m.users?.name ? initials(m.users.name) : "?"}</AvatarFallback>
+                      </Avatar>
+                      <div className={`max-w-[70%] ${isMe ? "items-end" : "items-start"} flex flex-col gap-0.5`}>
+                        <span className={`text-[11px] text-muted-foreground ${isMe ? "text-right" : ""}`}>{m.users?.name}</span>
+                        <div className={`px-3 py-2 rounded-2xl text-sm ${isMe ? "bg-primary text-white rounded-tr-sm" : "bg-muted rounded-tl-sm"}`}>
+                          {m.content}
+                        </div>
+                        <span className="text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(m.created_at), { addSuffix: true })}</span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              <div ref={msgEndRef} />
+            </div>
+
+            {/* Message input */}
+            <form onSubmit={sendMessage} className="flex gap-2">
+              <Input
+                placeholder="Type a message…"
+                value={newMsg}
+                onChange={e => setNewMsg(e.target.value)}
+                className="flex-1"
+              />
+              <Button type="submit" disabled={sending || !newMsg.trim()}>
+                {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              </Button>
+            </form>
+          </div>
+        );
+
+      // ── Profile ────────────────────────────────────────────────────────
+      case "profile":
+        return (
+          <div className="p-6 max-w-2xl">
+            <h2 className="text-lg font-bold flex items-center gap-2 mb-4"><User className="w-5 h-5 text-primary" /> Profile</h2>
+            <Card>
+              <CardContent className="py-8 flex flex-col items-center gap-4 text-center">
+                <Avatar className="w-20 h-20">
+                  <AvatarImage src={user?.avatar ?? undefined} />
+                  <AvatarFallback className="text-2xl bg-primary/20 text-primary">{userInitials}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="text-xl font-bold">{user?.name}</p>
+                  <p className="text-sm text-muted-foreground">{user?.email}</p>
+                  <Badge variant="outline" className="mt-2">{user?.role}</Badge>
+                </div>
+                <Link href="/profile">
+                  <Button variant="outline"><ExternalLink className="w-4 h-4 mr-1.5" /> Edit Full Profile</Button>
+                </Link>
+              </CardContent>
+            </Card>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // ── MAIN LAYOUT ───────────────────────────────────────────────────────────
+  return (
+    <div className="flex h-screen overflow-hidden bg-background">
+
+      {/* Desktop sidebar */}
+      <aside className={cn(
+        "hidden md:flex flex-col bg-sidebar border-r border-sidebar-border flex-shrink-0 transition-all duration-300 overflow-hidden",
+        collapsed ? "w-12" : "w-64"
+      )}>
+        {collapsed ? (
+          <div className="flex flex-col items-center pt-4 gap-3 h-full">
+            <button onClick={toggleCollapsed} className="p-2 rounded-lg text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
+              <PanelLeftOpen className="w-5 h-5" />
+            </button>
+          </div>
+        ) : (
+          <SidebarContent />
+        )}
+      </aside>
+
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex">
+          <div className="fixed inset-0 bg-black/60" onClick={() => setSidebarOpen(false)} />
+          <aside className="relative flex flex-col w-64 bg-sidebar border-r border-sidebar-border">
+            <SidebarContent />
+          </aside>
+        </div>
+      )}
+
+      {/* Main content */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Mobile header */}
+        <header className="md:hidden flex items-center gap-3 px-4 py-3 bg-card border-b border-border">
+          <button onClick={() => setSidebarOpen(true)} className="p-1">
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <GraduationCap className="w-5 h-5 text-primary flex-shrink-0" />
+            <span className="font-bold text-base truncate">{community.name}</span>
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-y-auto">
+          <motion.div
+            key={section}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="h-full"
+          >
+            {renderContent()}
+          </motion.div>
+        </main>
+      </div>
+    </div>
+  );
+}

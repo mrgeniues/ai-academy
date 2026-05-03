@@ -13,7 +13,7 @@ import { useAuth } from "@/lib/auth";
 import {
   Users2, Clock, CheckCircle, XCircle, CreditCard,
   ArrowRight, ArrowLeft, Users, Wrench, BookOpen, Tag, Check,
-  Sparkles, BadgeCheck, Unlock, ChevronLeft,
+  Sparkles, BadgeCheck, Unlock,
 } from "lucide-react";
 
 const API = "/api";
@@ -171,9 +171,8 @@ export default function CreateCommunityPage() {
                         </div>
                       </div>
                     </div>
-                    <Button size="sm" onClick={() => setOpenedId(openedId === c.id ? null : c.id)}>
-                      {openedId === c.id ? "Close" : "Open Community"}
-                      <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                    <Button size="sm" onClick={() => navigate(`/community-dashboard/${c.id}`)}>
+                      Open Community <ArrowRight className="w-3.5 h-3.5 ml-1" />
                     </Button>
                   </div>
                 </div>
