@@ -218,7 +218,7 @@ export default function CreateCommunityPage() {
                 {openedId === c.id && (() => {
                   const plan = c.plans;
                   const maxSlots    = plan?.max_communities ?? 0;
-                  const usedSlots   = myCommunities.length;
+                  const usedSlots   = myCommunities.filter(m => m.status !== "rejected").length;
                   const remaining   = Math.max(0, maxSlots - usedSlots);
                   const limitReached = remaining === 0;
 
