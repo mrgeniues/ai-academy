@@ -17,7 +17,7 @@ import {
   Shield, LogOut, Sun, Moon, Palette, Menu, GraduationCap, PanelLeftClose,
   PanelLeftOpen, ArrowLeft, Send, Trash2, ExternalLink, CheckCircle, Clock,
   XCircle, Users2, AlertTriangle, Loader2, Copy, UserCheck, UserX, Link2, Plus,
-  Globe, Lock, ImageIcon, X, MessageCircle,
+  Globe, Lock, ImageIcon, X, MessageCircle, Smile, Paperclip,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -85,6 +85,110 @@ type VipComment = {
   users: { id: number; name: string; avatar: string | null } | null;
 };
 
+// ── Shared rich-text helpers ─────────────────────────────────────────────────
+const COMMON_EMOJIS = [
+  "😀","😂","😊","😍","🤔","😎","🥳","😭","😤","😱","🙏","👍","👎","❤️","🔥",
+  "🎉","✨","🚀","💡","⭐","🎯","💯","🤝","👏","👋","💪","🎵","🏆","🥇","🎁",
+  "🌟","💫","⚡","🌈","🍕","🎸","🐶","🌸","🦋","🥂","🫶","🫡","🫂","🤩","😇",
+];
+
+function EmojiPickerPopover({ onSelect, accent = "hover:text-primary hover:bg-muted" }: {
+  onSelect: (emoji: string) => void; accent?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+  return (
+    <div className="relative" ref={ref}>
+      <button type="button" onClick={() => setOpen(o => !o)} title="Insert emoji"
+        className={`p-1.5 rounded-lg text-muted-foreground transition-colors ${accent}`}>
+        <Smile className="w-4 h-4" />
+      </button>
+      {open && (
+        <div className="absolute bottom-full left-0 mb-1 z-50 bg-popover border rounded-xl shadow-lg p-2 w-56">
+          <div className="flex flex-wrap">
+            {COMMON_EMOJIS.map(em => (
+              <button key={em} type="button" onClick={() => { onSelect(em); setOpen(false); }}
+                className="text-base p-1 rounded hover:bg-muted transition-colors leading-none w-8 h-8 flex items-center justify-center">
+                {em}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LinkInsertPopover({ onInsert, accent = "hover:text-primary hover:bg-muted" }: {
+  onInsert: (text: string) => void; accent?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState("");
+  const [label, setLabel] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+  const insert = () => {
+    if (!url.trim()) return;
+    const display = label.trim() || url.trim();
+    onInsert(`[${display}](${url.trim()})`);
+    setUrl(""); setLabel(""); setOpen(false);
+  };
+  return (
+    <div className="relative" ref={ref}>
+      <button type="button" onClick={() => setOpen(o => !o)} title="Insert link"
+        className={`p-1.5 rounded-lg text-muted-foreground transition-colors ${accent}`}>
+        <Link2 className="w-4 h-4" />
+      </button>
+      {open && (
+        <div className="absolute bottom-full left-0 mb-1 z-50 bg-popover border rounded-xl shadow-lg p-3 w-64 space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground">Insert link</p>
+          <input type="url" placeholder="https://…" value={url} onChange={e => setUrl(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); insert(); } }}
+            className="w-full text-xs px-2.5 py-1.5 rounded-lg border bg-background outline-none focus:ring-1 focus:ring-primary/50" />
+          <input type="text" placeholder="Label (optional)" value={label} onChange={e => setLabel(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); insert(); } }}
+            className="w-full text-xs px-2.5 py-1.5 rounded-lg border bg-background outline-none focus:ring-1 focus:ring-primary/50" />
+          <button type="button" onClick={insert} disabled={!url.trim()}
+            className="w-full text-xs py-1.5 bg-primary text-primary-foreground rounded-lg disabled:opacity-40 hover:bg-primary/90 transition-colors font-medium">
+            Insert Link
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function renderRichText(text: string): React.ReactNode {
+  if (!text) return null;
+  const pattern = /(\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s]+)/g;
+  const nodes: React.ReactNode[] = [];
+  let last = 0; let m: RegExpExecArray | null;
+  while ((m = pattern.exec(text)) !== null) {
+    if (m.index > last) nodes.push(text.slice(last, m.index));
+    const token = m[0];
+    const md = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+    if (md) {
+      nodes.push(<a key={m.index} href={md[2]} target="_blank" rel="noopener noreferrer" className="text-primary underline break-all">{md[1]}</a>);
+    } else {
+      nodes.push(<a key={m.index} href={token} target="_blank" rel="noopener noreferrer" className="text-primary underline break-all">{token}</a>);
+    }
+    last = m.index + token.length;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return nodes.length > 0 ? <>{nodes}</> : text;
+}
+
 function VipCommentSection({ postId, token, communityId, currentUserId, currentUserName, currentUserAvatar }: {
   postId: number; token: string | null; communityId: number;
   currentUserId: number | undefined; currentUserName: string | undefined; currentUserAvatar: string | null | undefined;
@@ -96,7 +200,22 @@ function VipCommentSection({ postId, token, communityId, currentUserId, currentU
   const [commentImage, setCommentImage] = useState<File | null>(null);
   const [commentImagePreview, setCommentImagePreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
   const commentImageRef = useRef<HTMLInputElement>(null);
+  const commentFileRef = useRef<HTMLInputElement>(null);
+
+  const uploadCommentFile = async (file: File) => {
+    if (!token) return;
+    setUploadingFile(true);
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+      if (res.ok) {
+        const { url } = await res.json() as { url: string };
+        setNewComment(c => c + (c && !c.endsWith(" ") ? " " : "") + `[📎 ${file.name}](${url})`);
+      } else { toast({ title: "File upload failed", variant: "destructive" }); }
+    } finally { setUploadingFile(false); }
+  };
 
   const fetchComments = useCallback(async () => {
     try {
@@ -171,7 +290,7 @@ function VipCommentSection({ postId, token, communityId, currentUserId, currentU
                     )}
                   </div>
                 </div>
-                {c.content && <p className="text-xs text-muted-foreground leading-relaxed break-words">{c.content}</p>}
+                {c.content && <p className="text-xs text-muted-foreground leading-relaxed break-words">{renderRichText(c.content)}</p>}
                 {c.image_url && (
                   <div className="mt-1 rounded-lg overflow-hidden max-h-36">
                     <img src={c.image_url} alt="comment" className="w-full object-cover max-h-36" />
@@ -207,6 +326,17 @@ function VipCommentSection({ postId, token, communityId, currentUserId, currentU
               setCommentImage(file);
               setCommentImagePreview(URL.createObjectURL(file));
             }} />
+            <input ref={commentFileRef} type="file" accept=".pdf,.doc,.docx,.txt,.zip" className="hidden" onChange={e => {
+              const file = e.target.files?.[0]; if (!file) return;
+              void uploadCommentFile(file);
+              if (commentFileRef.current) commentFileRef.current.value = "";
+            }} />
+            <EmojiPickerPopover onSelect={em => setNewComment(c => c + em)} accent="hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30" />
+            <LinkInsertPopover onInsert={txt => setNewComment(c => c + (c && !c.endsWith(" ") ? " " : "") + txt)} accent="hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30" />
+            <button type="button" onClick={() => commentFileRef.current?.click()}
+              className="text-muted-foreground hover:text-amber-500 transition-colors p-0.5" title="Attach file" disabled={uploadingFile}>
+              {uploadingFile ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Paperclip className="w-3.5 h-3.5" />}
+            </button>
             <button type="button" onClick={() => commentImageRef.current?.click()}
               className="text-muted-foreground hover:text-amber-500 transition-colors p-0.5" title="Add image">
               <ImageIcon className="w-3.5 h-3.5" />
@@ -243,7 +373,22 @@ function CommunityPostCommentSection({ postId, token, communityId, currentUserId
   const [commentImage, setCommentImage] = useState<File | null>(null);
   const [commentImagePreview, setCommentImagePreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
   const commentImageRef = useRef<HTMLInputElement>(null);
+  const commentFileRef = useRef<HTMLInputElement>(null);
+
+  const uploadCommentFile = async (file: File) => {
+    if (!token) return;
+    setUploadingFile(true);
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+      if (res.ok) {
+        const { url } = await res.json() as { url: string };
+        setNewComment(c => c + (c && !c.endsWith(" ") ? " " : "") + `[📎 ${file.name}](${url})`);
+      } else { toast({ title: "File upload failed", variant: "destructive" }); }
+    } finally { setUploadingFile(false); }
+  };
 
   const fetchComments = useCallback(async () => {
     try {
@@ -318,7 +463,7 @@ function CommunityPostCommentSection({ postId, token, communityId, currentUserId
                     )}
                   </div>
                 </div>
-                {c.content && <p className="text-sm leading-relaxed break-words">{c.content}</p>}
+                {c.content && <p className="text-sm leading-relaxed break-words">{renderRichText(c.content)}</p>}
                 {c.image_url && (
                   <div className="mt-1.5 rounded-lg overflow-hidden max-h-52">
                     <img src={c.image_url} alt="comment" className="w-full object-cover max-h-52" />
@@ -352,6 +497,17 @@ function CommunityPostCommentSection({ postId, token, communityId, currentUserId
               const file = e.target.files?.[0]; if (!file) return;
               setCommentImage(file); setCommentImagePreview(URL.createObjectURL(file));
             }} />
+            <input ref={commentFileRef} type="file" accept=".pdf,.doc,.docx,.txt,.zip" className="hidden" onChange={e => {
+              const file = e.target.files?.[0]; if (!file) return;
+              void uploadCommentFile(file);
+              if (commentFileRef.current) commentFileRef.current.value = "";
+            }} />
+            <EmojiPickerPopover onSelect={em => setNewComment(c => c + em)} />
+            <LinkInsertPopover onInsert={txt => setNewComment(c => c + (c && !c.endsWith(" ") ? " " : "") + txt)} />
+            <button type="button" onClick={() => commentFileRef.current?.click()}
+              className="text-muted-foreground hover:text-primary transition-colors p-0.5" title="Attach file" disabled={uploadingFile}>
+              {uploadingFile ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Paperclip className="w-3.5 h-3.5" />}
+            </button>
             <button type="button" onClick={() => commentImageRef.current?.click()}
               className="text-muted-foreground hover:text-primary transition-colors p-0.5" title="Add image">
               <ImageIcon className="w-3.5 h-3.5" />
@@ -413,6 +569,7 @@ export default function CommunityDashboardPage() {
   const [postImageFile, setPostImageFile] = useState<File | null>(null);
   const [postImagePreview, setPostImagePreview] = useState<string | null>(null);
   const postImageInputRef = useRef<HTMLInputElement>(null);
+  const postFileInputRef = useRef<HTMLInputElement>(null);
   const [expandedPostComments, setExpandedPostComments] = useState<Set<number>>(new Set());
   const [likedPosts, setLikedPosts] = useState<Record<number, { liked: boolean; count: number }>>({});
   const [messages, setMessages] = useState<CommunityMessage[]>([]);
@@ -459,6 +616,7 @@ export default function CommunityDashboardPage() {
   const [vipImageFile, setVipImageFile] = useState<File | null>(null);
   const [vipImagePreview, setVipImagePreview] = useState<string | null>(null);
   const vipImageInputRef = useRef<HTMLInputElement>(null);
+  const vipFileInputRef = useRef<HTMLInputElement>(null);
   const [expandedVipComments, setExpandedVipComments] = useState<Set<number>>(new Set());
   // Course enrollment requests (for My Approval Panel)
   const [courseEnrollments, setCourseEnrollments] = useState<CourseEnrollment[]>([]);
@@ -801,6 +959,31 @@ export default function CommunityDashboardPage() {
       toast({ title: "Tool removed" });
     } catch { toast({ title: "Network error", variant: "destructive" }); }
     finally { setRemovingTool(null); }
+  };
+
+  // ── File upload helpers for post composers ────────────────────────────────
+  const uploadVipFile = async (file: File) => {
+    if (!token) return;
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      const res = await fetch(`${API}/upload`, { method: "POST", headers: authH(token), body: fd });
+      if (res.ok) {
+        const { url } = await res.json() as { url: string };
+        setNewVipPost(c => c + (c && !c.endsWith(" ") ? " " : "") + `[📎 ${file.name}](${url})`);
+      } else { toast({ title: "File upload failed", variant: "destructive" }); }
+    } catch { toast({ title: "File upload failed", variant: "destructive" }); }
+  };
+
+  const uploadPostFile = async (file: File) => {
+    if (!token) return;
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      const res = await fetch(`${API}/upload`, { method: "POST", headers: authH(token), body: fd });
+      if (res.ok) {
+        const { url } = await res.json() as { url: string };
+        setNewPost(c => c + (c && !c.endsWith(" ") ? " " : "") + `[📎 ${file.name}](${url})`);
+      } else { toast({ title: "File upload failed", variant: "destructive" }); }
+    } catch { toast({ title: "File upload failed", variant: "destructive" }); }
   };
 
   // ── VIP Post handlers ─────────────────────────────────────────────────────
@@ -1496,6 +1679,17 @@ export default function CommunityDashboardPage() {
                     setVipImageFile(file);
                     setVipImagePreview(URL.createObjectURL(file));
                   }} />
+                  <input ref={vipFileInputRef} type="file" accept=".pdf,.doc,.docx,.txt,.zip" className="hidden" onChange={e => {
+                    const file = e.target.files?.[0]; if (!file) return;
+                    void uploadVipFile(file);
+                    if (vipFileInputRef.current) vipFileInputRef.current.value = "";
+                  }} />
+                  <EmojiPickerPopover onSelect={em => setNewVipPost(c => c + em)} accent="hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30" />
+                  <LinkInsertPopover onInsert={txt => setNewVipPost(c => c + (c && !c.endsWith(" ") ? " " : "") + txt)} accent="hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30" />
+                  <button type="button" onClick={() => vipFileInputRef.current?.click()}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors" title="Attach file">
+                    <Paperclip className="w-4 h-4" />
+                  </button>
                   <button type="button" onClick={() => vipImageInputRef.current?.click()}
                     className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors" title="Add image">
                     <ImageIcon className="w-4 h-4" />
@@ -1539,7 +1733,7 @@ export default function CommunityDashboardPage() {
                             </div>
                             <p className="text-xs text-muted-foreground flex-shrink-0">{formatDistanceToNow(new Date(p.created_at), { addSuffix: true })}</p>
                           </div>
-                          {p.content && <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">{p.content}</p>}
+                          {p.content && <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">{renderRichText(p.content)}</p>}
                           {p.image_url && (
                             <div className="mt-2 rounded-xl overflow-hidden max-h-72">
                               <img src={p.image_url} alt="post" className="w-full object-cover max-h-72" />
@@ -1621,6 +1815,18 @@ export default function CommunityDashboardPage() {
                       const file = e.target.files?.[0]; if (!file) return;
                       setPostImageFile(file); setPostImagePreview(URL.createObjectURL(file));
                     }} />
+                    <input ref={postFileInputRef} type="file" accept=".pdf,.doc,.docx,.txt,.zip" className="hidden" onChange={e => {
+                      const file = e.target.files?.[0]; if (!file) return;
+                      void uploadPostFile(file);
+                      if (postFileInputRef.current) postFileInputRef.current.value = "";
+                    }} />
+                    <EmojiPickerPopover onSelect={em => setNewPost(c => c + em)} />
+                    <LinkInsertPopover onInsert={txt => setNewPost(c => c + (c && !c.endsWith(" ") ? " " : "") + txt)} />
+                    <button type="button" onClick={() => postFileInputRef.current?.click()}
+                      title="Attach file"
+                      className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors">
+                      <Paperclip className="w-4 h-4" />
+                    </button>
                     <button type="button" onClick={() => postImageInputRef.current?.click()}
                       title="Add image"
                       className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors">
@@ -1666,7 +1872,7 @@ export default function CommunityDashboardPage() {
                         </div>
 
                         {/* Content */}
-                        {p.content && <p className="text-sm leading-relaxed mb-2 whitespace-pre-line">{p.content}</p>}
+                        {p.content && <p className="text-sm leading-relaxed mb-2 whitespace-pre-line">{renderRichText(p.content)}</p>}
                         {p.image_url && (
                           <div className="rounded-xl overflow-hidden max-h-80 mb-2">
                             <img src={p.image_url} alt="post" className="w-full object-cover max-h-80" />
