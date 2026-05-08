@@ -1,7 +1,11 @@
 -- ================================================================
--- AI Academy 2.0 — Supabase Database Setup
--- Paste this entire script into Supabase Dashboard → SQL Editor
--- Safe to run on an empty database or on top of an existing one
+-- AI Academy 3.0 — Complete Supabase Database Setup
+-- Paste this entire script into: Supabase Dashboard → SQL Editor
+--
+-- SAFE TO RUN ON ANY DATABASE:
+--   • Fresh database  → creates everything from scratch
+--   • Existing database → skips tables/columns that already exist,
+--     adds any missing columns, and never drops data
 -- ================================================================
 
 
@@ -13,7 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
   email            TEXT NOT NULL UNIQUE,
   password_hash    TEXT NOT NULL,
   name             TEXT NOT NULL,
-  role             TEXT NOT NULL DEFAULT 'member',   -- 'admin' | 'creator' | 'member'
+  role             TEXT NOT NULL DEFAULT 'member',     -- 'admin' | 'creator' | 'member'
   avatar           TEXT,
   bio              TEXT,
   social_links     JSONB,
@@ -29,6 +33,20 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE users DISABLE ROW LEVEL SECURITY;
+
+-- Ensure all columns exist (safe on existing tables)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_online        BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen        TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_approved      BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_blocked       BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS theme            TEXT NOT NULL DEFAULT 'light';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login       TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_logout      TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS social_links     JSONB;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS bio              TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar           TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
 -- Auto-approve admins on insert/update
 CREATE OR REPLACE FUNCTION auto_approve_admin()
@@ -53,13 +71,18 @@ CREATE TABLE IF NOT EXISTS courses (
   description     TEXT,
   thumbnail       TEXT,
   external_url    TEXT,
-  visibility      TEXT NOT NULL DEFAULT 'public',           -- 'public' | 'private'
-  enrollment_mode TEXT NOT NULL DEFAULT 'approval_required',-- 'open' | 'approval_required'
+  visibility      TEXT NOT NULL DEFAULT 'public',              -- 'public' | 'private'
+  enrollment_mode TEXT NOT NULL DEFAULT 'approval_required',   -- 'open' | 'approval_required'
   created_by      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE courses DISABLE ROW LEVEL SECURITY;
+
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS external_url    TEXT;
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS visibility      TEXT NOT NULL DEFAULT 'public';
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS enrollment_mode TEXT NOT NULL DEFAULT 'approval_required';
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
 
 -- ────────────────────────────────────────────────────────────────
@@ -73,9 +96,14 @@ CREATE TABLE IF NOT EXISTS lessons (
   video_url   TEXT,
   content     TEXT,
   "order"     INTEGER NOT NULL DEFAULT 0,
+  is_public   BOOLEAN NOT NULL DEFAULT TRUE,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE lessons DISABLE ROW LEVEL SECURITY;
+
+ALTER TABLE lessons ADD COLUMN IF NOT EXISTS video_url  TEXT;
+ALTER TABLE lessons ADD COLUMN IF NOT EXISTS content    TEXT;
+ALTER TABLE lessons ADD COLUMN IF NOT EXISTS is_public  BOOLEAN NOT NULL DEFAULT TRUE;
 
 
 -- ────────────────────────────────────────────────────────────────
@@ -87,9 +115,12 @@ CREATE TABLE IF NOT EXISTS enrollments (
   course_id   INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
   progress    INTEGER NOT NULL DEFAULT 0,
   is_approved BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, course_id)
 );
 ALTER TABLE enrollments DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS enrollments_user_id_idx   ON enrollments(user_id);
+CREATE INDEX IF NOT EXISTS enrollments_course_id_idx ON enrollments(course_id);
 
 
 -- ────────────────────────────────────────────────────────────────
@@ -117,6 +148,8 @@ CREATE TABLE IF NOT EXISTS lesson_completions (
   UNIQUE(user_id, lesson_id)
 );
 ALTER TABLE lesson_completions DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS lesson_completions_user_id_idx   ON lesson_completions(user_id);
+CREATE INDEX IF NOT EXISTS lesson_completions_lesson_id_idx ON lesson_completions(lesson_id);
 
 
 -- ────────────────────────────────────────────────────────────────
@@ -134,6 +167,14 @@ CREATE TABLE IF NOT EXISTS posts (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE posts DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS posts_user_id_idx    ON posts(user_id);
+CREATE INDEX IF NOT EXISTS posts_created_at_idx ON posts(created_at DESC);
+
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS video_url TEXT;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS file_url  TEXT;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS file_type TEXT;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS is_vip    BOOLEAN NOT NULL DEFAULT FALSE;
 
 
 -- ────────────────────────────────────────────────────────────────
@@ -152,6 +193,14 @@ CREATE TABLE IF NOT EXISTS comments (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE comments DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS comments_post_id_idx ON comments(post_id);
+CREATE INDEX IF NOT EXISTS comments_user_id_idx ON comments(user_id);
+
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS video_url TEXT;
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS file_url  TEXT;
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS file_type TEXT;
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES comments(id) ON DELETE CASCADE;
 
 
 -- ────────────────────────────────────────────────────────────────
@@ -165,6 +214,7 @@ CREATE TABLE IF NOT EXISTS likes (
   UNIQUE(post_id, user_id)
 );
 ALTER TABLE likes DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS likes_post_id_idx ON likes(post_id);
 
 
 -- ────────────────────────────────────────────────────────────────
@@ -179,6 +229,7 @@ CREATE TABLE IF NOT EXISTS comment_likes (
 );
 ALTER TABLE comment_likes DISABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS comment_likes_comment_id_idx ON comment_likes(comment_id);
+CREATE INDEX IF NOT EXISTS comment_likes_user_id_idx    ON comment_likes(user_id);
 
 
 -- ────────────────────────────────────────────────────────────────
@@ -198,11 +249,15 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 ALTER TABLE notifications DISABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS notifications_user_id_idx ON notifications(user_id);
-CREATE INDEX IF NOT EXISTS notifications_unread_idx ON notifications(user_id, is_read);
+CREATE INDEX IF NOT EXISTS notifications_unread_idx  ON notifications(user_id, is_read);
+
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS post_id   INTEGER REFERENCES posts(id) ON DELETE SET NULL;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS course_id INTEGER REFERENCES courses(id) ON DELETE SET NULL;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS is_vip    BOOLEAN NOT NULL DEFAULT FALSE;
 
 
 -- ────────────────────────────────────────────────────────────────
--- MESSAGES (direct messages between users)
+-- MESSAGES  (direct messages between users)
 -- ────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS messages (
   id          SERIAL PRIMARY KEY,
@@ -217,8 +272,14 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE messages DISABLE ROW LEVEL SECURITY;
-CREATE INDEX IF NOT EXISTS messages_sender_receiver_idx ON messages(sender_id, receiver_id);
-CREATE INDEX IF NOT EXISTS messages_receiver_unread_idx ON messages(receiver_id, is_read);
+CREATE INDEX IF NOT EXISTS messages_sender_receiver_idx  ON messages(sender_id, receiver_id);
+CREATE INDEX IF NOT EXISTS messages_receiver_unread_idx  ON messages(receiver_id, is_read);
+
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS video_url TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_url  TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_type TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_read   BOOLEAN NOT NULL DEFAULT FALSE;
 
 
 -- ────────────────────────────────────────────────────────────────
@@ -232,7 +293,7 @@ CREATE TABLE IF NOT EXISTS followers (
   UNIQUE(follower_id, following_id)
 );
 ALTER TABLE followers DISABLE ROW LEVEL SECURITY;
-CREATE INDEX IF NOT EXISTS followers_follower_id_idx ON followers(follower_id);
+CREATE INDEX IF NOT EXISTS followers_follower_id_idx  ON followers(follower_id);
 CREATE INDEX IF NOT EXISTS followers_following_id_idx ON followers(following_id);
 
 
@@ -250,10 +311,15 @@ CREATE TABLE IF NOT EXISTS tools (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE tools DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS tools_created_at_idx ON tools(created_at DESC);
+
+ALTER TABLE tools ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE tools ADD COLUMN IF NOT EXISTS video_url TEXT;
+ALTER TABLE tools ADD COLUMN IF NOT EXISTS tool_url  TEXT;
 
 
 -- ────────────────────────────────────────────────────────────────
--- TOOL REQUESTS (access control for AI tools)
+-- TOOL REQUESTS  (access control for AI tools)
 -- ────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS tool_requests (
   id          SERIAL PRIMARY KEY,
@@ -264,10 +330,12 @@ CREATE TABLE IF NOT EXISTS tool_requests (
   UNIQUE(user_id, tool_id)
 );
 ALTER TABLE tool_requests DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS tool_requests_user_id_idx ON tool_requests(user_id);
+CREATE INDEX IF NOT EXISTS tool_requests_tool_id_idx ON tool_requests(tool_id);
 
 
 -- ────────────────────────────────────────────────────────────────
--- SITE SETTINGS (key-value admin config)
+-- SITE SETTINGS  (key-value admin config: platform name, email, etc.)
 -- ────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS site_settings (
   id         SERIAL PRIMARY KEY,
@@ -277,6 +345,17 @@ CREATE TABLE IF NOT EXISTS site_settings (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE site_settings DISABLE ROW LEVEL SECURITY;
+
+
+-- ────────────────────────────────────────────────────────────────
+-- SETTINGS  (general key-value store used by the server)
+-- ────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS settings (
+  key        TEXT PRIMARY KEY,
+  value      TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE settings DISABLE ROW LEVEL SECURITY;
 
 
 -- ────────────────────────────────────────────────────────────────
@@ -295,7 +374,7 @@ ALTER TABLE maintenance_settings DISABLE ROW LEVEL SECURITY;
 
 
 -- ────────────────────────────────────────────────────────────────
--- ADMIN ACTIONS AUDIT LOG
+-- ADMIN ACTIONS  (audit log)
 -- ────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS admin_actions (
   id             SERIAL PRIMARY KEY,
@@ -309,6 +388,7 @@ CREATE TABLE IF NOT EXISTS admin_actions (
 );
 ALTER TABLE admin_actions DISABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS admin_actions_created_at_idx ON admin_actions(created_at DESC);
+CREATE INDEX IF NOT EXISTS admin_actions_actor_id_idx   ON admin_actions(actor_id);
 
 
 -- ────────────────────────────────────────────────────────────────
@@ -323,206 +403,34 @@ CREATE TABLE IF NOT EXISTS password_resets (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE password_resets DISABLE ROW LEVEL SECURITY;
-
-
--- ────────────────────────────────────────────────────────────────
--- COMMUNITY PAYMENT SETTINGS  (single-row config table)
--- ────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS community_payment_settings (
-  id              SERIAL PRIMARY KEY,
-  monthly_price   NUMERIC(10,2) NOT NULL DEFAULT 9.99,
-  yearly_price    NUMERIC(10,2) NOT NULL DEFAULT 79.99,
-  lifetime_price  NUMERIC(10,2) NOT NULL DEFAULT 199.99,
-  binance_account TEXT,
-  binance_qr_url  TEXT,
-  nayapay_account TEXT,
-  nayapay_qr_url  TEXT,
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-ALTER TABLE community_payment_settings DISABLE ROW LEVEL SECURITY;
-INSERT INTO community_payment_settings DEFAULT VALUES ON CONFLICT DO NOTHING;
-
--- ────────────────────────────────────────────────────────────────
--- COMMUNITY PAYMENTS
--- ────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS community_payments (
-  id                SERIAL PRIMARY KEY,
-  user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  community_id      INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
-  plan              TEXT,
-  plan_id           INTEGER REFERENCES plans(id) ON DELETE SET NULL,
-  coupon_id         INTEGER REFERENCES coupons(id) ON DELETE SET NULL,
-  payment_method    TEXT,
-  payment_method_id INTEGER REFERENCES payment_methods(id) ON DELETE SET NULL,
-  screenshot_url    TEXT,
-  status            TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'approved' | 'rejected'
-  final_price       NUMERIC(10,2),
-  discount_amount   NUMERIC(10,2) DEFAULT 0,
-  rejection_reason  TEXT,
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-ALTER TABLE community_payments DISABLE ROW LEVEL SECURITY;
-CREATE INDEX IF NOT EXISTS community_payments_status_idx      ON community_payments(status);
-CREATE INDEX IF NOT EXISTS community_payments_user_id_idx     ON community_payments(user_id);
-CREATE INDEX IF NOT EXISTS community_payments_community_id_idx ON community_payments(community_id);
-
--- ────────────────────────────────────────────────────────────────
--- COMMUNITY MEMBERS
--- ────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS community_members (
-  id           SERIAL PRIMARY KEY,
-  community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
-  user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  status       TEXT NOT NULL DEFAULT 'pending',   -- 'pending' | 'approved' | 'rejected'
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(community_id, user_id)
-);
-ALTER TABLE community_members DISABLE ROW LEVEL SECURITY;
-CREATE INDEX IF NOT EXISTS community_members_community_id_idx ON community_members(community_id);
-
--- ────────────────────────────────────────────────────────────────
--- COMMUNITY POSTS
--- ────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS community_posts (
-  id           SERIAL PRIMARY KEY,
-  community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
-  user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  content      TEXT NOT NULL,
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-ALTER TABLE community_posts DISABLE ROW LEVEL SECURITY;
-CREATE INDEX IF NOT EXISTS community_posts_community_id_idx ON community_posts(community_id);
-
--- ────────────────────────────────────────────────────────────────
--- COMMUNITY COURSES
--- ────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS community_courses (
-  id           SERIAL PRIMARY KEY,
-  community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
-  course_id    INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(community_id, course_id)
-);
-ALTER TABLE community_courses DISABLE ROW LEVEL SECURITY;
-
--- ────────────────────────────────────────────────────────────────
--- COMMUNITY TOOLS
--- ────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS community_tools (
-  id           SERIAL PRIMARY KEY,
-  community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
-  tool_id      INTEGER NOT NULL REFERENCES tools(id) ON DELETE CASCADE,
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(community_id, tool_id)
-);
-ALTER TABLE community_tools DISABLE ROW LEVEL SECURITY;
-
--- ────────────────────────────────────────────────────────────────
--- COMMUNITY MESSAGES (group chat)
--- ────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS community_messages (
-  id           SERIAL PRIMARY KEY,
-  community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
-  sender_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  content      TEXT NOT NULL,
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-ALTER TABLE community_messages DISABLE ROW LEVEL SECURITY;
-CREATE INDEX IF NOT EXISTS community_messages_community_id_idx ON community_messages(community_id);
-
--- ────────────────────────────────────────────────────────────────
--- PLANS  (community subscription tiers)
--- ────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS plans (
-  id               SERIAL PRIMARY KEY,
-  name             TEXT NOT NULL,
-  price            NUMERIC(10,2) NOT NULL DEFAULT 0,
-  max_communities  INTEGER NOT NULL DEFAULT 1,
-  max_tools        INTEGER NOT NULL DEFAULT 0,
-  max_courses      INTEGER NOT NULL DEFAULT 0,
-  discount_percent NUMERIC(5,2) NOT NULL DEFAULT 0,
-  description      TEXT,
-  is_active        BOOLEAN NOT NULL DEFAULT true,
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-ALTER TABLE plans DISABLE ROW LEVEL SECURITY;
-
-
--- ────────────────────────────────────────────────────────────────
--- COUPONS
--- ────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS coupons (
-  id               SERIAL PRIMARY KEY,
-  code             TEXT NOT NULL UNIQUE,
-  discount_percent NUMERIC(5,2) NOT NULL DEFAULT 0,
-  max_uses         INTEGER,
-  used_count       INTEGER NOT NULL DEFAULT 0,
-  is_active        BOOLEAN NOT NULL DEFAULT true,
-  expires_at       TIMESTAMPTZ,
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-ALTER TABLE coupons DISABLE ROW LEVEL SECURITY;
-
-
--- ────────────────────────────────────────────────────────────────
--- PAYMENT METHODS  (admin-defined Binance/NayaPay accounts etc.)
--- ────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS payment_methods (
-  id             SERIAL PRIMARY KEY,
-  name           TEXT NOT NULL,
-  account_number TEXT,
-  qr_url         TEXT,
-  description    TEXT,
-  is_active      BOOLEAN NOT NULL DEFAULT true,
-  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-ALTER TABLE payment_methods DISABLE ROW LEVEL SECURITY;
-
-
--- ────────────────────────────────────────────────────────────────
--- SETTINGS  (key-value store used by the server)
--- ────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS settings (
-  key        TEXT PRIMARY KEY,
-  value      TEXT,
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-ALTER TABLE settings DISABLE ROW LEVEL SECURITY;
-
-
--- ────────────────────────────────────────────────────────────────
--- COMMUNITIES
--- ────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS communities (
-  id          SERIAL PRIMARY KEY,
-  name        TEXT NOT NULL,
-  description TEXT,
-  owner_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  status      TEXT NOT NULL DEFAULT 'pending',   -- 'pending' | 'approved' | 'rejected'
-  invite_code TEXT UNIQUE,
-  plan_id     INTEGER REFERENCES plans(id) ON DELETE SET NULL,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-ALTER TABLE communities DISABLE ROW LEVEL SECURITY;
-CREATE INDEX IF NOT EXISTS communities_owner_id_idx    ON communities(owner_id);
-CREATE INDEX IF NOT EXISTS communities_status_idx      ON communities(status);
-CREATE INDEX IF NOT EXISTS communities_invite_code_idx ON communities(invite_code);
+CREATE INDEX IF NOT EXISTS password_resets_token_idx ON password_resets(token);
 
 
 -- ================================================================
 -- STORAGE BUCKET
--- Create the "media" bucket for file/image/video uploads.
--- Run this separately if the SQL below causes an error
--- (Supabase sometimes requires bucket creation via the Dashboard).
+-- Creates the "media" bucket for image/video/file uploads.
+-- If this line errors, create the bucket manually in:
+--   Supabase Dashboard → Storage → New Bucket → name: "media", Public: ON
 -- ================================================================
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('media', 'media', true)
 ON CONFLICT (id) DO NOTHING;
 
+-- Allow public read access on the media bucket
+CREATE POLICY IF NOT EXISTS "Public media read"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'media');
+
+-- Allow authenticated uploads to the media bucket
+CREATE POLICY IF NOT EXISTS "Authenticated media upload"
+  ON storage.objects FOR INSERT
+  WITH CHECK (bucket_id = 'media');
+
 
 -- ================================================================
--- SEED DATA  (safe to re-run — uses ON CONFLICT DO NOTHING)
--- Passwords for all seed users: password123
+-- SEED DATA
+-- Safe to re-run — uses ON CONFLICT DO NOTHING.
+-- Passwords for all demo users: password123
 -- ================================================================
 
 INSERT INTO users (email, password_hash, name, role, is_approved) VALUES
@@ -558,61 +466,26 @@ SELECT
 FROM users WHERE email = 'admin@lms.com'
 ON CONFLICT DO NOTHING;
 
-INSERT INTO lessons (course_id, title, description, "order")
-SELECT 1, 'HTML Fundamentals',     'Learn the building blocks of web pages.', 1 WHERE EXISTS (SELECT 1 FROM courses WHERE id = 1)
-ON CONFLICT DO NOTHING;
-INSERT INTO lessons (course_id, title, description, "order")
-SELECT 1, 'CSS Styling Basics',    'Style your HTML with colors, fonts, and layout.', 2 WHERE EXISTS (SELECT 1 FROM courses WHERE id = 1)
-ON CONFLICT DO NOTHING;
-INSERT INTO lessons (course_id, title, description, "order")
-SELECT 1, 'JavaScript Essentials', 'Variables, functions, DOM manipulation, and events.', 3 WHERE EXISTS (SELECT 1 FROM courses WHERE id = 1)
+INSERT INTO lessons (course_id, title, description, "order", is_public)
+SELECT 1, 'HTML Fundamentals',     'Learn the building blocks of web pages.', 1, true
+WHERE EXISTS (SELECT 1 FROM courses WHERE id = 1)
 ON CONFLICT DO NOTHING;
 
-INSERT INTO posts (user_id, content)
-SELECT id, 'Welcome to AI Academy! Check out the new courses and let me know what topics you want next.'
-FROM users WHERE email = 'alice@example.com'
+INSERT INTO lessons (course_id, title, description, "order", is_public)
+SELECT 1, 'CSS Styling Basics',    'Style your HTML with colors, fonts, and layout.', 2, true
+WHERE EXISTS (SELECT 1 FROM courses WHERE id = 1)
 ON CONFLICT DO NOTHING;
 
-INSERT INTO posts (user_id, content)
-SELECT id, 'Just finished the Web Development course — absolutely loved it. Highly recommend!'
-FROM users WHERE email = 'bob@example.com'
+INSERT INTO lessons (course_id, title, description, "order", is_public)
+SELECT 1, 'JavaScript Essentials', 'Variables, functions, DOM manipulation, and events.', 3, true
+WHERE EXISTS (SELECT 1 FROM courses WHERE id = 1)
 ON CONFLICT DO NOTHING;
 
-INSERT INTO posts (user_id, content)
-SELECT id, 'Platform update: progress tracking and community features are now live. Keep learning!'
-FROM users WHERE email = 'admin@lms.com'
+INSERT INTO posts (user_id, content) VALUES
+  ((SELECT id FROM users WHERE email = 'alice@example.com'),
+   'Welcome to AI Academy! Check out the new courses and let me know what topics you want next.'),
+  ((SELECT id FROM users WHERE email = 'bob@example.com'),
+   'Just finished the Web Development course — absolutely loved it. Highly recommend!'),
+  ((SELECT id FROM users WHERE email = 'admin@lms.com'),
+   'Platform update: progress tracking and new features are now live. Keep learning!')
 ON CONFLICT DO NOTHING;
-
-
--- ================================================================
--- MIGRATIONS — run these if your database already exists
--- (safe to run on a fresh DB too — IF NOT EXISTS / IF NOT NULL)
--- ================================================================
-
--- communities: invite_code (auto-generated when a community is approved)
-ALTER TABLE communities ADD COLUMN IF NOT EXISTS invite_code TEXT UNIQUE;
-CREATE INDEX IF NOT EXISTS communities_invite_code_idx ON communities(invite_code);
-
--- communities: plan_id (links to a subscription plan)
-ALTER TABLE communities ADD COLUMN IF NOT EXISTS plan_id INTEGER REFERENCES plans(id) ON DELETE SET NULL;
-
--- community_payments: plan_id
-ALTER TABLE community_payments ADD COLUMN IF NOT EXISTS plan_id           INTEGER REFERENCES plans(id) ON DELETE SET NULL;
--- community_payments: coupon_id
-ALTER TABLE community_payments ADD COLUMN IF NOT EXISTS coupon_id         INTEGER REFERENCES coupons(id) ON DELETE SET NULL;
--- community_payments: payment_method_id
-ALTER TABLE community_payments ADD COLUMN IF NOT EXISTS payment_method_id INTEGER REFERENCES payment_methods(id) ON DELETE SET NULL;
--- community_payments: final_price & discount_amount
-ALTER TABLE community_payments ADD COLUMN IF NOT EXISTS final_price      NUMERIC(10,2);
-ALTER TABLE community_payments ADD COLUMN IF NOT EXISTS discount_amount  NUMERIC(10,2) DEFAULT 0;
--- community_payments: rejection_reason
-ALTER TABLE community_payments ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
-
-
--- ================================================================
--- STORED PROCEDURE — atomically increment coupon usage count
--- ================================================================
-CREATE OR REPLACE FUNCTION increment_coupon_usage(coupon_id INTEGER)
-RETURNS void AS $$
-  UPDATE coupons SET used_count = used_count + 1 WHERE id = coupon_id;
-$$ LANGUAGE sql;
