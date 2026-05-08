@@ -129,11 +129,22 @@ router.get("/communities/:id/posts", requireAuth, async (req, res): Promise<void
   if (!community || community.status !== "approved") { res.status(404).json({ error: "Not found" }); return; }
   if (!isOwner && memberStatus !== "approved") { res.status(403).json({ error: "Access denied" }); return; }
 
-  const { data, error } = await supabase
+  // Try with image_url first; if column missing fall back to without it
+  let { data, error } = await supabase
     .from("community_posts")
     .select("id, content, image_url, created_at, user_id, users!community_posts_user_id_fkey(id, name, avatar)")
     .eq("community_id", id)
     .order("created_at", { ascending: false });
+
+  if (error && (error.message.includes("image_url") || error.message.includes("schema cache"))) {
+    const fallback = await supabase
+      .from("community_posts")
+      .select("id, content, created_at, user_id, users!community_posts_user_id_fkey(id, name, avatar)")
+      .eq("community_id", id)
+      .order("created_at", { ascending: false });
+    data = (fallback.data ?? []).map((p: Record<string, unknown>) => ({ ...p, image_url: null })) as typeof data;
+    error = fallback.error;
+  }
 
   if (error) { res.status(500).json({ error: error.message }); return; }
 
@@ -142,20 +153,22 @@ router.get("/communities/:id/posts", requireAuth, async (req, res): Promise<void
 
   const postIds = posts.map((p: { id: number }) => p.id);
 
-  // Fetch like counts and current-user likes in one query each
-  const [{ data: allLikes }, { data: commentCounts }] = await Promise.all([
+  // Fetch like counts and current-user likes — degrade gracefully if tables missing
+  const [likesResult, commentsResult] = await Promise.all([
     supabase.from("community_post_likes").select("post_id, user_id").in("post_id", postIds),
     supabase.from("community_post_comments").select("post_id").in("post_id", postIds),
   ]);
+  const allLikes = likesResult.error ? [] : (likesResult.data ?? []);
+  const commentCounts = commentsResult.error ? [] : (commentsResult.data ?? []);
 
   const likesByPost: Record<number, number> = {};
   const likedByMe: Record<number, boolean> = {};
-  for (const like of (allLikes ?? []) as { post_id: number; user_id: number }[]) {
+  for (const like of allLikes as { post_id: number; user_id: number }[]) {
     likesByPost[like.post_id] = (likesByPost[like.post_id] ?? 0) + 1;
     if (like.user_id === req.userId) likedByMe[like.post_id] = true;
   }
   const commentsByPost: Record<number, number> = {};
-  for (const c of (commentCounts ?? []) as { post_id: number }[]) {
+  for (const c of commentCounts as { post_id: number }[]) {
     commentsByPost[c.post_id] = (commentsByPost[c.post_id] ?? 0) + 1;
   }
 
@@ -185,11 +198,22 @@ router.post("/communities/:id/posts", requireAuth, async (req, res): Promise<voi
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
   if (!parsed.data.content.trim() && !parsed.data.imageUrl) { res.status(400).json({ error: "Content or image required" }); return; }
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("community_posts")
     .insert({ community_id: id, user_id: req.userId!, content: parsed.data.content.trim(), image_url: parsed.data.imageUrl ?? null })
     .select("id, content, image_url, created_at, user_id, users!community_posts_user_id_fkey(id, name, avatar)")
     .single();
+
+  // Fallback: if image_url column doesn't exist yet, insert without it
+  if (error && (error.message.includes("image_url") || error.message.includes("schema cache"))) {
+    const fallback = await supabase
+      .from("community_posts")
+      .insert({ community_id: id, user_id: req.userId!, content: parsed.data.content.trim() })
+      .select("id, content, created_at, user_id, users!community_posts_user_id_fkey(id, name, avatar)")
+      .single();
+    data = fallback.data ? { ...fallback.data, image_url: null } as typeof data : null;
+    error = fallback.error;
+  }
 
   if (error) { res.status(500).json({ error: error.message }); return; }
   res.status(201).json({ ...data, likes_count: 0, liked_by_me: false, comments_count: 0 });
