@@ -59,3 +59,9 @@ id = "ZHsBFwQQp7Wk8u9YXFxGT"
 uri = "file://ai-academy-database-migration.txt"
 type = "text"
 title = "AI Academy 2.0 — Full Database Migration SQL"
+
+[[outputs]]
+id = "10guOjeMQyPeS4Btaf_0a"
+uri = "file://ai-academy-3.0-hostinger.zip"
+type = "unspecified"
+title = "AI Academy 3.0 — Hostinger Deployment Package"
