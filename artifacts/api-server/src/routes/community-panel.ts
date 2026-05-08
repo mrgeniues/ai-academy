@@ -87,7 +87,7 @@ router.get("/communities/:id/members", requireAuth, async (req, res): Promise<vo
 
   const { data, error } = await supabase
     .from("community_members")
-    .select("id, status, created_at, user_id, users!community_members_user_id_fkey(id, name, email, avatar)")
+    .select("id, status, created_at, user_id, users!community_members_user_id_fkey(id, name, email, avatar, role)")
     .eq("community_id", id)
     .order("created_at", { ascending: true });
 
@@ -618,7 +618,7 @@ router.get("/communities/:id/messages", requireAuth, async (req, res): Promise<v
 
   const { data, error } = await supabase
     .from("community_messages")
-    .select("id, content, created_at, sender_id, users!community_messages_sender_id_fkey(id, name, avatar)")
+    .select("id, content, created_at, sender_id, users!community_messages_sender_id_fkey(id, name, avatar, role)")
     .eq("community_id", id)
     .order("created_at", { ascending: true })
     .limit(200);

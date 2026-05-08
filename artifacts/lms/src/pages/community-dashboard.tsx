@@ -54,7 +54,7 @@ type CommunityPostComment = {
 };
 type CommunityMessage = {
   id: number; content: string; created_at: string; sender_id: number;
-  users: { id: number; name: string; avatar: string | null } | null;
+  users: { id: number; name: string; avatar: string | null; role?: string | null } | null;
 };
 type CourseRow = {
   id: number; course_id: number; created_at: string;
@@ -66,7 +66,7 @@ type ToolRow = {
 };
 type Member = {
   id: number; status: string; created_at: string; user_id: number;
-  users: { id: number; name: string; email: string; avatar: string | null } | null;
+  users: { id: number; name: string; email: string; avatar: string | null; role?: string | null } | null;
 };
 type AllCourse = { id: number; title: string; description: string | null; thumbnail: string | null };
 type AllTool   = { id: number; title: string; description: string | null; image_url: string | null; tool_url: string | null };
@@ -1929,54 +1929,154 @@ export default function CommunityDashboardPage() {
         );
 
       // ── Messages ───────────────────────────────────────────────────────
-      case "messages":
-        return (
-          <div className="p-6 flex flex-col h-full max-w-3xl" style={{ maxHeight: "calc(100vh - 4rem)" }}>
-            <h2 className="text-lg font-bold flex items-center gap-2 mb-4"><MessageSquare className="w-5 h-5 text-primary" /> Community Messages</h2>
+      case "messages": {
+        const MsgRoleBadge = ({ role, isOwner }: { role?: string | null; isOwner: boolean }) => {
+          if (isOwner) return <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 font-semibold leading-none">Owner</span>;
+          if (role === "admin") return <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300 font-semibold leading-none">Admin</span>;
+          if (role === "creator") return <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold leading-none">Creator</span>;
+          return <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-semibold leading-none">Member</span>;
+        };
 
-            {/* Messages feed */}
-            <div className="flex-1 overflow-y-auto space-y-3 mb-4 min-h-0">
-              {msgLoading ? (
-                <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}</div>
-              ) : messages.length === 0 ? (
-                <Card className="flex-1"><CardContent className="py-10 text-center text-sm text-muted-foreground">No messages yet.</CardContent></Card>
-              ) : (
-                messages.map(m => {
-                  const isMe = m.sender_id === user?.id;
-                  return (
-                    <div key={m.id} className={`flex gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
-                      <Avatar className="w-7 h-7 flex-shrink-0">
-                        <AvatarImage src={m.users?.avatar ?? undefined} />
-                        <AvatarFallback className="text-[10px]">{m.users?.name ? initials(m.users.name) : "?"}</AvatarFallback>
-                      </Avatar>
-                      <div className={`max-w-[70%] ${isMe ? "items-end" : "items-start"} flex flex-col gap-0.5`}>
-                        <span className={`text-[11px] text-muted-foreground ${isMe ? "text-right" : ""}`}>{m.users?.name}</span>
-                        <div className={`px-3 py-2 rounded-2xl text-sm ${isMe ? "bg-primary text-white rounded-tr-sm" : "bg-muted rounded-tl-sm"}`}>
-                          {m.content}
+        const approvedMembers = members.filter(m => m.status === "approved");
+
+        return (
+          <div className="flex h-full" style={{ maxHeight: "calc(100vh - 4rem)" }}>
+            {/* ── Main chat column ─────────────────────────────────── */}
+            <div className="flex-1 flex flex-col min-w-0 border-r">
+              {/* Header */}
+              <div className="px-5 py-3 border-b flex items-center gap-2 flex-shrink-0">
+                <MessageSquare className="w-4 h-4 text-primary" />
+                <h2 className="text-base font-bold">Community Chat</h2>
+                <span className="text-xs text-muted-foreground ml-1">· {approvedMembers.length} members</span>
+              </div>
+
+              {/* Messages feed */}
+              <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1 min-h-0">
+                {msgLoading ? (
+                  <div className="space-y-3 pt-2">{[1,2,3,4].map(i => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}</div>
+                ) : messages.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full gap-2 text-center py-12">
+                    <MessageSquare className="w-8 h-8 text-muted-foreground/30" />
+                    <p className="text-sm text-muted-foreground">No messages yet — say hello!</p>
+                  </div>
+                ) : (() => {
+                  let lastDate = "";
+                  return messages.map((m, idx) => {
+                    const isMe = m.sender_id === user?.id;
+                    const isOwnerMsg = m.sender_id === community.owner_id;
+                    const prevM = messages[idx - 1];
+                    const sameAuthor = prevM && prevM.sender_id === m.sender_id &&
+                      (new Date(m.created_at).getTime() - new Date(prevM.created_at).getTime()) < 5 * 60 * 1000;
+
+                    const dateLabel = new Date(m.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+                    const showDate = dateLabel !== lastDate;
+                    if (showDate) lastDate = dateLabel;
+
+                    return (
+                      <div key={m.id}>
+                        {showDate && (
+                          <div className="flex items-center gap-2 my-3">
+                            <div className="flex-1 h-px bg-border" />
+                            <span className="text-[10px] text-muted-foreground font-medium px-2">{dateLabel}</span>
+                            <div className="flex-1 h-px bg-border" />
+                          </div>
+                        )}
+                        <div className={`flex gap-2.5 ${isMe ? "flex-row-reverse" : ""} ${sameAuthor ? "mt-0.5" : "mt-3"}`}>
+                          {/* Avatar — hidden for grouped messages */}
+                          <div className="w-8 flex-shrink-0 flex items-end">
+                            {!sameAuthor && (
+                              <Avatar className="w-8 h-8">
+                                <AvatarImage src={m.users?.avatar ?? undefined} />
+                                <AvatarFallback className="text-[10px]">{m.users?.name ? initials(m.users.name) : "?"}</AvatarFallback>
+                              </Avatar>
+                            )}
+                          </div>
+
+                          {/* Bubble + meta */}
+                          <div className={`max-w-[68%] flex flex-col gap-0.5 ${isMe ? "items-end" : "items-start"}`}>
+                            {!sameAuthor && (
+                              <div className={`flex items-center gap-1.5 ${isMe ? "flex-row-reverse" : ""}`}>
+                                <span className="text-xs font-semibold">{isMe ? "You" : (m.users?.name ?? "Unknown")}</span>
+                                <MsgRoleBadge role={m.users?.role} isOwner={isOwnerMsg} />
+                              </div>
+                            )}
+                            <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed break-words ${isMe ? "bg-primary text-primary-foreground rounded-tr-none" : "bg-muted rounded-tl-none"}`}>
+                              {renderRichText(m.content)}
+                            </div>
+                            <span className="text-[10px] text-muted-foreground px-0.5">
+                              {formatDistanceToNow(new Date(m.created_at), { addSuffix: true })}
+                            </span>
+                          </div>
                         </div>
-                        <span className="text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(m.created_at), { addSuffix: true })}</span>
                       </div>
-                    </div>
-                  );
-                })
-              )}
-              <div ref={msgEndRef} />
+                    );
+                  });
+                })()}
+                <div ref={msgEndRef} />
+              </div>
+
+              {/* Input */}
+              <div className="px-4 py-3 border-t flex-shrink-0">
+                <form onSubmit={sendMessage} className="flex gap-2">
+                  <Input
+                    placeholder="Type a message…"
+                    value={newMsg}
+                    onChange={e => setNewMsg(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void sendMessage(e); } }}
+                    className="flex-1"
+                  />
+                  <Button type="submit" disabled={sending || !newMsg.trim()} size="icon">
+                    {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  </Button>
+                </form>
+              </div>
             </div>
 
-            {/* Message input */}
-            <form onSubmit={sendMessage} className="flex gap-2">
-              <Input
-                placeholder="Type a message…"
-                value={newMsg}
-                onChange={e => setNewMsg(e.target.value)}
-                className="flex-1"
-              />
-              <Button type="submit" disabled={sending || !newMsg.trim()}>
-                {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              </Button>
-            </form>
+            {/* ── Members sidebar ──────────────────────────────────── */}
+            <div className="w-52 flex-shrink-0 flex flex-col overflow-hidden">
+              <div className="px-3 py-3 border-b flex-shrink-0">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Members — {approvedMembers.length}</p>
+              </div>
+              <div className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5">
+                {/* Owner first */}
+                {approvedMembers
+                  .slice()
+                  .sort((a, b) => {
+                    if (a.user_id === community.owner_id) return -1;
+                    if (b.user_id === community.owner_id) return 1;
+                    return (a.users?.name ?? "").localeCompare(b.users?.name ?? "");
+                  })
+                  .map(m => {
+                    const isOwnerMember = m.user_id === community.owner_id;
+                    const role = (m.users as { role?: string } | null)?.role;
+                    return (
+                      <div key={m.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-muted/50 transition-colors">
+                        <Avatar className="w-6 h-6 flex-shrink-0">
+                          <AvatarImage src={m.users?.avatar ?? undefined} />
+                          <AvatarFallback className="text-[9px]">{m.users?.name ? initials(m.users.name) : "?"}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium truncate">{m.users?.name ?? "Unknown"}</p>
+                          <p className="text-[9px] font-medium leading-none mt-0.5">
+                            {isOwnerMember ? (
+                              <span className="text-amber-600 dark:text-amber-400">Owner</span>
+                            ) : role === "admin" ? (
+                              <span className="text-violet-600 dark:text-violet-400">Admin</span>
+                            ) : role === "creator" ? (
+                              <span className="text-blue-600 dark:text-blue-400">Creator</span>
+                            ) : (
+                              <span className="text-muted-foreground">Member</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
           </div>
         );
+      }
 
       // ── Members (owner only) ───────────────────────────────────────────
       case "members": {
