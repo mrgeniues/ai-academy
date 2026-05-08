@@ -76,6 +76,12 @@ CREATE TABLE IF NOT EXISTS community_vip_posts (
 );
 ```
 
+**Community-scoped courses** (courses created inside a community stay private to that community):
+```sql
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS community_id INTEGER REFERENCES communities(id) ON DELETE CASCADE;
+```
+After adding this column, courses created via `POST /api/communities/:id/courses/create` are stored with `community_id` set and only appear inside that community. The global `/courses` page automatically filters them out.
+
 ### Demo users (password: `password123`):
 - `admin@lms.com` — admin role
 - `alice@example.com` — creator role

@@ -62,10 +62,18 @@ function formatCourse(course: DbCourse, lessonCount: number, enrollmentCount: nu
 }
 
 router.get("/courses", requireAuth, async (_req, res): Promise<void> => {
-  const { data: courses, error } = await supabase
+  let { data: courses, error } = await supabase
     .from("courses")
     .select("*")
+    .is("community_id", null)  // exclude community-scoped courses from global list
     .order("created_at", { ascending: true });
+
+  // community_id column not yet added — fall back to all courses
+  if (error?.message?.includes("community_id")) {
+    const fallback = await supabase.from("courses").select("*").order("created_at", { ascending: true });
+    courses = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) {
     res.status(500).json({ error: "Failed to fetch courses" });

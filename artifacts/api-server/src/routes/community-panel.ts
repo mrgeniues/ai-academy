@@ -218,6 +218,50 @@ router.post("/communities/:id/courses", requireAuth, async (req, res): Promise<v
   res.status(201).json({ ok: true });
 });
 
+// ── POST /api/communities/:id/courses/create ── create course scoped to community ──
+router.post("/communities/:id/courses/create", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { community, isOwner } = await getMembership(id, req.userId!);
+  if (!community || community.status !== "approved") { res.status(404).json({ error: "Not found" }); return; }
+  if (!isOwner) { res.status(403).json({ error: "Owner only" }); return; }
+
+  const parsed = z.object({
+    title: z.string().min(1).max(200),
+    description: z.string().max(1000).optional().nullable(),
+    thumbnail: z.string().optional().nullable(),
+  }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Title is required" }); return; }
+
+  const { title, description, thumbnail } = parsed.data;
+
+  // Try to insert with community_id (scoping column)
+  const payload: Record<string, unknown> = {
+    title, description: description ?? null, created_by: req.userId!, community_id: id,
+  };
+  if (thumbnail) payload.thumbnail = thumbnail;
+
+  let { data: course, error } = await supabase.from("courses").insert(payload).select().single();
+
+  // Graceful fallback if community_id column not yet migrated
+  if (error?.message?.includes("community_id")) {
+    const fallback = await supabase
+      .from("courses")
+      .insert({ title, description: description ?? null, created_by: req.userId!, ...(thumbnail ? { thumbnail } : {}) })
+      .select().single();
+    course = fallback.data;
+    error = fallback.error;
+  }
+
+  if (error || !course) { res.status(500).json({ error: error?.message ?? "Failed to create course" }); return; }
+
+  // Auto-link to this community
+  await supabase.from("community_courses").insert({ community_id: id, course_id: course.id });
+
+  res.status(201).json(course);
+});
+
 // ── DELETE /api/communities/:id/courses/:courseId ── remove course ───────────
 router.delete("/communities/:id/courses/:courseId", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(req.params["id"] as string, 10);

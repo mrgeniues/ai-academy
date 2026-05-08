@@ -118,6 +118,9 @@ export default function CommunityDashboardPage() {
   const [removingTool, setRemovingTool] = useState<number | null>(null);
   const [courseSearch, setCourseSearch] = useState("");
   const [toolSearch, setToolSearch]     = useState("");
+  const [showCreateCourse, setShowCreateCourse] = useState(false);
+  const [creatingCourse, setCreatingCourse] = useState(false);
+  const [createCourseForm, setCreateCourseForm] = useState({ title: "", description: "", thumbnail: "" });
   const msgEndRef = useRef<HTMLDivElement>(null);
 
   // ── Fetch community + verify owner access ────────────────────────────────
@@ -267,6 +270,32 @@ export default function CommunityDashboardPage() {
       toast({ title: "Course removed" });
     } catch { toast({ title: "Network error", variant: "destructive" }); }
     finally { setRemovingCourse(null); }
+  };
+
+  const createCourse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createCourseForm.title.trim()) return;
+    setCreatingCourse(true);
+    try {
+      const res = await fetch(`${API}/communities/${communityId}/courses/create`, {
+        method: "POST", headers: jsonH(token),
+        body: JSON.stringify({
+          title: createCourseForm.title.trim(),
+          description: createCourseForm.description.trim() || null,
+          thumbnail: createCourseForm.thumbnail.trim() || null,
+        }),
+      });
+      if (res.ok) {
+        setCreateCourseForm({ title: "", description: "", thumbnail: "" });
+        setShowCreateCourse(false);
+        fetchCourses();
+        toast({ title: "Course created and linked to your community!" });
+      } else {
+        const d = await res.json() as { error?: string };
+        toast({ title: d.error ?? "Failed to create course", variant: "destructive" });
+      }
+    } catch { toast({ title: "Network error", variant: "destructive" }); }
+    finally { setCreatingCourse(false); }
   };
 
   // ── Tool management (owner only) ──────────────────────────────────────────
@@ -572,8 +601,65 @@ export default function CommunityDashboardPage() {
           <div className="p-6 space-y-6 max-w-4xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold flex items-center gap-2"><BookOpen className="w-5 h-5 text-primary" /> Courses</h2>
-              <span className="text-sm text-muted-foreground">{courses.length} linked</span>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground">{courses.length} linked</span>
+                {community.isOwner && (
+                  <Button size="sm" onClick={() => setShowCreateCourse(v => !v)}>
+                    <Plus className="w-3.5 h-3.5 mr-1.5" /> Create Course
+                  </Button>
+                )}
+              </div>
             </div>
+
+            {/* Create course form (owner only) */}
+            {community.isOwner && showCreateCourse && (
+              <Card className="border-primary/30 bg-primary/5">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-primary" /> New Community Course
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={createCourse} className="space-y-3">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Course Title *</label>
+                      <Input
+                        placeholder="e.g. Introduction to Marketing"
+                        value={createCourseForm.title}
+                        onChange={e => setCreateCourseForm(f => ({ ...f, title: e.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Description</label>
+                      <Textarea
+                        placeholder="What will members learn in this course?"
+                        value={createCourseForm.description}
+                        onChange={e => setCreateCourseForm(f => ({ ...f, description: e.target.value }))}
+                        rows={2}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Thumbnail URL</label>
+                      <Input
+                        placeholder="https://example.com/image.jpg"
+                        value={createCourseForm.thumbnail}
+                        onChange={e => setCreateCourseForm(f => ({ ...f, thumbnail: e.target.value }))}
+                      />
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <Button type="submit" size="sm" disabled={creatingCourse || !createCourseForm.title.trim()}>
+                        {creatingCourse ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Plus className="w-3.5 h-3.5 mr-1.5" />}
+                        Create &amp; Link
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => { setShowCreateCourse(false); setCreateCourseForm({ title: "", description: "", thumbnail: "" }); }}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Linked courses */}
             {courses.length === 0 ? (
