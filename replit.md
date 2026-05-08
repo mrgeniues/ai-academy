@@ -64,6 +64,18 @@ ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_read boolean NOT NULL DEFAULT f
 
 Until these are added, the app degrades gracefully (offline status / badge hidden).
 
+**Community VIP Posts table** (exclusive member-only posts per community):
+```sql
+CREATE TABLE IF NOT EXISTS community_vip_posts (
+  id SERIAL PRIMARY KEY,
+  community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  image_url TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
 ### Demo users (password: `password123`):
 - `admin@lms.com` — admin role
 - `alice@example.com` — creator role

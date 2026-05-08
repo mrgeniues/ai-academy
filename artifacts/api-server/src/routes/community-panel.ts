@@ -328,4 +328,68 @@ router.post("/communities/:id/messages", requireAuth, async (req, res): Promise<
   res.status(201).json(data);
 });
 
+// ── GET /api/communities/:id/vip-posts ── exclusive member-only posts ────────
+router.get("/communities/:id/vip-posts", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { community, isOwner, memberStatus } = await getMembership(id, req.userId!);
+  if (!community || community.status !== "approved") { res.status(404).json({ error: "Not found" }); return; }
+  if (!isOwner && memberStatus !== "approved") { res.status(403).json({ error: "Access denied" }); return; }
+
+  const { data, error } = await supabase
+    .from("community_vip_posts")
+    .select("id, content, created_at, user_id, users!community_vip_posts_user_id_fkey(id, name, avatar)")
+    .eq("community_id", id)
+    .order("created_at", { ascending: false });
+
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.json(data ?? []);
+});
+
+// ── POST /api/communities/:id/vip-posts ── create VIP post ───────────────────
+router.post("/communities/:id/vip-posts", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { community, isOwner, memberStatus } = await getMembership(id, req.userId!);
+  if (!community || community.status !== "approved") { res.status(404).json({ error: "Not found" }); return; }
+  if (!isOwner && memberStatus !== "approved") { res.status(403).json({ error: "Access denied" }); return; }
+
+  const parsed = z.object({ content: z.string().min(1).max(5000) }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Content required" }); return; }
+
+  const { data, error } = await supabase
+    .from("community_vip_posts")
+    .insert({ community_id: id, user_id: req.userId!, content: parsed.data.content.trim() })
+    .select("id, content, created_at, user_id, users!community_vip_posts_user_id_fkey(id, name, avatar)")
+    .single();
+
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.status(201).json(data);
+});
+
+// ── DELETE /api/communities/:id/vip-posts/:postId ── delete VIP post ─────────
+router.delete("/communities/:id/vip-posts/:postId", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  const postId = parseInt(req.params["postId"] as string, 10);
+  if (isNaN(id) || isNaN(postId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { community, isOwner } = await getMembership(id, req.userId!);
+  if (!community || community.status !== "approved") { res.status(404).json({ error: "Not found" }); return; }
+
+  const { data: post } = await supabase
+    .from("community_vip_posts")
+    .select("user_id")
+    .eq("id", postId)
+    .eq("community_id", id)
+    .single();
+
+  if (!post) { res.status(404).json({ error: "Post not found" }); return; }
+  if (!isOwner && post.user_id !== req.userId) { res.status(403).json({ error: "Not allowed" }); return; }
+
+  await supabase.from("community_vip_posts").delete().eq("id", postId);
+  res.json({ ok: true });
+});
+
 export default router;

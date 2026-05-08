@@ -1,0 +1,129 @@
+You are a senior Next.js and Supabase developer.
+
+Fix the COMMUNITY JOIN APPROVAL FLOW.
+
+IMPORTANT:
+
+* Do NOT modify UI design
+* Do NOT add any new features
+* Do NOT change existing architecture
+* ONLY fix approval routing logic
+* Keep everything else unchanged
+
+=====================================
+GOAL:
+
+When a user joins a community using that community's invite link:
+
+→ Approval request must go ONLY to that COMMUNITY OWNER'S admin panel
+
+→ It must NOT go to the main website admin panel
+
+=====================================
+CURRENT ISSUE:
+
+Right now:
+
+* User joins via community invite link
+* Approval request incorrectly goes to global web admin
+
+This is WRONG.
+
+=====================================
+CORRECT FLOW:
+
+CASE:
+
+User opens:
+
+/community/join/[invite_code]
+
+Then:
+
+1. Detect invite_code
+2. Fetch community using invite_code
+3. Get:
+
+   * community_id
+   * community owner_id
+
+=====================================
+JOIN LOGIC:
+
+After signup/login:
+
+DO NOT create global approval request
+
+Instead:
+
+Insert directly into:
+
+community_members
+
+Fields:
+
+* community_id
+* user_id
+* status = pending
+
+=====================================
+COMMUNITY OWNER PANEL:
+
+Inside COMMUNITY OWNER dashboard:
+
+Members section:
+
+Show:
+
+"PENDING APPROVAL"
+
+Community owner can:
+
+* Approve
+* Reject
+
+=====================================
+IMPORTANT RULE:
+
+Approval request must ONLY appear inside:
+
+That specific community dashboard
+
+NOT inside:
+
+* main admin panel
+* global user approvals
+
+=====================================
+FALLBACK RULE:
+
+If user signs up normally from main website:
+
+→ Keep existing global admin approval flow
+
+Only invite-link joins should use community approval flow.
+
+=====================================
+ACCESS CONTROL:
+
+Until community owner approves:
+
+* User cannot access community content
+* User remains pending
+
+=====================================
+SECURITY:
+
+* Validate invite_code
+* Ensure correct community mapping
+* Prevent bypass
+* Validate owner_id before approval actions
+
+=====================================
+OUTPUT:
+
+* Fixed invite-link approval logic
+* Correct routing to community owner panel
+* Updated community_members insertion flow
+
+Ensure no extra changes are made.

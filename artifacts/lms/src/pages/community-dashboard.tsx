@@ -16,7 +16,7 @@ import {
   LayoutDashboard, BookOpen, Wrench, Crown, Users, MessageSquare, User,
   Shield, LogOut, Sun, Moon, Palette, Menu, GraduationCap, PanelLeftClose,
   PanelLeftOpen, ArrowLeft, Send, Trash2, ExternalLink, CheckCircle, Clock,
-  XCircle, Users2, AlertTriangle, Loader2, Copy, UserCheck, UserX, Link2,
+  XCircle, Users2, AlertTriangle, Loader2, Copy, UserCheck, UserX, Link2, Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -59,6 +59,12 @@ type Member = {
   id: number; status: string; created_at: string; user_id: number;
   users: { id: number; name: string; email: string; avatar: string | null } | null;
 };
+type AllCourse = { id: number; title: string; description: string | null; thumbnail: string | null };
+type AllTool   = { id: number; title: string; description: string | null; image_url: string | null; tool_url: string | null };
+type VipPost   = {
+  id: number; content: string; created_at: string; user_id: number;
+  users: { id: number; name: string; avatar: string | null } | null;
+};
 
 const NAV_ITEMS: { section: Section; label: string; icon: React.ElementType }[] = [
   { section: "dashboard",  label: "Dashboard",        icon: LayoutDashboard },
@@ -100,6 +106,18 @@ export default function CommunityDashboardPage() {
   const [sending, setSending] = useState(false);
   const [courses, setCourses] = useState<CourseRow[]>([]);
   const [tools, setTools] = useState<ToolRow[]>([]);
+  const [allCourses, setAllCourses]     = useState<AllCourse[]>([]);
+  const [allTools, setAllTools]         = useState<AllTool[]>([]);
+  const [vipPosts, setVipPosts]         = useState<VipPost[]>([]);
+  const [vipPostsLoading, setVipPostsLoading] = useState(false);
+  const [newVipPost, setNewVipPost]     = useState("");
+  const [postingVip, setPostingVip]     = useState(false);
+  const [addingCourse, setAddingCourse] = useState<number | null>(null);
+  const [removingCourse, setRemovingCourse] = useState<number | null>(null);
+  const [addingTool, setAddingTool]     = useState<number | null>(null);
+  const [removingTool, setRemovingTool] = useState<number | null>(null);
+  const [courseSearch, setCourseSearch] = useState("");
+  const [toolSearch, setToolSearch]     = useState("");
   const msgEndRef = useRef<HTMLDivElement>(null);
 
   // ── Fetch community + verify owner access ────────────────────────────────
@@ -150,10 +168,37 @@ export default function CommunityDashboardPage() {
       .catch(() => {});
   }, [communityId, token]);
 
+  const fetchAllCourses = useCallback(() => {
+    fetch(`${API}/courses`, { headers: authH(token) })
+      .then(r => r.json()).then(d => { if (Array.isArray(d)) setAllCourses(d); })
+      .catch(() => {});
+  }, [token]);
+
+  const fetchAllTools = useCallback(() => {
+    fetch(`${API}/tools`, { headers: authH(token) })
+      .then(r => r.json()).then(d => { if (Array.isArray(d)) setAllTools(d); })
+      .catch(() => {});
+  }, [token]);
+
+  const fetchVipPosts = useCallback(() => {
+    setVipPostsLoading(true);
+    fetch(`${API}/communities/${communityId}/vip-posts`, { headers: authH(token) })
+      .then(r => r.json()).then(d => { if (Array.isArray(d)) setVipPosts(d); })
+      .catch(() => {}).finally(() => setVipPostsLoading(false));
+  }, [communityId, token]);
+
   useEffect(() => {
     if (!community) return;
     fetchPosts(); fetchMessages(); fetchCourses(); fetchTools(); fetchMembers();
   }, [community]);
+
+  // Load management data when relevant sections are opened
+  useEffect(() => {
+    if (!community) return;
+    if (section === "courses")   { fetchAllCourses(); }
+    if (section === "tools")     { fetchAllTools(); }
+    if (section === "vip-posts") { fetchVipPosts(); }
+  }, [section, community]);
 
   useEffect(() => { msgEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
@@ -198,6 +243,75 @@ export default function CommunityDashboardPage() {
       }
     } catch { toast({ title: "Network error", variant: "destructive" }); }
     finally { setActingMember(null); }
+  };
+
+  // ── Course management (owner only) ───────────────────────────────────────
+  const addCourse = async (courseId: number) => {
+    setAddingCourse(courseId);
+    try {
+      const res = await fetch(`${API}/communities/${communityId}/courses`, {
+        method: "POST", headers: jsonH(token),
+        body: JSON.stringify({ courseId }),
+      });
+      if (res.ok) { fetchCourses(); toast({ title: "Course linked!" }); }
+      else { const d = await res.json() as { error?: string }; toast({ title: d.error ?? "Failed", variant: "destructive" }); }
+    } catch { toast({ title: "Network error", variant: "destructive" }); }
+    finally { setAddingCourse(null); }
+  };
+
+  const removeCourse = async (courseId: number) => {
+    setRemovingCourse(courseId);
+    try {
+      await fetch(`${API}/communities/${communityId}/courses/${courseId}`, { method: "DELETE", headers: authH(token) });
+      fetchCourses();
+      toast({ title: "Course removed" });
+    } catch { toast({ title: "Network error", variant: "destructive" }); }
+    finally { setRemovingCourse(null); }
+  };
+
+  // ── Tool management (owner only) ──────────────────────────────────────────
+  const addTool = async (toolId: number) => {
+    setAddingTool(toolId);
+    try {
+      const res = await fetch(`${API}/communities/${communityId}/tools`, {
+        method: "POST", headers: jsonH(token),
+        body: JSON.stringify({ toolId }),
+      });
+      if (res.ok) { fetchTools(); toast({ title: "Tool linked!" }); }
+      else { const d = await res.json() as { error?: string }; toast({ title: d.error ?? "Failed", variant: "destructive" }); }
+    } catch { toast({ title: "Network error", variant: "destructive" }); }
+    finally { setAddingTool(null); }
+  };
+
+  const removeTool = async (toolId: number) => {
+    setRemovingTool(toolId);
+    try {
+      await fetch(`${API}/communities/${communityId}/tools/${toolId}`, { method: "DELETE", headers: authH(token) });
+      fetchTools();
+      toast({ title: "Tool removed" });
+    } catch { toast({ title: "Network error", variant: "destructive" }); }
+    finally { setRemovingTool(null); }
+  };
+
+  // ── VIP Post handlers ─────────────────────────────────────────────────────
+  const submitVipPost = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newVipPost.trim()) return;
+    setPostingVip(true);
+    try {
+      const res = await fetch(`${API}/communities/${communityId}/vip-posts`, {
+        method: "POST", headers: jsonH(token),
+        body: JSON.stringify({ content: newVipPost.trim() }),
+      });
+      if (res.ok) { setNewVipPost(""); fetchVipPosts(); }
+      else toast({ title: "Failed to post", variant: "destructive" });
+    } catch { toast({ title: "Network error", variant: "destructive" }); }
+    finally { setPostingVip(false); }
+  };
+
+  const deleteVipPost = async (postId: number) => {
+    await fetch(`${API}/communities/${communityId}/vip-posts/${postId}`, { method: "DELETE", headers: authH(token) });
+    fetchVipPosts();
   };
 
   // ── Copy invite link ──────────────────────────────────────────────────────
@@ -448,67 +562,47 @@ export default function CommunityDashboardPage() {
         );
 
       // ── Courses ────────────────────────────────────────────────────────
-      case "courses":
+      case "courses": {
+        const linkedCourseIds = new Set(courses.map(r => r.course_id));
+        const availableCourses = allCourses.filter(c =>
+          !linkedCourseIds.has(c.id) &&
+          (!courseSearch.trim() || c.title.toLowerCase().includes(courseSearch.toLowerCase()))
+        );
         return (
-          <div className="p-6 space-y-4 max-w-4xl">
+          <div className="p-6 space-y-6 max-w-4xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold flex items-center gap-2"><BookOpen className="w-5 h-5 text-primary" /> Courses</h2>
               <span className="text-sm text-muted-foreground">{courses.length} linked</span>
             </div>
+
+            {/* Linked courses */}
             {courses.length === 0 ? (
-              <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No courses linked to this community yet.</CardContent></Card>
+              <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">No courses linked yet. Add courses below.</CardContent></Card>
             ) : (
               <div className="grid sm:grid-cols-2 gap-4">
                 {courses.map(row => row.courses && (
                   <Card key={row.id} className="overflow-hidden">
                     {row.courses.thumbnail && (
-                      <div className="h-36 overflow-hidden bg-muted">
+                      <div className="h-32 overflow-hidden bg-muted">
                         <img src={row.courses.thumbnail} alt={row.courses.title} className="w-full h-full object-cover" />
                       </div>
                     )}
-                    <CardContent className="py-3 px-4">
+                    <CardContent className="py-3 px-4 space-y-2">
                       <p className="font-semibold text-sm">{row.courses.title}</p>
-                      {row.courses.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{row.courses.description}</p>}
-                      <Link href={`/courses/${row.courses.id}`}>
-                        <Button size="sm" variant="outline" className="mt-3 w-full">
-                          <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> Open Course
-                        </Button>
-                      </Link>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-
-      // ── AI Tools ───────────────────────────────────────────────────────
-      case "tools":
-        return (
-          <div className="p-6 space-y-4 max-w-4xl">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold flex items-center gap-2"><Wrench className="w-5 h-5 text-primary" /> AI Tools</h2>
-              <span className="text-sm text-muted-foreground">{tools.length} linked</span>
-            </div>
-            {tools.length === 0 ? (
-              <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No AI tools linked to this community yet.</CardContent></Card>
-            ) : (
-              <div className="grid sm:grid-cols-2 gap-4">
-                {tools.map(row => row.tools && (
-                  <Card key={row.id}>
-                    <CardContent className="py-4 px-4 flex items-start gap-3">
-                      {row.tools.image_url && (
-                        <img src={row.tools.image_url} alt={row.tools.title} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm">{row.tools.title}</p>
-                        {row.tools.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{row.tools.description}</p>}
-                        {row.tools.tool_url && (
-                          <a href={row.tools.tool_url} target="_blank" rel="noopener noreferrer">
-                            <Button size="sm" variant="outline" className="mt-2">
-                              <ExternalLink className="w-3 h-3 mr-1" /> Open Tool
-                            </Button>
-                          </a>
+                      {row.courses.description && <p className="text-xs text-muted-foreground line-clamp-2">{row.courses.description}</p>}
+                      <div className="flex gap-2">
+                        <Link href={`/courses/${row.courses.id}`} className="flex-1">
+                          <Button size="sm" variant="outline" className="w-full">
+                            <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> Open
+                          </Button>
+                        </Link>
+                        {community.isOwner && (
+                          <Button size="sm" variant="outline"
+                            className="text-red-500 border-red-200 hover:bg-red-50 dark:hover:bg-red-950/20 px-2"
+                            disabled={removingCourse === row.course_id}
+                            onClick={() => removeCourse(row.course_id)}>
+                            {removingCourse === row.course_id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                          </Button>
                         )}
                       </div>
                     </CardContent>
@@ -516,23 +610,228 @@ export default function CommunityDashboardPage() {
                 ))}
               </div>
             )}
+
+            {/* Add courses picker (owner only) */}
+            {community.isOwner && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="h-px flex-1 bg-border" />
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2">Add Courses</span>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search available courses…"
+                  value={courseSearch}
+                  onChange={e => setCourseSearch(e.target.value)}
+                  className="w-full px-3 py-2 text-sm rounded-lg border bg-card focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+                {availableCourses.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    {allCourses.length === 0 ? "No courses on the platform yet." : "All courses are already linked."}
+                  </p>
+                ) : (
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    {availableCourses.slice(0, 10).map(c => (
+                      <div key={c.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-muted/40 transition-colors">
+                        {c.thumbnail ? (
+                          <img src={c.thumbnail} alt={c.title} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <BookOpen className="w-4 h-4 text-primary" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{c.title}</p>
+                          {c.description && <p className="text-xs text-muted-foreground truncate">{c.description}</p>}
+                        </div>
+                        <Button size="sm" disabled={addingCourse === c.id} onClick={() => addCourse(c.id)} className="flex-shrink-0">
+                          {addingCourse === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         );
+      }
+
+      // ── AI Tools ───────────────────────────────────────────────────────
+      case "tools": {
+        const linkedToolIds = new Set(tools.map(r => r.tool_id));
+        const availableTools = allTools.filter(t =>
+          !linkedToolIds.has(t.id) &&
+          (!toolSearch.trim() || t.title.toLowerCase().includes(toolSearch.toLowerCase()))
+        );
+        return (
+          <div className="p-6 space-y-6 max-w-4xl">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold flex items-center gap-2"><Wrench className="w-5 h-5 text-primary" /> AI Tools</h2>
+              <span className="text-sm text-muted-foreground">{tools.length} linked</span>
+            </div>
+
+            {/* Linked tools */}
+            {tools.length === 0 ? (
+              <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">No AI tools linked yet. Add tools below.</CardContent></Card>
+            ) : (
+              <div className="grid sm:grid-cols-2 gap-4">
+                {tools.map(row => row.tools && (
+                  <Card key={row.id}>
+                    <CardContent className="py-4 px-4 flex items-start gap-3">
+                      {row.tools.image_url ? (
+                        <img src={row.tools.image_url} alt={row.tools.title} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          <Wrench className="w-4 h-4 text-primary" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm">{row.tools.title}</p>
+                        {row.tools.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{row.tools.description}</p>}
+                        <div className="flex gap-2 mt-2">
+                          {row.tools.tool_url && (
+                            <a href={row.tools.tool_url} target="_blank" rel="noopener noreferrer">
+                              <Button size="sm" variant="outline">
+                                <ExternalLink className="w-3 h-3 mr-1" /> Open
+                              </Button>
+                            </a>
+                          )}
+                          {community.isOwner && (
+                            <Button size="sm" variant="outline"
+                              className="text-red-500 border-red-200 hover:bg-red-50 dark:hover:bg-red-950/20 px-2"
+                              disabled={removingTool === row.tool_id}
+                              onClick={() => removeTool(row.tool_id)}>
+                              {removingTool === row.tool_id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            {/* Add tools picker (owner only) */}
+            {community.isOwner && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="h-px flex-1 bg-border" />
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2">Add AI Tools</span>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search available tools…"
+                  value={toolSearch}
+                  onChange={e => setToolSearch(e.target.value)}
+                  className="w-full px-3 py-2 text-sm rounded-lg border bg-card focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+                {availableTools.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    {allTools.length === 0 ? "No AI tools on the platform yet." : "All tools are already linked."}
+                  </p>
+                ) : (
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    {availableTools.slice(0, 10).map(t => (
+                      <div key={t.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-muted/40 transition-colors">
+                        {t.image_url ? (
+                          <img src={t.image_url} alt={t.title} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <Wrench className="w-4 h-4 text-primary" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{t.title}</p>
+                          {t.description && <p className="text-xs text-muted-foreground truncate">{t.description}</p>}
+                        </div>
+                        <Button size="sm" disabled={addingTool === t.id} onClick={() => addTool(t.id)} className="flex-shrink-0">
+                          {addingTool === t.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      }
 
       // ── VIP Posts ──────────────────────────────────────────────────────
       case "vip-posts":
         return (
-          <div className="p-6 space-y-4 max-w-4xl">
-            <h2 className="text-lg font-bold flex items-center gap-2"><Crown className="w-5 h-5 text-primary" /> VIP Posts</h2>
-            <Card>
-              <CardContent className="py-10 text-center space-y-3">
-                <Crown className="w-8 h-8 text-primary mx-auto" />
-                <p className="text-sm text-muted-foreground">VIP Posts are shared across the platform.</p>
-                <Link href="/vip-posts">
-                  <Button variant="outline"><ExternalLink className="w-4 h-4 mr-1.5" /> View VIP Posts</Button>
-                </Link>
-              </CardContent>
-            </Card>
+          <div className="p-6 space-y-4 max-w-3xl">
+            {/* Header */}
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h2 className="text-lg font-bold flex items-center gap-2">
+                <Crown className="w-5 h-5 text-amber-500" /> VIP Posts
+              </h2>
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                <Crown className="w-3 h-3" /> Members Only
+              </span>
+            </div>
+            <p className="text-sm text-muted-foreground">Exclusive posts visible only to approved community members.</p>
+
+            {/* Create post form */}
+            <form onSubmit={submitVipPost} className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Share exclusive content with your members…"
+                value={newVipPost}
+                onChange={e => setNewVipPost(e.target.value)}
+                className="flex-1 px-3 py-2 text-sm rounded-lg border bg-card focus:outline-none focus:ring-2 focus:ring-amber-400/40 transition-colors"
+              />
+              <Button type="submit" disabled={postingVip || !newVipPost.trim()}
+                className="bg-amber-500 hover:bg-amber-600 text-white">
+                {postingVip ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              </Button>
+            </form>
+
+            {/* Post feed */}
+            {vipPostsLoading ? (
+              <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}</div>
+            ) : vipPosts.length === 0 ? (
+              <Card className="border-amber-200/50 dark:border-amber-800/50">
+                <CardContent className="py-10 text-center space-y-2">
+                  <Crown className="w-8 h-8 text-amber-400/40 mx-auto" />
+                  <p className="text-sm text-muted-foreground">No VIP posts yet. Share exclusive content with your members!</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {vipPosts.map(p => (
+                  <Card key={p.id} className="border-amber-200/40 dark:border-amber-800/30 bg-gradient-to-r from-amber-50/30 to-transparent dark:from-amber-950/10">
+                    <CardContent className="py-3 px-4 flex items-start gap-3">
+                      <Avatar className="w-8 h-8 flex-shrink-0">
+                        <AvatarImage src={p.users?.avatar ?? undefined} />
+                        <AvatarFallback className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                          {p.users?.name ? initials(p.users.name) : "?"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium">{p.users?.name ?? "Unknown"}</p>
+                            <Crown className="w-3 h-3 text-amber-500 flex-shrink-0" />
+                          </div>
+                          <p className="text-xs text-muted-foreground flex-shrink-0">{formatDistanceToNow(new Date(p.created_at), { addSuffix: true })}</p>
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">{p.content}</p>
+                      </div>
+                      {(p.user_id === user?.id || community.isOwner) && (
+                        <button onClick={() => deleteVipPost(p.id)} className="text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0 mt-0.5">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </div>
         );
 
