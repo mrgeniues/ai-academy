@@ -537,7 +537,7 @@ export default function CourseDetailPage() {
                     <CardTitle className="text-lg flex items-center gap-2">
                       {activeLesson.isPublic === false
                         ? <Lock className="w-5 h-5 text-red-400" />
-                        : <img src="/logo.png" className="w-5 h-5 object-contain flex-shrink-0" alt="" />
+                        : <FileText className="w-5 h-5 text-primary" />
                       }
                       {activeLesson.title}
                       {activeLesson.isPublic === false && (
