@@ -131,12 +131,42 @@ router.get("/communities/:id/posts", requireAuth, async (req, res): Promise<void
 
   const { data, error } = await supabase
     .from("community_posts")
-    .select("id, content, created_at, user_id, users!community_posts_user_id_fkey(id, name, avatar)")
+    .select("id, content, image_url, created_at, user_id, users!community_posts_user_id_fkey(id, name, avatar)")
     .eq("community_id", id)
     .order("created_at", { ascending: false });
 
   if (error) { res.status(500).json({ error: error.message }); return; }
-  res.json(data ?? []);
+
+  const posts = data ?? [];
+  if (posts.length === 0) { res.json([]); return; }
+
+  const postIds = posts.map((p: { id: number }) => p.id);
+
+  // Fetch like counts and current-user likes in one query each
+  const [{ data: allLikes }, { data: commentCounts }] = await Promise.all([
+    supabase.from("community_post_likes").select("post_id, user_id").in("post_id", postIds),
+    supabase.from("community_post_comments").select("post_id").in("post_id", postIds),
+  ]);
+
+  const likesByPost: Record<number, number> = {};
+  const likedByMe: Record<number, boolean> = {};
+  for (const like of (allLikes ?? []) as { post_id: number; user_id: number }[]) {
+    likesByPost[like.post_id] = (likesByPost[like.post_id] ?? 0) + 1;
+    if (like.user_id === req.userId) likedByMe[like.post_id] = true;
+  }
+  const commentsByPost: Record<number, number> = {};
+  for (const c of (commentCounts ?? []) as { post_id: number }[]) {
+    commentsByPost[c.post_id] = (commentsByPost[c.post_id] ?? 0) + 1;
+  }
+
+  const enriched = posts.map((p: { id: number }) => ({
+    ...p,
+    likes_count: likesByPost[p.id] ?? 0,
+    liked_by_me: likedByMe[p.id] ?? false,
+    comments_count: commentsByPost[p.id] ?? 0,
+  }));
+
+  res.json(enriched);
 });
 
 // ── POST /api/communities/:id/posts ── create post ───────────────────────────
@@ -148,17 +178,21 @@ router.post("/communities/:id/posts", requireAuth, async (req, res): Promise<voi
   if (!community || community.status !== "approved") { res.status(404).json({ error: "Not found" }); return; }
   if (!isOwner && memberStatus !== "approved") { res.status(403).json({ error: "Access denied" }); return; }
 
-  const parsed = z.object({ content: z.string().min(1).max(5000) }).safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: "Content required" }); return; }
+  const parsed = z.object({
+    content: z.string().max(5000).default(""),
+    imageUrl: z.string().url().nullish(),
+  }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
+  if (!parsed.data.content.trim() && !parsed.data.imageUrl) { res.status(400).json({ error: "Content or image required" }); return; }
 
   const { data, error } = await supabase
     .from("community_posts")
-    .insert({ community_id: id, user_id: req.userId!, content: parsed.data.content.trim() })
-    .select()
+    .insert({ community_id: id, user_id: req.userId!, content: parsed.data.content.trim(), image_url: parsed.data.imageUrl ?? null })
+    .select("id, content, image_url, created_at, user_id, users!community_posts_user_id_fkey(id, name, avatar)")
     .single();
 
   if (error) { res.status(500).json({ error: error.message }); return; }
-  res.status(201).json(data);
+  res.status(201).json({ ...data, likes_count: 0, liked_by_me: false, comments_count: 0 });
 });
 
 // ── DELETE /api/communities/:id/posts/:postId ── delete post (owner or author)
@@ -175,6 +209,103 @@ router.delete("/communities/:id/posts/:postId", requireAuth, async (req, res): P
   if (!isOwner && post.user_id !== req.userId) { res.status(403).json({ error: "Not allowed" }); return; }
 
   await supabase.from("community_posts").delete().eq("id", postId);
+  res.json({ ok: true });
+});
+
+// ── POST /api/communities/:id/posts/:postId/like ── toggle like ──────────────
+router.post("/communities/:id/posts/:postId/like", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  const postId = parseInt(req.params["postId"] as string, 10);
+  if (isNaN(id) || isNaN(postId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { community, isOwner, memberStatus } = await getMembership(id, req.userId!);
+  if (!community || community.status !== "approved") { res.status(404).json({ error: "Not found" }); return; }
+  if (!isOwner && memberStatus !== "approved") { res.status(403).json({ error: "Access denied" }); return; }
+
+  const { data: existing } = await supabase
+    .from("community_post_likes")
+    .select("id")
+    .eq("post_id", postId)
+    .eq("user_id", req.userId!)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase.from("community_post_likes").delete().eq("id", existing.id);
+    res.json({ liked: false });
+  } else {
+    await supabase.from("community_post_likes").insert({ post_id: postId, user_id: req.userId! });
+    res.json({ liked: true });
+  }
+});
+
+// ── GET /api/communities/:id/posts/:postId/comments ──────────────────────────
+router.get("/communities/:id/posts/:postId/comments", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  const postId = parseInt(req.params["postId"] as string, 10);
+  if (isNaN(id) || isNaN(postId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { community, isOwner, memberStatus } = await getMembership(id, req.userId!);
+  if (!community || community.status !== "approved") { res.status(404).json({ error: "Not found" }); return; }
+  if (!isOwner && memberStatus !== "approved") { res.status(403).json({ error: "Access denied" }); return; }
+
+  const { data, error } = await supabase
+    .from("community_post_comments")
+    .select("id, content, image_url, created_at, user_id, users!community_post_comments_user_id_fkey(id, name, avatar)")
+    .eq("post_id", postId)
+    .order("created_at", { ascending: true });
+
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.json(data ?? []);
+});
+
+// ── POST /api/communities/:id/posts/:postId/comments ─────────────────────────
+router.post("/communities/:id/posts/:postId/comments", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  const postId = parseInt(req.params["postId"] as string, 10);
+  if (isNaN(id) || isNaN(postId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { community, isOwner, memberStatus } = await getMembership(id, req.userId!);
+  if (!community || community.status !== "approved") { res.status(404).json({ error: "Not found" }); return; }
+  if (!isOwner && memberStatus !== "approved") { res.status(403).json({ error: "Access denied" }); return; }
+
+  const parsed = z.object({
+    content: z.string().max(5000).default(""),
+    imageUrl: z.string().url().nullish(),
+  }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
+  if (!parsed.data.content.trim() && !parsed.data.imageUrl) { res.status(400).json({ error: "Content or image required" }); return; }
+
+  const { data, error } = await supabase
+    .from("community_post_comments")
+    .insert({ post_id: postId, user_id: req.userId!, content: parsed.data.content.trim(), image_url: parsed.data.imageUrl ?? null })
+    .select("id, content, image_url, created_at, user_id, users!community_post_comments_user_id_fkey(id, name, avatar)")
+    .single();
+
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.status(201).json(data);
+});
+
+// ── DELETE /api/communities/:id/posts/:postId/comments/:commentId ─────────────
+router.delete("/communities/:id/posts/:postId/comments/:commentId", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  const postId = parseInt(req.params["postId"] as string, 10);
+  const commentId = parseInt(req.params["commentId"] as string, 10);
+  if (isNaN(id) || isNaN(postId) || isNaN(commentId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { community, isOwner } = await getMembership(id, req.userId!);
+  if (!community || community.status !== "approved") { res.status(404).json({ error: "Not found" }); return; }
+
+  const { data: comment } = await supabase
+    .from("community_post_comments")
+    .select("user_id")
+    .eq("id", commentId)
+    .eq("post_id", postId)
+    .single();
+
+  if (!comment) { res.status(404).json({ error: "Comment not found" }); return; }
+  if (!isOwner && comment.user_id !== req.userId) { res.status(403).json({ error: "Not allowed" }); return; }
+
+  await supabase.from("community_post_comments").delete().eq("id", commentId);
   res.json({ ok: true });
 });
 

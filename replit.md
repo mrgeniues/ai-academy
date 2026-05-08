@@ -76,6 +76,28 @@ CREATE TABLE IF NOT EXISTS community_vip_posts (
 );
 ```
 
+**Community post image support + likes + comments** (run after the community_posts table exists):
+```sql
+ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS image_url TEXT;
+
+CREATE TABLE IF NOT EXISTS community_post_likes (
+  id SERIAL PRIMARY KEY,
+  post_id INTEGER NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(post_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS community_post_comments (
+  id SERIAL PRIMARY KEY,
+  post_id INTEGER NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  content TEXT NOT NULL DEFAULT '',
+  image_url TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
 **VIP post image support** (adds image_url column to community_vip_posts):
 ```sql
 ALTER TABLE community_vip_posts ADD COLUMN IF NOT EXISTS image_url TEXT;

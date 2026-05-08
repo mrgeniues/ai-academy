@@ -44,7 +44,12 @@ type Community = {
   owner: { id: number; name: string; avatar: string | null } | null;
 };
 type CommunityPost = {
-  id: number; content: string; created_at: string; user_id: number;
+  id: number; content: string; image_url: string | null; created_at: string; user_id: number;
+  likes_count: number; liked_by_me: boolean; comments_count: number;
+  users: { id: number; name: string; avatar: string | null } | null;
+};
+type CommunityPostComment = {
+  id: number; content: string; image_url: string | null; created_at: string; user_id: number;
   users: { id: number; name: string; avatar: string | null } | null;
 };
 type CommunityMessage = {
@@ -226,6 +231,151 @@ function VipCommentSection({ postId, token, communityId, currentUserId, currentU
   );
 }
 
+function CommunityPostCommentSection({ postId, token, communityId, currentUserId, currentUserName, currentUserAvatar, onCountChange }: {
+  postId: number; token: string | null; communityId: number;
+  currentUserId: number | undefined; currentUserName: string | undefined; currentUserAvatar: string | null | undefined;
+  onCountChange?: (delta: number) => void;
+}) {
+  const { toast } = useToast();
+  const [comments, setComments] = useState<CommunityPostComment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newComment, setNewComment] = useState("");
+  const [commentImage, setCommentImage] = useState<File | null>(null);
+  const [commentImagePreview, setCommentImagePreview] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const commentImageRef = useRef<HTMLInputElement>(null);
+
+  const fetchComments = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/communities/${communityId}/posts/${postId}/comments`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) setComments(await res.json() as CommunityPostComment[]);
+    } catch { /* silent */ } finally { setLoading(false); }
+  }, [postId, communityId, token]);
+
+  useEffect(() => { void fetchComments(); }, [fetchComments]);
+
+  const submitComment = async () => {
+    if (!newComment.trim() && !commentImage) return;
+    setSubmitting(true);
+    try {
+      let imageUrl: string | null = null;
+      if (commentImage) {
+        const fd = new FormData();
+        fd.append("file", commentImage);
+        const uploadRes = await fetch("/api/upload", { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body: fd });
+        if (!uploadRes.ok) throw new Error("Image upload failed");
+        imageUrl = ((await uploadRes.json()) as { url: string }).url;
+      }
+      const res = await fetch(`/api/communities/${communityId}/posts/${postId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ content: newComment.trim(), imageUrl }),
+      });
+      if (!res.ok) throw new Error("Failed to post comment");
+      const c = await res.json() as CommunityPostComment;
+      setComments(prev => [...prev, c]);
+      setNewComment(""); setCommentImage(null); setCommentImagePreview(null);
+      if (commentImageRef.current) commentImageRef.current.value = "";
+      onCountChange?.(1);
+    } catch (err) {
+      toast({ title: (err as Error).message ?? "Failed", variant: "destructive" });
+    } finally { setSubmitting(false); }
+  };
+
+  const deleteComment = async (commentId: number) => {
+    try {
+      await fetch(`/api/communities/${communityId}/posts/${postId}/comments/${commentId}`, {
+        method: "DELETE", headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      setComments(prev => prev.filter(c => c.id !== commentId));
+      onCountChange?.(-1);
+    } catch { /* silent */ }
+  };
+
+  return (
+    <div className="mt-3 pt-3 border-t space-y-2.5">
+      {loading ? (
+        <Skeleton className="h-8 w-full rounded-xl" />
+      ) : comments.length > 0 ? (
+        <div className="space-y-2">
+          {comments.map(c => (
+            <div key={c.id} className="flex gap-2.5">
+              <Avatar className="w-7 h-7 flex-shrink-0">
+                <AvatarImage src={c.users?.avatar ?? undefined} />
+                <AvatarFallback className="text-[10px]">{c.users?.name ? initials(c.users.name) : "?"}</AvatarFallback>
+              </Avatar>
+              <div className="flex-1 bg-muted rounded-xl px-3 py-2 min-w-0">
+                <div className="flex items-center justify-between gap-2 mb-0.5">
+                  <span className="text-xs font-semibold">{c.users?.name ?? "Unknown"}</span>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <span className="text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(c.created_at), { addSuffix: true })}</span>
+                    {c.user_id === currentUserId && (
+                      <button onClick={() => void deleteComment(c.id)} className="text-muted-foreground hover:text-destructive transition-colors">
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {c.content && <p className="text-sm leading-relaxed break-words">{c.content}</p>}
+                {c.image_url && (
+                  <div className="mt-1.5 rounded-lg overflow-hidden max-h-52">
+                    <img src={c.image_url} alt="comment" className="w-full object-cover max-h-52" />
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground pl-1">No comments yet. Be the first!</p>
+      )}
+
+      {/* Comment composer */}
+      <div className="flex gap-2.5">
+        <Avatar className="w-7 h-7 flex-shrink-0">
+          <AvatarImage src={currentUserAvatar ?? undefined} />
+          <AvatarFallback className="text-[10px]">{currentUserName ? initials(currentUserName) : "?"}</AvatarFallback>
+        </Avatar>
+        <div className="flex-1 space-y-1.5">
+          <div className="flex items-center gap-1 bg-muted rounded-full px-3 py-2">
+            <input
+              type="text"
+              value={newComment}
+              onChange={e => setNewComment(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); void submitComment(); } }}
+              placeholder="Write a comment…"
+              className="flex-1 text-sm bg-transparent border-0 outline-none min-w-0"
+            />
+            <input ref={commentImageRef} type="file" accept="image/*" className="hidden" onChange={e => {
+              const file = e.target.files?.[0]; if (!file) return;
+              setCommentImage(file); setCommentImagePreview(URL.createObjectURL(file));
+            }} />
+            <button type="button" onClick={() => commentImageRef.current?.click()}
+              className="text-muted-foreground hover:text-primary transition-colors p-0.5" title="Add image">
+              <ImageIcon className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => void submitComment()} disabled={submitting || (!newComment.trim() && !commentImage)}
+              className="text-primary disabled:opacity-40 transition-colors p-0.5">
+              {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+          {commentImagePreview && (
+            <div className="relative w-14 h-14 rounded-lg overflow-hidden border ml-1">
+              <img src={commentImagePreview} alt="preview" className="w-full h-full object-cover" />
+              <button onClick={() => { setCommentImage(null); setCommentImagePreview(null); if (commentImageRef.current) commentImageRef.current.value = ""; }}
+                className="absolute top-0.5 right-0.5 bg-black/60 hover:bg-black/80 text-white rounded-full p-0.5 transition-colors">
+                <X className="w-2.5 h-2.5" />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const NAV_ITEMS: { section: Section; label: string; icon: React.ElementType }[] = [
   { section: "dashboard",  label: "Dashboard",        icon: LayoutDashboard },
   { section: "courses",    label: "Courses",           icon: BookOpen },
@@ -260,6 +410,11 @@ export default function CommunityDashboardPage() {
   const [postsLoading, setPostsLoading] = useState(false);
   const [newPost, setNewPost] = useState("");
   const [posting, setPosting] = useState(false);
+  const [postImageFile, setPostImageFile] = useState<File | null>(null);
+  const [postImagePreview, setPostImagePreview] = useState<string | null>(null);
+  const postImageInputRef = useRef<HTMLInputElement>(null);
+  const [expandedPostComments, setExpandedPostComments] = useState<Set<number>>(new Set());
+  const [likedPosts, setLikedPosts] = useState<Record<number, { liked: boolean; count: number }>>({});
   const [messages, setMessages] = useState<CommunityMessage[]>([]);
   const [msgLoading, setMsgLoading] = useState(false);
   const [newMsg, setNewMsg] = useState("");
@@ -329,7 +484,14 @@ export default function CommunityDashboardPage() {
   const fetchPosts = useCallback(() => {
     setPostsLoading(true);
     fetch(`${API}/communities/${communityId}/posts`, { headers: authH(token) })
-      .then(r => r.json()).then(d => { if (Array.isArray(d)) setPosts(d); })
+      .then(r => r.json()).then((d: CommunityPost[]) => {
+        if (Array.isArray(d)) {
+          setPosts(d);
+          const init: Record<number, { liked: boolean; count: number }> = {};
+          for (const p of d) init[p.id] = { liked: p.liked_by_me, count: p.likes_count };
+          setLikedPosts(init);
+        }
+      })
       .catch(() => {}).finally(() => setPostsLoading(false));
   }, [communityId, token]);
 
@@ -400,18 +562,34 @@ export default function CommunityDashboardPage() {
   useEffect(() => { msgEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   // ── Post community message ────────────────────────────────────────────────
-  const submitPost = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newPost.trim()) return;
+  const submitPost = async () => {
+    if (!newPost.trim() && !postImageFile) return;
     setPosting(true);
     try {
+      let imageUrl: string | null = null;
+      if (postImageFile) {
+        const fd = new FormData();
+        fd.append("file", postImageFile);
+        const uploadResp = await fetch(`${API}/upload`, { method: "POST", headers: authH(token), body: fd });
+        if (!uploadResp.ok) throw new Error("Image upload failed");
+        const uploadData = await uploadResp.json() as { url: string };
+        imageUrl = uploadData.url;
+      }
       const res = await fetch(`${API}/communities/${communityId}/posts`, {
         method: "POST", headers: jsonH(token),
-        body: JSON.stringify({ content: newPost.trim() }),
+        body: JSON.stringify({ content: newPost.trim(), imageUrl }),
       });
-      if (res.ok) { setNewPost(""); fetchPosts(); }
-      else toast({ title: "Failed to post", variant: "destructive" });
-    } catch { toast({ title: "Network error", variant: "destructive" }); }
+      if (res.ok) {
+        const newP = await res.json() as CommunityPost;
+        setNewPost(""); setPostImageFile(null); setPostImagePreview(null);
+        if (postImageInputRef.current) postImageInputRef.current.value = "";
+        setPosts(prev => [newP, ...prev]);
+        setLikedPosts(prev => ({ ...prev, [newP.id]: { liked: false, count: 0 } }));
+      } else {
+        const d = await res.json() as { error?: string };
+        throw new Error(d.error ?? "Failed to post");
+      }
+    } catch (err) { toast({ title: (err as Error).message ?? "Failed", variant: "destructive" }); }
     finally { setPosting(false); }
   };
 
@@ -419,7 +597,22 @@ export default function CommunityDashboardPage() {
     await fetch(`${API}/communities/${communityId}/posts/${postId}`, {
       method: "DELETE", headers: authH(token),
     });
-    fetchPosts();
+    setPosts(prev => prev.filter(p => p.id !== postId));
+    setExpandedPostComments(prev => { const s = new Set(prev); s.delete(postId); return s; });
+  };
+
+  const togglePostLike = async (postId: number) => {
+    const current = likedPosts[postId] ?? { liked: false, count: 0 };
+    const optimistic = { liked: !current.liked, count: current.liked ? current.count - 1 : current.count + 1 };
+    setLikedPosts(prev => ({ ...prev, [postId]: optimistic }));
+    try {
+      const res = await fetch(`${API}/communities/${communityId}/posts/${postId}/like`, {
+        method: "POST", headers: authH(token),
+      });
+      if (!res.ok) throw new Error("Failed");
+    } catch {
+      setLikedPosts(prev => ({ ...prev, [postId]: current }));
+    }
   };
 
   // ── Approve / reject member ───────────────────────────────────────────────
@@ -1396,47 +1589,134 @@ export default function CommunityDashboardPage() {
           <div className="p-6 space-y-4 max-w-3xl">
             <h2 className="text-lg font-bold flex items-center gap-2"><Users className="w-5 h-5 text-primary" /> Community Posts</h2>
 
-            {/* Post form */}
-            <form onSubmit={submitPost} className="flex gap-2">
-              <Input
-                placeholder="Share something with the community…"
-                value={newPost}
-                onChange={e => setNewPost(e.target.value)}
-                className="flex-1"
-              />
-              <Button type="submit" disabled={posting || !newPost.trim()}>
-                {posting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              </Button>
-            </form>
+            {/* Post composer */}
+            <Card className="shadow-sm">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex gap-3">
+                  <Avatar className="w-9 h-9 flex-shrink-0">
+                    <AvatarImage src={user?.avatar ?? undefined} />
+                    <AvatarFallback className="text-xs">{user?.name ? initials(user.name) : "?"}</AvatarFallback>
+                  </Avatar>
+                  <Textarea
+                    placeholder="Share something with the community…"
+                    value={newPost}
+                    onChange={e => setNewPost(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void submitPost(); } }}
+                    rows={3}
+                    className="flex-1 resize-none border-0 bg-muted/40 focus-visible:ring-1 rounded-xl text-sm"
+                  />
+                </div>
+                {postImagePreview && (
+                  <div className="relative max-h-48 rounded-xl overflow-hidden ml-12">
+                    <img src={postImagePreview} alt="preview" className="w-full max-h-48 object-cover" />
+                    <button type="button" onClick={() => { setPostImageFile(null); setPostImagePreview(null); if (postImageInputRef.current) postImageInputRef.current.value = ""; }}
+                      className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-center justify-between ml-12">
+                  <div className="flex items-center gap-0.5">
+                    <input ref={postImageInputRef} type="file" accept="image/*" className="hidden" onChange={e => {
+                      const file = e.target.files?.[0]; if (!file) return;
+                      setPostImageFile(file); setPostImagePreview(URL.createObjectURL(file));
+                    }} />
+                    <button type="button" onClick={() => postImageInputRef.current?.click()}
+                      title="Add image"
+                      className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors">
+                      <ImageIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <Button onClick={() => void submitPost()} disabled={posting || (!newPost.trim() && !postImageFile)} size="sm"
+                    className="gap-1.5">
+                    {posting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                    Post
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
 
             {postsLoading ? (
-              <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}</div>
+              <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-28 w-full rounded-xl" />)}</div>
             ) : posts.length === 0 ? (
               <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No posts yet. Be the first to share!</CardContent></Card>
             ) : (
               <div className="space-y-3">
-                {posts.map(p => (
-                  <Card key={p.id}>
-                    <CardContent className="py-3 px-4 flex items-start gap-3">
-                      <Avatar className="w-8 h-8 flex-shrink-0">
-                        <AvatarImage src={p.users?.avatar ?? undefined} />
-                        <AvatarFallback className="text-xs">{p.users?.name ? initials(p.users.name) : "?"}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm font-medium">{p.users?.name ?? "Unknown"}</p>
-                          <p className="text-xs text-muted-foreground flex-shrink-0">{formatDistanceToNow(new Date(p.created_at), { addSuffix: true })}</p>
+                {posts.map(p => {
+                  const likeState = likedPosts[p.id] ?? { liked: p.liked_by_me, count: p.likes_count };
+                  const commentCount = p.comments_count;
+                  return (
+                    <Card key={p.id} className="shadow-sm">
+                      <CardContent className="pt-4 pb-3 px-4">
+                        {/* Header */}
+                        <div className="flex items-start gap-3 mb-3">
+                          <Avatar className="w-9 h-9 flex-shrink-0">
+                            <AvatarImage src={p.users?.avatar ?? undefined} />
+                            <AvatarFallback className="text-xs">{p.users?.name ? initials(p.users.name) : "?"}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold leading-tight">{p.users?.name ?? "Unknown"}</p>
+                            <p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(p.created_at), { addSuffix: true })}</p>
+                          </div>
+                          {(p.user_id === user?.id || community.isOwner) && (
+                            <button onClick={() => deletePost(p.id)} className="text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
-                        <p className="text-sm text-muted-foreground mt-0.5">{p.content}</p>
-                      </div>
-                      {(p.user_id === user?.id || community.isOwner) && (
-                        <button onClick={() => deletePost(p.id)} className="text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
+
+                        {/* Content */}
+                        {p.content && <p className="text-sm leading-relaxed mb-2 whitespace-pre-line">{p.content}</p>}
+                        {p.image_url && (
+                          <div className="rounded-xl overflow-hidden max-h-80 mb-2">
+                            <img src={p.image_url} alt="post" className="w-full object-cover max-h-80" />
+                          </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-4 pt-1 border-t mt-2">
+                          <button
+                            onClick={() => void togglePostLike(p.id)}
+                            className={cn("flex items-center gap-1.5 text-sm transition-colors", likeState.liked ? "text-red-500" : "text-muted-foreground hover:text-red-500")}
+                          >
+                            <svg className="w-4 h-4" fill={likeState.liked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                            </svg>
+                            <span>{likeState.count > 0 ? likeState.count : ""}</span>
+                            <span className="sr-only">Like</span>
+                          </button>
+                          <button
+                            onClick={() => setExpandedPostComments(prev => {
+                              const s = new Set(prev);
+                              s.has(p.id) ? s.delete(p.id) : s.add(p.id);
+                              return s;
+                            })}
+                            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                            <span>{commentCount > 0 ? commentCount : ""}</span>
+                            <span>{expandedPostComments.has(p.id) ? "Hide" : "Comment"}</span>
+                          </button>
+                        </div>
+
+                        {/* Inline comments */}
+                        {expandedPostComments.has(p.id) && (
+                          <CommunityPostCommentSection
+                            postId={p.id}
+                            token={token}
+                            communityId={communityId}
+                            currentUserId={user?.id}
+                            currentUserName={user?.name}
+                            currentUserAvatar={user?.avatar}
+                            onCountChange={delta => {
+                              setPosts(prev => prev.map(pp => pp.id === p.id ? { ...pp, comments_count: pp.comments_count + delta } : pp));
+                            }}
+                          />
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </div>
