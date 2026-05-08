@@ -17,7 +17,7 @@ import {
   Shield, LogOut, Sun, Moon, Palette, Menu, GraduationCap, PanelLeftClose,
   PanelLeftOpen, ArrowLeft, Send, Trash2, ExternalLink, CheckCircle, Clock,
   XCircle, Users2, AlertTriangle, Loader2, Copy, UserCheck, UserX, Link2, Plus,
-  Globe, Lock, ImageIcon, X,
+  Globe, Lock, ImageIcon, X, MessageCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -72,9 +72,159 @@ type CourseEnrollment = {
   course: { id: number; title: string } | null;
 };
 type VipPost   = {
-  id: number; content: string; created_at: string; user_id: number;
+  id: number; content: string; image_url: string | null; created_at: string; user_id: number;
   users: { id: number; name: string; avatar: string | null } | null;
 };
+type VipComment = {
+  id: number; content: string; image_url: string | null; created_at: string; user_id: number;
+  users: { id: number; name: string; avatar: string | null } | null;
+};
+
+function VipCommentSection({ postId, token, communityId, currentUserId, currentUserName, currentUserAvatar }: {
+  postId: number; token: string | null; communityId: number;
+  currentUserId: number | undefined; currentUserName: string | undefined; currentUserAvatar: string | null | undefined;
+}) {
+  const { toast } = useToast();
+  const [comments, setComments] = useState<VipComment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newComment, setNewComment] = useState("");
+  const [commentImage, setCommentImage] = useState<File | null>(null);
+  const [commentImagePreview, setCommentImagePreview] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const commentImageRef = useRef<HTMLInputElement>(null);
+
+  const fetchComments = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/communities/${communityId}/vip-posts/${postId}/comments`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) setComments(await res.json() as VipComment[]);
+    } catch { /* silent */ } finally { setLoading(false); }
+  }, [postId, communityId, token]);
+
+  useEffect(() => { void fetchComments(); }, [fetchComments]);
+
+  const submitComment = async () => {
+    if (!newComment.trim() && !commentImage) return;
+    setSubmitting(true);
+    try {
+      let imageUrl: string | null = null;
+      if (commentImage) {
+        const fd = new FormData();
+        fd.append("file", commentImage);
+        const uploadRes = await fetch("/api/upload", { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body: fd });
+        if (!uploadRes.ok) throw new Error("Image upload failed");
+        const uploadData = await uploadRes.json() as { url: string };
+        imageUrl = uploadData.url;
+      }
+      const res = await fetch(`/api/communities/${communityId}/vip-posts/${postId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ content: newComment.trim(), imageUrl }),
+      });
+      if (!res.ok) throw new Error("Failed to post comment");
+      setNewComment(""); setCommentImage(null); setCommentImagePreview(null);
+      if (commentImageRef.current) commentImageRef.current.value = "";
+      void fetchComments();
+    } catch (err) {
+      toast({ title: (err as Error).message ?? "Failed", variant: "destructive" });
+    } finally { setSubmitting(false); }
+  };
+
+  const deleteComment = async (commentId: number) => {
+    try {
+      await fetch(`/api/communities/${communityId}/vip-posts/${postId}/comments/${commentId}`, {
+        method: "DELETE", headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      setComments(prev => prev.filter(c => c.id !== commentId));
+    } catch { /* silent */ }
+  };
+
+  return (
+    <div className="mt-2 pt-2 border-t border-amber-200/30 space-y-2">
+      {loading ? (
+        <Skeleton className="h-8 w-full rounded-lg" />
+      ) : comments.length > 0 ? (
+        <div className="space-y-2">
+          {comments.map(c => (
+            <div key={c.id} className="flex gap-2">
+              <Avatar className="w-6 h-6 flex-shrink-0">
+                <AvatarImage src={c.users?.avatar ?? undefined} />
+                <AvatarFallback className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                  {c.users?.name ? initials(c.users.name) : "?"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 bg-muted rounded-lg px-2.5 py-1.5 min-w-0">
+                <div className="flex items-center justify-between gap-2 mb-0.5">
+                  <span className="text-xs font-medium">{c.users?.name ?? "Unknown"}</span>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <span className="text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(c.created_at), { addSuffix: true })}</span>
+                    {c.user_id === currentUserId && (
+                      <button onClick={() => void deleteComment(c.id)} className="text-muted-foreground hover:text-destructive transition-colors">
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {c.content && <p className="text-xs text-muted-foreground leading-relaxed break-words">{c.content}</p>}
+                {c.image_url && (
+                  <div className="mt-1 rounded-lg overflow-hidden max-h-36">
+                    <img src={c.image_url} alt="comment" className="w-full object-cover max-h-36" />
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {/* Comment input */}
+      <div className="flex gap-2">
+        <Avatar className="w-6 h-6 flex-shrink-0">
+          <AvatarImage src={currentUserAvatar ?? undefined} />
+          <AvatarFallback className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+            {currentUserName ? initials(currentUserName) : "?"}
+          </AvatarFallback>
+        </Avatar>
+        <div className="flex-1 space-y-1">
+          <div className="flex items-center gap-1 bg-muted rounded-full px-3 py-1.5">
+            <input
+              type="text"
+              value={newComment}
+              onChange={e => setNewComment(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); void submitComment(); } }}
+              placeholder="Write a comment…"
+              className="flex-1 text-xs bg-transparent border-0 outline-none min-w-0"
+            />
+            <input ref={commentImageRef} type="file" accept="image/*" className="hidden" onChange={e => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              setCommentImage(file);
+              setCommentImagePreview(URL.createObjectURL(file));
+            }} />
+            <button type="button" onClick={() => commentImageRef.current?.click()}
+              className="text-muted-foreground hover:text-amber-500 transition-colors p-0.5" title="Add image">
+              <ImageIcon className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => void submitComment()} disabled={submitting || (!newComment.trim() && !commentImage)}
+              className="text-amber-600 disabled:opacity-40 transition-colors p-0.5">
+              {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+          {commentImagePreview && (
+            <div className="relative w-14 h-14 rounded-lg overflow-hidden border border-amber-200/40 ml-1">
+              <img src={commentImagePreview} alt="preview" className="w-full h-full object-cover" />
+              <button onClick={() => { setCommentImage(null); setCommentImagePreview(null); if (commentImageRef.current) commentImageRef.current.value = ""; }}
+                className="absolute top-0.5 right-0.5 bg-black/60 hover:bg-black/80 text-white rounded-full p-0.5 transition-colors">
+                <X className="w-2.5 h-2.5" />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const NAV_ITEMS: { section: Section; label: string; icon: React.ElementType }[] = [
   { section: "dashboard",  label: "Dashboard",        icon: LayoutDashboard },
@@ -150,6 +300,11 @@ export default function CommunityDashboardPage() {
   const [ctImagePreview, setCtImagePreview] = useState<string | null>(null);
   const [creatingTool, setCreatingTool] = useState(false);
   const ctImageInputRef = useRef<HTMLInputElement>(null);
+  // VIP post image state
+  const [vipImageFile, setVipImageFile] = useState<File | null>(null);
+  const [vipImagePreview, setVipImagePreview] = useState<string | null>(null);
+  const vipImageInputRef = useRef<HTMLInputElement>(null);
+  const [expandedVipComments, setExpandedVipComments] = useState<Set<number>>(new Set());
   // Course enrollment requests (for My Approval Panel)
   const [courseEnrollments, setCourseEnrollments] = useState<CourseEnrollment[]>([]);
   const [actingEnrollment, setActingEnrollment] = useState<number | null>(null);
@@ -456,18 +611,32 @@ export default function CommunityDashboardPage() {
   };
 
   // ── VIP Post handlers ─────────────────────────────────────────────────────
-  const submitVipPost = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newVipPost.trim()) return;
+  const submitVipPost = async () => {
+    if (!newVipPost.trim() && !vipImageFile) return;
     setPostingVip(true);
     try {
+      let imageUrl: string | null = null;
+      if (vipImageFile) {
+        const fd = new FormData();
+        fd.append("file", vipImageFile);
+        const uploadResp = await fetch(`${API}/upload`, { method: "POST", headers: authH(token), body: fd });
+        if (!uploadResp.ok) { const e = await uploadResp.json().catch(() => ({})) as { error?: string }; throw new Error(e.error ?? "Image upload failed"); }
+        const uploadData = await uploadResp.json() as { url: string };
+        imageUrl = uploadData.url;
+      }
       const res = await fetch(`${API}/communities/${communityId}/vip-posts`, {
         method: "POST", headers: jsonH(token),
-        body: JSON.stringify({ content: newVipPost.trim() }),
+        body: JSON.stringify({ content: newVipPost.trim(), imageUrl }),
       });
-      if (res.ok) { setNewVipPost(""); fetchVipPosts(); }
-      else toast({ title: "Failed to post", variant: "destructive" });
-    } catch { toast({ title: "Network error", variant: "destructive" }); }
+      if (res.ok) {
+        setNewVipPost(""); setVipImageFile(null); setVipImagePreview(null);
+        if (vipImageInputRef.current) vipImageInputRef.current.value = "";
+        fetchVipPosts();
+      } else {
+        const d = await res.json() as { error?: string };
+        throw new Error(d.error ?? "Failed to post");
+      }
+    } catch (err) { toast({ title: (err as Error).message ?? "Failed", variant: "destructive" }); }
     finally { setPostingVip(false); }
   };
 
@@ -1109,19 +1278,43 @@ export default function CommunityDashboardPage() {
             <p className="text-sm text-muted-foreground">Exclusive posts visible only to approved community members.</p>
 
             {/* Create post form */}
-            <form onSubmit={submitVipPost} className="flex gap-2">
-              <input
-                type="text"
+            <div className="rounded-xl border border-amber-200/40 dark:border-amber-800/30 bg-card p-3 space-y-2">
+              <Textarea
                 placeholder="Share exclusive content with your members…"
                 value={newVipPost}
                 onChange={e => setNewVipPost(e.target.value)}
-                className="flex-1 px-3 py-2 text-sm rounded-lg border bg-card focus:outline-none focus:ring-2 focus:ring-amber-400/40 transition-colors"
+                rows={3}
+                className="border-0 bg-transparent p-0 resize-none focus-visible:ring-0 text-sm"
               />
-              <Button type="submit" disabled={postingVip || !newVipPost.trim()}
-                className="bg-amber-500 hover:bg-amber-600 text-white">
-                {postingVip ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              </Button>
-            </form>
+              {vipImagePreview && (
+                <div className="relative w-full max-h-40 rounded-lg overflow-hidden">
+                  <img src={vipImagePreview} alt="preview" className="w-full max-h-40 object-cover" />
+                  <button type="button" onClick={() => { setVipImageFile(null); setVipImagePreview(null); if (vipImageInputRef.current) vipImageInputRef.current.value = ""; }}
+                    className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+              <div className="flex items-center justify-between pt-1 border-t border-amber-200/20">
+                <div className="flex items-center gap-1">
+                  <input ref={vipImageInputRef} type="file" accept="image/*" className="hidden" onChange={e => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setVipImageFile(file);
+                    setVipImagePreview(URL.createObjectURL(file));
+                  }} />
+                  <button type="button" onClick={() => vipImageInputRef.current?.click()}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors" title="Add image">
+                    <ImageIcon className="w-4 h-4" />
+                  </button>
+                </div>
+                <Button onClick={() => void submitVipPost()} disabled={postingVip || (!newVipPost.trim() && !vipImageFile)}
+                  className="bg-amber-500 hover:bg-amber-600 text-white" size="sm">
+                  {postingVip ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Crown className="w-3.5 h-3.5 mr-1.5" />}
+                  Post VIP Update
+                </Button>
+              </div>
+            </div>
 
             {/* Post feed */}
             {vipPostsLoading ? (
@@ -1137,28 +1330,58 @@ export default function CommunityDashboardPage() {
               <div className="space-y-3">
                 {vipPosts.map(p => (
                   <Card key={p.id} className="border-amber-200/40 dark:border-amber-800/30 bg-gradient-to-r from-amber-50/30 to-transparent dark:from-amber-950/10">
-                    <CardContent className="py-3 px-4 flex items-start gap-3">
-                      <Avatar className="w-8 h-8 flex-shrink-0">
-                        <AvatarImage src={p.users?.avatar ?? undefined} />
-                        <AvatarFallback className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                          {p.users?.name ? initials(p.users.name) : "?"}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium">{p.users?.name ?? "Unknown"}</p>
-                            <Crown className="w-3 h-3 text-amber-500 flex-shrink-0" />
+                    <CardContent className="py-3 px-4">
+                      <div className="flex items-start gap-3">
+                        <Avatar className="w-8 h-8 flex-shrink-0">
+                          <AvatarImage src={p.users?.avatar ?? undefined} />
+                          <AvatarFallback className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                            {p.users?.name ? initials(p.users.name) : "?"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium">{p.users?.name ?? "Unknown"}</p>
+                              <Crown className="w-3 h-3 text-amber-500 flex-shrink-0" />
+                            </div>
+                            <p className="text-xs text-muted-foreground flex-shrink-0">{formatDistanceToNow(new Date(p.created_at), { addSuffix: true })}</p>
                           </div>
-                          <p className="text-xs text-muted-foreground flex-shrink-0">{formatDistanceToNow(new Date(p.created_at), { addSuffix: true })}</p>
+                          {p.content && <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">{p.content}</p>}
+                          {p.image_url && (
+                            <div className="mt-2 rounded-xl overflow-hidden max-h-72">
+                              <img src={p.image_url} alt="post" className="w-full object-cover max-h-72" />
+                            </div>
+                          )}
+                          <div className="flex items-center gap-3 mt-2">
+                            <button
+                              onClick={() => setExpandedVipComments(prev => {
+                                const s = new Set(prev);
+                                s.has(p.id) ? s.delete(p.id) : s.add(p.id);
+                                return s;
+                              })}
+                              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-amber-600 transition-colors"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" />
+                              <span>{expandedVipComments.has(p.id) ? "Hide comments" : "Comments"}</span>
+                            </button>
+                          </div>
+                          {expandedVipComments.has(p.id) && (
+                            <VipCommentSection
+                              postId={p.id}
+                              token={token}
+                              communityId={communityId}
+                              currentUserId={user?.id}
+                              currentUserName={user?.name}
+                              currentUserAvatar={user?.avatar}
+                            />
+                          )}
                         </div>
-                        <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">{p.content}</p>
+                        {(p.user_id === user?.id || community.isOwner) && (
+                          <button onClick={() => deleteVipPost(p.id)} className="text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0 mt-0.5">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
-                      {(p.user_id === user?.id || community.isOwner) && (
-                        <button onClick={() => deleteVipPost(p.id)} className="text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0 mt-0.5">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
                     </CardContent>
                   </Card>
                 ))}

@@ -505,7 +505,7 @@ router.get("/communities/:id/vip-posts", requireAuth, async (req, res): Promise<
 
   const { data, error } = await supabase
     .from("community_vip_posts")
-    .select("id, content, created_at, user_id, users!community_vip_posts_user_id_fkey(id, name, avatar)")
+    .select("id, content, image_url, created_at, user_id, users!community_vip_posts_user_id_fkey(id, name, avatar)")
     .eq("community_id", id)
     .order("created_at", { ascending: false });
 
@@ -522,13 +522,17 @@ router.post("/communities/:id/vip-posts", requireAuth, async (req, res): Promise
   if (!community || community.status !== "approved") { res.status(404).json({ error: "Not found" }); return; }
   if (!isOwner && memberStatus !== "approved") { res.status(403).json({ error: "Access denied" }); return; }
 
-  const parsed = z.object({ content: z.string().min(1).max(5000) }).safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: "Content required" }); return; }
+  const parsed = z.object({
+    content: z.string().max(5000).default(""),
+    imageUrl: z.string().url().nullish(),
+  }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
+  if (!parsed.data.content.trim() && !parsed.data.imageUrl) { res.status(400).json({ error: "Content or image required" }); return; }
 
   const { data, error } = await supabase
     .from("community_vip_posts")
-    .insert({ community_id: id, user_id: req.userId!, content: parsed.data.content.trim() })
-    .select("id, content, created_at, user_id, users!community_vip_posts_user_id_fkey(id, name, avatar)")
+    .insert({ community_id: id, user_id: req.userId!, content: parsed.data.content.trim(), image_url: parsed.data.imageUrl ?? null })
+    .select("id, content, image_url, created_at, user_id, users!community_vip_posts_user_id_fkey(id, name, avatar)")
     .single();
 
   if (error) { res.status(500).json({ error: error.message }); return; }
@@ -555,6 +559,77 @@ router.delete("/communities/:id/vip-posts/:postId", requireAuth, async (req, res
   if (!isOwner && post.user_id !== req.userId) { res.status(403).json({ error: "Not allowed" }); return; }
 
   await supabase.from("community_vip_posts").delete().eq("id", postId);
+  res.json({ ok: true });
+});
+
+// ── GET /api/communities/:id/vip-posts/:postId/comments ──────────────────────
+router.get("/communities/:id/vip-posts/:postId/comments", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  const postId = parseInt(req.params["postId"] as string, 10);
+  if (isNaN(id) || isNaN(postId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { community, isOwner, memberStatus } = await getMembership(id, req.userId!);
+  if (!community || community.status !== "approved") { res.status(404).json({ error: "Not found" }); return; }
+  if (!isOwner && memberStatus !== "approved") { res.status(403).json({ error: "Access denied" }); return; }
+
+  const { data, error } = await supabase
+    .from("community_vip_post_comments")
+    .select("id, content, image_url, created_at, user_id, users!community_vip_post_comments_user_id_fkey(id, name, avatar)")
+    .eq("post_id", postId)
+    .order("created_at", { ascending: true });
+
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.json(data ?? []);
+});
+
+// ── POST /api/communities/:id/vip-posts/:postId/comments ─────────────────────
+router.post("/communities/:id/vip-posts/:postId/comments", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  const postId = parseInt(req.params["postId"] as string, 10);
+  if (isNaN(id) || isNaN(postId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { community, isOwner, memberStatus } = await getMembership(id, req.userId!);
+  if (!community || community.status !== "approved") { res.status(404).json({ error: "Not found" }); return; }
+  if (!isOwner && memberStatus !== "approved") { res.status(403).json({ error: "Access denied" }); return; }
+
+  const parsed = z.object({
+    content: z.string().max(5000).default(""),
+    imageUrl: z.string().url().nullish(),
+  }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
+  if (!parsed.data.content.trim() && !parsed.data.imageUrl) { res.status(400).json({ error: "Content or image required" }); return; }
+
+  const { data, error } = await supabase
+    .from("community_vip_post_comments")
+    .insert({ post_id: postId, user_id: req.userId!, content: parsed.data.content.trim(), image_url: parsed.data.imageUrl ?? null })
+    .select("id, content, image_url, created_at, user_id, users!community_vip_post_comments_user_id_fkey(id, name, avatar)")
+    .single();
+
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.status(201).json(data);
+});
+
+// ── DELETE /api/communities/:id/vip-posts/:postId/comments/:commentId ─────────
+router.delete("/communities/:id/vip-posts/:postId/comments/:commentId", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  const postId = parseInt(req.params["postId"] as string, 10);
+  const commentId = parseInt(req.params["commentId"] as string, 10);
+  if (isNaN(id) || isNaN(postId) || isNaN(commentId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { community, isOwner } = await getMembership(id, req.userId!);
+  if (!community || community.status !== "approved") { res.status(404).json({ error: "Not found" }); return; }
+
+  const { data: comment } = await supabase
+    .from("community_vip_post_comments")
+    .select("user_id")
+    .eq("id", commentId)
+    .eq("post_id", postId)
+    .single();
+
+  if (!comment) { res.status(404).json({ error: "Comment not found" }); return; }
+  if (!isOwner && comment.user_id !== req.userId) { res.status(403).json({ error: "Not allowed" }); return; }
+
+  await supabase.from("community_vip_post_comments").delete().eq("id", commentId);
   res.json({ ok: true });
 });
 

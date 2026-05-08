@@ -76,6 +76,23 @@ CREATE TABLE IF NOT EXISTS community_vip_posts (
 );
 ```
 
+**VIP post image support** (adds image_url column to community_vip_posts):
+```sql
+ALTER TABLE community_vip_posts ADD COLUMN IF NOT EXISTS image_url TEXT;
+```
+
+**VIP post comments table** (threaded comments on community VIP posts):
+```sql
+CREATE TABLE IF NOT EXISTS community_vip_post_comments (
+  id SERIAL PRIMARY KEY,
+  post_id INTEGER NOT NULL REFERENCES community_vip_posts(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  content TEXT NOT NULL DEFAULT '',
+  image_url TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
 **Community-scoped courses** (courses created inside a community stay private to that community):
 ```sql
 ALTER TABLE courses ADD COLUMN IF NOT EXISTS community_id INTEGER REFERENCES communities(id) ON DELETE CASCADE;
