@@ -17,8 +17,12 @@ import {
   Shield, LogOut, Sun, Moon, Palette, Menu, GraduationCap, PanelLeftClose,
   PanelLeftOpen, ArrowLeft, Send, Trash2, ExternalLink, CheckCircle, Clock,
   XCircle, Users2, AlertTriangle, Loader2, Copy, UserCheck, UserX, Link2, Plus,
+  Globe, Lock, ImageIcon, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const API = "/api";
 function authH(token: string | null): Record<string, string> {
@@ -61,6 +65,12 @@ type Member = {
 };
 type AllCourse = { id: number; title: string; description: string | null; thumbnail: string | null };
 type AllTool   = { id: number; title: string; description: string | null; image_url: string | null; tool_url: string | null };
+type LessonDraft = { title: string; description: string; videoUrl: string };
+type CourseEnrollment = {
+  id: number; courseId: number; userId: number; createdAt: string;
+  user: { id: number; name: string; email: string; avatar: string | null } | null;
+  course: { id: number; title: string } | null;
+};
 type VipPost   = {
   id: number; content: string; created_at: string; user_id: number;
   users: { id: number; name: string; avatar: string | null } | null;
@@ -118,9 +128,21 @@ export default function CommunityDashboardPage() {
   const [removingTool, setRemovingTool] = useState<number | null>(null);
   const [courseSearch, setCourseSearch] = useState("");
   const [toolSearch, setToolSearch]     = useState("");
-  const [showCreateCourse, setShowCreateCourse] = useState(false);
+  // Create course dialog state
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [ccTitle, setCcTitle] = useState("");
+  const [ccDescription, setCcDescription] = useState("");
+  const [ccImageFile, setCcImageFile] = useState<File | null>(null);
+  const [ccImagePreview, setCcImagePreview] = useState<string | null>(null);
+  const [ccExternalUrl, setCcExternalUrl] = useState("");
+  const [ccVisibility, setCcVisibility] = useState<"public" | "private">("public");
+  const [ccEnrollmentMode, setCcEnrollmentMode] = useState<"open" | "approval_required">("approval_required");
+  const [ccLessons, setCcLessons] = useState<LessonDraft[]>([{ title: "", description: "", videoUrl: "" }]);
   const [creatingCourse, setCreatingCourse] = useState(false);
-  const [createCourseForm, setCreateCourseForm] = useState({ title: "", description: "", thumbnail: "" });
+  const ccImageInputRef = useRef<HTMLInputElement>(null);
+  // Course enrollment requests (for My Approval Panel)
+  const [courseEnrollments, setCourseEnrollments] = useState<CourseEnrollment[]>([]);
+  const [actingEnrollment, setActingEnrollment] = useState<number | null>(null);
   const msgEndRef = useRef<HTMLDivElement>(null);
 
   // ── Fetch community + verify owner access ────────────────────────────────
@@ -190,6 +212,12 @@ export default function CommunityDashboardPage() {
       .catch(() => {}).finally(() => setVipPostsLoading(false));
   }, [communityId, token]);
 
+  const fetchCourseEnrollments = useCallback(() => {
+    fetch(`${API}/communities/${communityId}/course-enrollments/pending`, { headers: authH(token) })
+      .then(r => r.json()).then(d => { if (Array.isArray(d)) setCourseEnrollments(d); })
+      .catch(() => {});
+  }, [communityId, token]);
+
   useEffect(() => {
     if (!community) return;
     fetchPosts(); fetchMessages(); fetchCourses(); fetchTools(); fetchMembers();
@@ -201,6 +229,7 @@ export default function CommunityDashboardPage() {
     if (section === "courses")   { fetchAllCourses(); }
     if (section === "tools")     { fetchAllTools(); }
     if (section === "vip-posts") { fetchVipPosts(); }
+    if (section === "members")   { fetchCourseEnrollments(); }
   }, [section, community]);
 
   useEffect(() => { msgEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
@@ -272,30 +301,78 @@ export default function CommunityDashboardPage() {
     finally { setRemovingCourse(null); }
   };
 
-  const createCourse = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!createCourseForm.title.trim()) return;
+  const resetCreateDialog = () => {
+    setCcTitle(""); setCcDescription(""); setCcImageFile(null); setCcImagePreview(null);
+    setCcExternalUrl(""); setCcVisibility("public"); setCcEnrollmentMode("approval_required");
+    setCcLessons([{ title: "", description: "", videoUrl: "" }]);
+    if (ccImageInputRef.current) ccImageInputRef.current.value = "";
+  };
+
+  const createCourse = async () => {
+    if (!ccTitle.trim()) { toast({ title: "Title is required", variant: "destructive" }); return; }
     setCreatingCourse(true);
     try {
+      let thumbnailUrl: string | null = null;
+      if (ccImageFile) {
+        const fd = new FormData();
+        fd.append("file", ccImageFile);
+        const uploadResp = await fetch(`${API}/upload`, {
+          method: "POST", headers: authH(token), body: fd,
+        });
+        if (!uploadResp.ok) {
+          const errData = await uploadResp.json().catch(() => ({})) as { error?: string };
+          throw new Error(errData.error ?? "Image upload failed");
+        }
+        const uploadData = await uploadResp.json() as { url: string };
+        thumbnailUrl = uploadData.url;
+      }
+
+      const validLessons = ccLessons.filter(l => l.title.trim());
       const res = await fetch(`${API}/communities/${communityId}/courses/create`, {
         method: "POST", headers: jsonH(token),
         body: JSON.stringify({
-          title: createCourseForm.title.trim(),
-          description: createCourseForm.description.trim() || null,
-          thumbnail: createCourseForm.thumbnail.trim() || null,
+          title: ccTitle.trim(),
+          description: ccDescription.trim() || null,
+          thumbnail: thumbnailUrl,
+          externalUrl: ccExternalUrl.trim() || null,
+          visibility: ccVisibility,
+          enrollmentMode: ccEnrollmentMode,
+          lessons: validLessons.map(l => ({
+            title: l.title.trim(),
+            description: l.description.trim() || null,
+            videoUrl: l.videoUrl.trim() || null,
+          })),
         }),
       });
       if (res.ok) {
-        setCreateCourseForm({ title: "", description: "", thumbnail: "" });
-        setShowCreateCourse(false);
+        resetCreateDialog();
+        setCreateDialogOpen(false);
         fetchCourses();
         toast({ title: "Course created and linked to your community!" });
       } else {
         const d = await res.json() as { error?: string };
-        toast({ title: d.error ?? "Failed to create course", variant: "destructive" });
+        throw new Error(d.error ?? "Failed to create course");
+      }
+    } catch (err) {
+      toast({ title: (err as Error).message ?? "Failed", variant: "destructive" });
+    } finally { setCreatingCourse(false); }
+  };
+
+  const handleCourseEnrollmentAction = async (enrollmentId: number, action: "approve" | "reject") => {
+    setActingEnrollment(enrollmentId);
+    try {
+      const res = await fetch(`${API}/communities/${communityId}/course-enrollments/${enrollmentId}/${action}`, {
+        method: "PATCH", headers: authH(token),
+      });
+      if (res.ok) {
+        fetchCourseEnrollments();
+        toast({ title: action === "approve" ? "Enrollment approved!" : "Enrollment rejected" });
+      } else {
+        const d = await res.json() as { error?: string };
+        toast({ title: d.error ?? "Failed", variant: "destructive" });
       }
     } catch { toast({ title: "Network error", variant: "destructive" }); }
-    finally { setCreatingCourse(false); }
+    finally { setActingEnrollment(null); }
   };
 
   // ── Tool management (owner only) ──────────────────────────────────────────
@@ -604,62 +681,111 @@ export default function CommunityDashboardPage() {
               <div className="flex items-center gap-3">
                 <span className="text-sm text-muted-foreground">{courses.length} linked</span>
                 {community.isOwner && (
-                  <Button size="sm" onClick={() => setShowCreateCourse(v => !v)}>
+                  <Button size="sm" onClick={() => setCreateDialogOpen(true)}>
                     <Plus className="w-3.5 h-3.5 mr-1.5" /> Create Course
                   </Button>
                 )}
               </div>
             </div>
 
-            {/* Create course form (owner only) */}
-            {community.isOwner && showCreateCourse && (
-              <Card className="border-primary/30 bg-primary/5">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <BookOpen className="w-4 h-4 text-primary" /> New Community Course
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={createCourse} className="space-y-3">
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Course Title *</label>
-                      <Input
-                        placeholder="e.g. Introduction to Marketing"
-                        value={createCourseForm.title}
-                        onChange={e => setCreateCourseForm(f => ({ ...f, title: e.target.value }))}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Description</label>
-                      <Textarea
-                        placeholder="What will members learn in this course?"
-                        value={createCourseForm.description}
-                        onChange={e => setCreateCourseForm(f => ({ ...f, description: e.target.value }))}
-                        rows={2}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Thumbnail URL</label>
-                      <Input
-                        placeholder="https://example.com/image.jpg"
-                        value={createCourseForm.thumbnail}
-                        onChange={e => setCreateCourseForm(f => ({ ...f, thumbnail: e.target.value }))}
-                      />
-                    </div>
-                    <div className="flex gap-2 pt-1">
-                      <Button type="submit" size="sm" disabled={creatingCourse || !createCourseForm.title.trim()}>
-                        {creatingCourse ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Plus className="w-3.5 h-3.5 mr-1.5" />}
-                        Create &amp; Link
+            {/* Create Course Dialog */}
+            <Dialog open={createDialogOpen} onOpenChange={(open) => { setCreateDialogOpen(open); if (!open) resetCreateDialog(); }}>
+              <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2"><BookOpen className="w-4 h-4 text-primary" /> Create New Course</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
+                  <div>
+                    <Label>Title <span className="text-destructive">*</span></Label>
+                    <Input className="mt-1" placeholder="Course title" value={ccTitle} onChange={e => setCcTitle(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Description</Label>
+                    <Textarea className="mt-1" placeholder="What will members learn?" value={ccDescription} onChange={e => setCcDescription(e.target.value)} rows={3} />
+                  </div>
+                  <div>
+                    <Label>Course Image</Label>
+                    <input ref={ccImageInputRef} type="file" accept="image/*" className="hidden" onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setCcImageFile(file);
+                      setCcImagePreview(URL.createObjectURL(file));
+                    }} />
+                    {ccImagePreview ? (
+                      <div className="mt-1 relative w-full h-36 rounded-lg overflow-hidden border">
+                        <img src={ccImagePreview} alt="Preview" className="w-full h-full object-cover" />
+                        <button type="button" onClick={() => { setCcImageFile(null); setCcImagePreview(null); if (ccImageInputRef.current) ccImageInputRef.current.value = ""; }}
+                          className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button type="button" onClick={() => ccImageInputRef.current?.click()}
+                        className="mt-1 w-full h-28 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors">
+                        <ImageIcon className="w-6 h-6" />
+                        <span className="text-sm font-medium">Click to upload image</span>
+                        <span className="text-xs">PNG, JPG, GIF up to 10MB</span>
+                      </button>
+                    )}
+                  </div>
+                  <div>
+                    <Label>External URL</Label>
+                    <Input className="mt-1" placeholder="https://external-resource.com" value={ccExternalUrl} onChange={e => setCcExternalUrl(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Visibility</Label>
+                    <Select value={ccVisibility} onValueChange={(v: "public" | "private") => setCcVisibility(v)}>
+                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="public"><span className="flex items-center gap-2"><Globe className="w-3.5 h-3.5" /> Public — anyone can enroll</span></SelectItem>
+                        <SelectItem value="private"><span className="flex items-center gap-2"><Lock className="w-3.5 h-3.5" /> Private — invite only</span></SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Enrollment Mode</Label>
+                    <Select value={ccEnrollmentMode} onValueChange={(v: "open" | "approval_required") => setCcEnrollmentMode(v)}>
+                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="open">Open — students enrolled immediately</SelectItem>
+                        <SelectItem value="approval_required">Requires Approval — you must approve</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <Label className="text-base font-semibold">Lessons ({ccLessons.length})</Label>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setCcLessons(l => [...l, { title: "", description: "", videoUrl: "" }])}>
+                        <Plus className="w-3.5 h-3.5 mr-1" /> Add Lesson
                       </Button>
-                      <Button type="button" size="sm" variant="outline" onClick={() => { setShowCreateCourse(false); setCreateCourseForm({ title: "", description: "", thumbnail: "" }); }}>
-                        Cancel
-                      </Button>
                     </div>
-                  </form>
-                </CardContent>
-              </Card>
-            )}
+                    <div className="space-y-3">
+                      {ccLessons.map((lesson, i) => (
+                        <div key={i} className="border rounded-lg p-3 space-y-2 bg-muted/30 relative">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-medium text-muted-foreground">Lesson {i + 1}</span>
+                            {ccLessons.length > 1 && (
+                              <button onClick={() => setCcLessons(l => l.filter((_, idx) => idx !== i))} className="text-muted-foreground hover:text-destructive transition-colors">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                          <Input placeholder="Lesson title *" value={lesson.title} onChange={e => setCcLessons(l => l.map((x, idx) => idx === i ? { ...x, title: e.target.value } : x))} />
+                          <Textarea placeholder="Lesson description" rows={2} value={lesson.description} onChange={e => setCcLessons(l => l.map((x, idx) => idx === i ? { ...x, description: e.target.value } : x))} />
+                          <Input placeholder="Video URL (YouTube, Vimeo, etc.)" value={lesson.videoUrl} onChange={e => setCcLessons(l => l.map((x, idx) => idx === i ? { ...x, videoUrl: e.target.value } : x))} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end pt-2">
+                    <Button variant="outline" onClick={() => { setCreateDialogOpen(false); resetCreateDialog(); }}>Cancel</Button>
+                    <Button onClick={createCourse} disabled={creatingCourse || !ccTitle.trim()}>
+                      {creatingCourse ? <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />Creating…</> : "Create Course"}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             {/* Linked courses */}
             {courses.length === 0 ? (
@@ -1081,16 +1207,59 @@ export default function CommunityDashboardPage() {
               </Button>
             </div>
 
-            {/* Pending approval */}
+            {/* Course Enrollment Requests */}
+            {courseEnrollments.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                  Course Enrollment Requests
+                  <span className="bg-blue-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{courseEnrollments.length}</span>
+                </h3>
+                {courseEnrollments.map(e => (
+                  <div key={e.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card">
+                    <Avatar className="w-8 h-8 flex-shrink-0">
+                      <AvatarImage src={e.user?.avatar ?? undefined} />
+                      <AvatarFallback className="text-xs">{e.user?.name ? initials(e.user.name) : "?"}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{e.user?.name ?? "Unknown"}</p>
+                      <p className="text-xs text-muted-foreground truncate">{e.user?.email}</p>
+                      {e.course && (
+                        <p className="text-xs text-primary truncate flex items-center gap-1 mt-0.5">
+                          <BookOpen className="w-3 h-3" /> {e.course.title}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <Button size="sm" variant="outline"
+                        className="h-7 px-2 text-xs text-green-600 border-green-300 hover:bg-green-50 dark:hover:bg-green-950/30"
+                        disabled={actingEnrollment === e.id}
+                        onClick={() => handleCourseEnrollmentAction(e.id, "approve")}>
+                        {actingEnrollment === e.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
+                        <span className="ml-1">Approve</span>
+                      </Button>
+                      <Button size="sm" variant="outline"
+                        className="h-7 px-2 text-xs text-red-500 border-red-300 hover:bg-red-50 dark:hover:bg-red-950/30"
+                        disabled={actingEnrollment === e.id}
+                        onClick={() => handleCourseEnrollmentAction(e.id, "reject")}>
+                        <XCircle className="w-3 h-3" />
+                        <span className="ml-1">Reject</span>
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Member Join Requests */}
             <div className="space-y-2">
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                Pending Approval
+                Member Join Requests
                 {pending.length > 0 && (
                   <span className="bg-yellow-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{pending.length}</span>
                 )}
               </h3>
               {pending.length === 0 ? (
-                <Card><CardContent className="py-6 text-center text-sm text-muted-foreground">No pending requests.</CardContent></Card>
+                <Card><CardContent className="py-6 text-center text-sm text-muted-foreground">No pending join requests.</CardContent></Card>
               ) : pending.map(m => <MemberRow key={m.id} m={m} showActions />)}
             </div>
 

@@ -110,6 +110,10 @@ router.get("/enrollments/pending", requireAuth, async (req, res): Promise<void> 
     // Only include enrollments from courses that require approval
     if (enrollmentMode === "open") return null;
 
+    // Exclude community-scoped courses (handled by community owner's panel)
+    const commId = (course as Record<string, unknown>).community_id;
+    if (commId != null) return null;
+
     return {
       id: enrollment.id,
       userId: enrollment.user_id,

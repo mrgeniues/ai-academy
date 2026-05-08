@@ -229,37 +229,124 @@ router.post("/communities/:id/courses/create", requireAuth, async (req, res): Pr
 
   const parsed = z.object({
     title: z.string().min(1).max(200),
-    description: z.string().max(1000).optional().nullable(),
+    description: z.string().max(2000).optional().nullable(),
     thumbnail: z.string().optional().nullable(),
+    externalUrl: z.string().optional().nullable(),
+    visibility: z.enum(["public", "private"]).optional().default("public"),
+    enrollmentMode: z.enum(["open", "approval_required"]).optional().default("approval_required"),
+    lessons: z.array(z.object({
+      title: z.string().min(1),
+      description: z.string().optional().nullable(),
+      videoUrl: z.string().optional().nullable(),
+    })).optional(),
   }).safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Title is required" }); return; }
 
-  const { title, description, thumbnail } = parsed.data;
+  const { title, description, thumbnail, externalUrl, visibility, enrollmentMode, lessons } = parsed.data;
 
-  // Try to insert with community_id (scoping column)
   const payload: Record<string, unknown> = {
     title, description: description ?? null, created_by: req.userId!, community_id: id,
+    visibility, enrollment_mode: enrollmentMode,
   };
   if (thumbnail) payload.thumbnail = thumbnail;
+  if (externalUrl) payload.external_url = externalUrl;
 
   let { data: course, error } = await supabase.from("courses").insert(payload).select().single();
 
-  // Graceful fallback if community_id column not yet migrated
-  if (error?.message?.includes("community_id")) {
-    const fallback = await supabase
-      .from("courses")
-      .insert({ title, description: description ?? null, created_by: req.userId!, ...(thumbnail ? { thumbnail } : {}) })
-      .select().single();
+  // Graceful fallback if optional columns not yet migrated
+  if (error && (error.message.includes("community_id") || error.message.includes("visibility") || error.message.includes("enrollment_mode") || error.message.includes("external_url"))) {
+    const core: Record<string, unknown> = { title, description: description ?? null, created_by: req.userId! };
+    if (thumbnail) core.thumbnail = thumbnail;
+    const fallback = await supabase.from("courses").insert(core).select().single();
     course = fallback.data;
     error = fallback.error;
   }
 
   if (error || !course) { res.status(500).json({ error: error?.message ?? "Failed to create course" }); return; }
 
+  // Insert lessons
+  if (lessons && lessons.length > 0) {
+    const validLessons = lessons.filter(l => l.title.trim());
+    if (validLessons.length > 0) {
+      const lessonRows = validLessons.map((l, i) => {
+        const row: Record<string, unknown> = { course_id: course.id, title: l.title.trim(), order: i + 1 };
+        if (l.description) row.content = l.description;
+        if (l.videoUrl) row.video_url = l.videoUrl;
+        return row;
+      });
+      await supabase.from("lessons").insert(lessonRows);
+    }
+  }
+
   // Auto-link to this community
   await supabase.from("community_courses").insert({ community_id: id, course_id: course.id });
 
   res.status(201).json(course);
+});
+
+// ── GET /api/communities/:id/course-enrollments/pending ───────────────────────
+router.get("/communities/:id/course-enrollments/pending", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const { community, isOwner } = await getMembership(id, req.userId!);
+  if (!community || community.status !== "approved") { res.status(404).json({ error: "Not found" }); return; }
+  if (!isOwner) { res.status(403).json({ error: "Owner only" }); return; }
+
+  const { data: links } = await supabase.from("community_courses").select("course_id").eq("community_id", id);
+  const courseIds = (links ?? []).map(l => l.course_id);
+  if (courseIds.length === 0) { res.json([]); return; }
+
+  const { data: enrollments, error } = await supabase
+    .from("enrollments")
+    .select("id, user_id, course_id, created_at")
+    .in("course_id", courseIds)
+    .eq("is_approved", false)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    if (error.message.includes("is_approved") || error.code === "42703") { res.json([]); return; }
+    res.status(500).json({ error: error.message }); return;
+  }
+
+  const enriched = await Promise.all((enrollments ?? []).map(async (e) => {
+    const [{ data: user }, { data: course }] = await Promise.all([
+      supabase.from("users").select("id, name, email, avatar").eq("id", e.user_id).maybeSingle(),
+      supabase.from("courses").select("id, title").eq("id", e.course_id).maybeSingle(),
+    ]);
+    if (!user || !course) return null;
+    return {
+      id: e.id, courseId: e.course_id, userId: e.user_id, createdAt: e.created_at,
+      user: { id: user.id, name: user.name, email: user.email, avatar: user.avatar ?? null },
+      course: { id: course.id, title: course.title },
+    };
+  }));
+  res.json(enriched.filter(Boolean));
+});
+
+// ── PATCH /api/communities/:id/course-enrollments/:enrollmentId/approve ───────
+router.patch("/communities/:id/course-enrollments/:enrollmentId/approve", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  const enrollmentId = parseInt(req.params["enrollmentId"] as string, 10);
+  if (isNaN(id) || isNaN(enrollmentId)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const { community, isOwner } = await getMembership(id, req.userId!);
+  if (!community || community.status !== "approved") { res.status(404).json({ error: "Not found" }); return; }
+  if (!isOwner) { res.status(403).json({ error: "Owner only" }); return; }
+  const { error } = await supabase.from("enrollments").update({ is_approved: true }).eq("id", enrollmentId);
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.json({ ok: true });
+});
+
+// ── PATCH /api/communities/:id/course-enrollments/:enrollmentId/reject ────────
+router.patch("/communities/:id/course-enrollments/:enrollmentId/reject", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  const enrollmentId = parseInt(req.params["enrollmentId"] as string, 10);
+  if (isNaN(id) || isNaN(enrollmentId)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const { community, isOwner } = await getMembership(id, req.userId!);
+  if (!community || community.status !== "approved") { res.status(404).json({ error: "Not found" }); return; }
+  if (!isOwner) { res.status(403).json({ error: "Owner only" }); return; }
+  const { error } = await supabase.from("enrollments").delete().eq("id", enrollmentId);
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.json({ ok: true });
 });
 
 // ── DELETE /api/communities/:id/courses/:courseId ── remove course ───────────
