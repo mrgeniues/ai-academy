@@ -171,17 +171,31 @@ function LinkInsertPopover({ onInsert, accent = "hover:text-primary hover:bg-mut
 
 function renderRichText(text: string): React.ReactNode {
   if (!text) return null;
-  const pattern = /(\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s]+)/g;
+  // Matches: ![alt](url), [label](url), bare URLs
+  const pattern = /(!?\[[^\]]*\]\([^)]+\)|https?:\/\/[^\s]+)/g;
   const nodes: React.ReactNode[] = [];
   let last = 0; let m: RegExpExecArray | null;
   while ((m = pattern.exec(text)) !== null) {
     if (m.index > last) nodes.push(text.slice(last, m.index));
     const token = m[0];
-    const md = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-    if (md) {
-      nodes.push(<a key={m.index} href={md[2]} target="_blank" rel="noopener noreferrer" className="text-primary underline break-all">{md[1]}</a>);
+    // Image markdown: ![alt](url)
+    const imgMd = token.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    if (imgMd) {
+      nodes.push(<img key={m.index} src={imgMd[2]} alt={imgMd[1] || "image"} className="max-w-xs rounded-lg mt-1 max-h-56 object-cover border" />);
     } else {
-      nodes.push(<a key={m.index} href={token} target="_blank" rel="noopener noreferrer" className="text-primary underline break-all">{token}</a>);
+      // Link markdown: [label](url)
+      const md = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+      if (md) {
+        nodes.push(<a key={m.index} href={md[2]} target="_blank" rel="noopener noreferrer" className="text-primary underline break-all">{md[1]}</a>);
+      } else {
+        // Bare URL — render image inline if it's an image extension
+        const isImg = /\.(jpg|jpeg|png|gif|webp)(\?[^)]*)?$/i.test(token);
+        if (isImg) {
+          nodes.push(<img key={m.index} src={token} alt="image" className="max-w-xs rounded-lg mt-1 max-h-56 object-cover border" />);
+        } else {
+          nodes.push(<a key={m.index} href={token} target="_blank" rel="noopener noreferrer" className="text-primary underline break-all">{token}</a>);
+        }
+      }
     }
     last = m.index + token.length;
   }
@@ -576,6 +590,10 @@ export default function CommunityDashboardPage() {
   const [msgLoading, setMsgLoading] = useState(false);
   const [newMsg, setNewMsg] = useState("");
   const [sending, setSending] = useState(false);
+  const [msgImageFile, setMsgImageFile] = useState<File | null>(null);
+  const [msgImagePreview, setMsgImagePreview] = useState<string | null>(null);
+  const msgImageInputRef = useRef<HTMLInputElement>(null);
+  const msgFileInputRef = useRef<HTMLInputElement>(null);
   const [courses, setCourses] = useState<CourseRow[]>([]);
   const [tools, setTools] = useState<ToolRow[]>([]);
   const [allCourses, setAllCourses]     = useState<AllCourse[]>([]);
@@ -1031,16 +1049,41 @@ export default function CommunityDashboardPage() {
   };
 
   // ── Send message ──────────────────────────────────────────────────────────
+  const uploadMsgFile = async (file: File) => {
+    if (!token) return;
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      const res = await fetch(`${API}/upload`, { method: "POST", headers: authH(token), body: fd });
+      if (res.ok) {
+        const { url } = await res.json() as { url: string };
+        setNewMsg(c => c + (c && !c.endsWith(" ") ? " " : "") + `[📎 ${file.name}](${url})`);
+      } else { toast({ title: "Upload failed", variant: "destructive" }); }
+    } catch { toast({ title: "Upload failed", variant: "destructive" }); }
+  };
+
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMsg.trim()) return;
+    if (!newMsg.trim() && !msgImageFile) return;
     setSending(true);
     try {
+      let content = newMsg.trim();
+      if (msgImageFile) {
+        const fd = new FormData(); fd.append("file", msgImageFile);
+        const uploadRes = await fetch(`${API}/upload`, { method: "POST", headers: authH(token), body: fd });
+        if (uploadRes.ok) {
+          const { url } = await uploadRes.json() as { url: string };
+          content = content ? `${content}\n![](${url})` : `![](${url})`;
+        }
+      }
       const res = await fetch(`${API}/communities/${communityId}/messages`, {
         method: "POST", headers: jsonH(token),
-        body: JSON.stringify({ content: newMsg.trim() }),
+        body: JSON.stringify({ content }),
       });
-      if (res.ok) { setNewMsg(""); fetchMessages(); }
+      if (res.ok) {
+        setNewMsg(""); setMsgImageFile(null); setMsgImagePreview(null);
+        if (msgImageInputRef.current) msgImageInputRef.current.value = "";
+        fetchMessages();
+      }
     } catch {}
     finally { setSending(false); }
   };
@@ -2016,18 +2059,55 @@ export default function CommunityDashboardPage() {
               </div>
 
               {/* Input */}
-              <div className="px-4 py-3 border-t flex-shrink-0">
-                <form onSubmit={sendMessage} className="flex gap-2">
-                  <Input
-                    placeholder="Type a message…"
-                    value={newMsg}
-                    onChange={e => setNewMsg(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void sendMessage(e); } }}
-                    className="flex-1"
-                  />
-                  <Button type="submit" disabled={sending || !newMsg.trim()} size="icon">
-                    {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  </Button>
+              <div className="px-4 py-3 border-t flex-shrink-0 space-y-2">
+                {/* Image preview */}
+                {msgImagePreview && (
+                  <div className="relative inline-block">
+                    <img src={msgImagePreview} alt="preview" className="h-24 w-auto rounded-lg border object-cover" />
+                    <button type="button" onClick={() => { setMsgImageFile(null); setMsgImagePreview(null); if (msgImageInputRef.current) msgImageInputRef.current.value = ""; }}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-white text-xs flex items-center justify-center leading-none">✕</button>
+                  </div>
+                )}
+                <form onSubmit={sendMessage} className="flex flex-col gap-2">
+                  <div className="flex items-center gap-1 px-1">
+                    <EmojiPickerPopover onSelect={em => setNewMsg(c => c + em)} />
+                    <LinkInsertPopover onInsert={text => setNewMsg(c => c + (c && !c.endsWith(" ") ? " " : "") + text)} />
+                    {/* File upload */}
+                    <button type="button" title="Attach file"
+                      className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                      onClick={() => msgFileInputRef.current?.click()}>
+                      <Paperclip className="w-4 h-4" />
+                    </button>
+                    <input ref={msgFileInputRef} type="file" className="hidden"
+                      accept=".pdf,.doc,.docx,.txt,.zip"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) void uploadMsgFile(f); e.target.value = ""; }} />
+                    {/* Image upload */}
+                    <button type="button" title="Add image"
+                      className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                      onClick={() => msgImageInputRef.current?.click()}>
+                      <ImageIcon className="w-4 h-4" />
+                    </button>
+                    <input ref={msgImageInputRef} type="file" className="hidden" accept="image/*"
+                      onChange={e => {
+                        const f = e.target.files?.[0]; if (!f) return;
+                        setMsgImageFile(f);
+                        const reader = new FileReader();
+                        reader.onload = ev => setMsgImagePreview(ev.target?.result as string);
+                        reader.readAsDataURL(f);
+                      }} />
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Type a message…"
+                      value={newMsg}
+                      onChange={e => setNewMsg(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void sendMessage(e); } }}
+                      className="flex-1"
+                    />
+                    <Button type="submit" disabled={sending || (!newMsg.trim() && !msgImageFile)} size="icon">
+                      {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    </Button>
+                  </div>
                 </form>
               </div>
             </div>
