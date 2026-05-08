@@ -34,6 +34,11 @@ CREATE TABLE IF NOT EXISTS users (
 );
 ALTER TABLE users DISABLE ROW LEVEL SECURITY;
 
+-- Remove any email-format check constraints that may be leftover from previous setups
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_gmail_only;
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_check;
+ALTER TABLE users DROP CONSTRAINT IF EXISTS email_check;
+
 -- Ensure all columns exist (safe on existing tables)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_online        BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen        TIMESTAMPTZ DEFAULT NOW();
