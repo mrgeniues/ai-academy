@@ -81,8 +81,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Logo + collapse button */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-sidebar-border">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
-            <GraduationCap className="w-4 h-4 text-white" />
+          <div className="w-7 h-7 rounded-lg bg-white flex items-center justify-center flex-shrink-0 overflow-hidden">
+            <img src="/logo.png" className="w-6 h-6 object-contain" alt="AI Academy" />
           </div>
           <span className="font-bold text-sm text-sidebar-foreground tracking-tight whitespace-nowrap">AI Academy 3.0</span>
         </div>
@@ -244,7 +244,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <Menu className="w-5 h-5" />
           </button>
           <div className="flex items-center gap-2 flex-1">
-            <GraduationCap className="w-5 h-5 text-primary" />
+            <div className="w-5 h-5 rounded bg-white flex items-center justify-center overflow-hidden">
+              <img src="/logo.png" className="w-4 h-4 object-contain" alt="AI Academy" />
+            </div>
             <span className="font-bold text-base">AI Academy 3.0</span>
           </div>
           {isMobile && <NotificationBell />}
