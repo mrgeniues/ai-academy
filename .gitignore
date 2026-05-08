@@ -1,9 +1,15 @@
 # ── Compiled output ───────────────────────────
-dist/
 tmp/
 out-tsc/
 build/
 *.tsbuildinfo
+
+# Ignore dist everywhere EXCEPT our two pre-built artifacts
+dist/
+!artifacts/api-server/dist/
+!artifacts/api-server/dist/**
+!artifacts/lms/dist/
+!artifacts/lms/dist/**
 
 # ── Dependencies ──────────────────────────────
 node_modules/
