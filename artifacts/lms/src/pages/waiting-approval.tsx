@@ -35,8 +35,8 @@ export default function WaitingApprovalPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-8">
       <div className="w-full max-w-md text-center">
-        <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center mx-auto mb-6 overflow-hidden shadow-sm">
-          <img src="/logo.png" className="w-12 h-12 object-contain" alt="AI Academy" />
+        <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-6">
+          <GraduationCap className="w-9 h-9 text-white" />
         </div>
 
         <h1 className="text-2xl font-bold mb-2">AI Academy 3.0</h1>
