@@ -121,61 +121,6 @@ export default function AdminPage() {
   const [auditLogStartDate, setAuditLogStartDate] = useState("");
   const [auditLogEndDate, setAuditLogEndDate] = useState("");
 
-  // Community requests state
-  type PendingCommunityPayment = {
-    id: number;
-    screenshot_url: string;
-    payment_method: string | null;
-    payment_method_id: number | null;
-    final_price: number | null;
-    discount_amount: number | null;
-    status: string;
-    created_at: string;
-  };
-  type PendingCommunity = {
-    id: number;
-    name: string;
-    description: string | null;
-    status: string;
-    created_at: string;
-    owner_id: number;
-    plan_id: number | null;
-    users: { id: number; name: string; email: string; avatar: string | null } | null;
-    plans: { id: number; name: string; price: number } | null;
-    latest_payment: PendingCommunityPayment | null;
-  };
-  const [pendingCommunities, setPendingCommunities] = useState<PendingCommunity[]>([]);
-  const [communitiesLoading, setCommunitiesLoading] = useState(true);
-  const [actioningCommunityId, setActioningCommunityId] = useState<number | null>(null);
-
-  // Payment state
-  type CommunityPayment = {
-    id: number; plan: string; payment_method: string | null;
-    screenshot_url: string; status: string; created_at: string;
-    user_id: number; community_id: number;
-    users: { id: number; name: string; email: string; avatar: string | null } | null;
-    communities: { id: number; name: string; description: string | null } | null;
-  };
-  type PaymentSettings = {
-    monthly_price: number; yearly_price: number; lifetime_price: number;
-    binance_account: string | null; binance_qr_url: string | null;
-    nayapay_account: string | null; nayapay_qr_url: string | null;
-  };
-  const [communityPayments, setCommunityPayments]   = useState<CommunityPayment[]>([]);
-  const [paymentsLoading, setPaymentsLoading]       = useState(false);
-  const [actioningPaymentId, setActioningPaymentId] = useState<number | null>(null);
-  const [paymentSettings, setPaymentSettings]       = useState<PaymentSettings | null>(null);
-  const [psLoading, setPsLoading]                   = useState(false);
-  const [psSaving, setPsSaving]                     = useState(false);
-  const [psLoaded, setPsLoaded]                     = useState(false);
-  const [psMonthly, setPsMonthly]                   = useState("");
-  const [psYearly, setPsYearly]                     = useState("");
-  const [psLifetime, setPsLifetime]                 = useState("");
-  const [psBinanceAcc, setPsBinanceAcc]             = useState("");
-  const [psBinanceQr, setPsBinanceQr]               = useState("");
-  const [psNayapayAcc, setPsNayapayAcc]             = useState("");
-  const [psNayapayQr, setPsNayapayQr]               = useState("");
-  const [qrUploading, setQrUploading]               = useState<string | null>(null); // 'binance'|'nayapay'
   const [viewScreenshot, setViewScreenshot]         = useState<string | null>(null);
 
   // Plans state
@@ -530,142 +475,6 @@ export default function AdminPage() {
     }
   }, [user, fetchPendingToolRequests]);
 
-  const fetchPendingCommunities = useCallback(async () => {
-    setCommunitiesLoading(true);
-    try {
-      const authToken = token ?? localStorage.getItem("lms_token");
-      const resp = await fetch("/api/communities/pending", { headers: { Authorization: `Bearer ${authToken}` } });
-      if (resp.ok) setPendingCommunities(await resp.json() as PendingCommunity[]);
-    } catch { /* silently ignore */ }
-    finally { setCommunitiesLoading(false); }
-  }, [token]);
-
-  useEffect(() => {
-    if (user?.role === "admin") {
-      void fetchPendingCommunities();
-    }
-  }, [user, fetchPendingCommunities]);
-
-  const handleCommunityAction = async (community: PendingCommunity, status: "approved" | "rejected") => {
-    setActioningCommunityId(community.id);
-    try {
-      const authToken = token ?? localStorage.getItem("lms_token");
-      const resp = await fetch(`/api/communities/${community.id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-        body: JSON.stringify({ status }),
-      });
-      if (!resp.ok) {
-        const err = await resp.json() as { error?: string };
-        throw new Error(err.error ?? "Failed to update");
-      }
-      toast({ title: status === "approved" ? `"${community.name}" approved` : `"${community.name}" rejected` });
-      setPendingCommunities(prev => prev.filter(c => c.id !== community.id));
-    } catch (err) {
-      toast({ title: err instanceof Error ? err.message : "Error", variant: "destructive" });
-    } finally {
-      setActioningCommunityId(null);
-    }
-  };
-
-  // ── Payment settings + payments fetch ─────────────────────────────────────
-  const fetchPaymentSettings = useCallback(async () => {
-    if (psLoaded) return;
-    setPsLoading(true);
-    try {
-      const authToken = token ?? localStorage.getItem("lms_token");
-      const resp = await fetch("/api/community-payments/settings", { headers: { Authorization: `Bearer ${authToken}` } });
-      if (resp.ok) {
-        const d = await resp.json() as PaymentSettings;
-        setPaymentSettings(d);
-        setPsMonthly(String(d.monthly_price ?? ""));
-        setPsYearly(String(d.yearly_price ?? ""));
-        setPsLifetime(String(d.lifetime_price ?? ""));
-        setPsBinanceAcc(d.binance_account ?? "");
-        setPsBinanceQr(d.binance_qr_url ?? "");
-        setPsNayapayAcc(d.nayapay_account ?? "");
-        setPsNayapayQr(d.nayapay_qr_url ?? "");
-        setPsLoaded(true);
-      }
-    } catch { /* silent */ } finally { setPsLoading(false); }
-  }, [token, psLoaded]);
-
-  const fetchCommunityPayments = useCallback(async () => {
-    setPaymentsLoading(true);
-    try {
-      const authToken = token ?? localStorage.getItem("lms_token");
-      const resp = await fetch("/api/community-payments/all", { headers: { Authorization: `Bearer ${authToken}` } });
-      if (resp.ok) setCommunityPayments(await resp.json() as CommunityPayment[]);
-    } catch { /* silent */ } finally { setPaymentsLoading(false); }
-  }, [token]);
-
-  const handleSavePaymentSettings = async () => {
-    setPsSaving(true);
-    try {
-      const authToken = token ?? localStorage.getItem("lms_token");
-      const resp = await fetch("/api/community-payments/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-        body: JSON.stringify({
-          monthly_price: parseFloat(psMonthly) || 0,
-          yearly_price:  parseFloat(psYearly) || 0,
-          lifetime_price: parseFloat(psLifetime) || 0,
-          binance_account: psBinanceAcc || null,
-          binance_qr_url: psBinanceQr || null,
-          nayapay_account: psNayapayAcc || null,
-          nayapay_qr_url: psNayapayQr || null,
-        }),
-      });
-      if (!resp.ok) { const d = await resp.json() as { error?: string }; throw new Error(d.error ?? "Failed"); }
-      toast({ title: "Payment settings saved" });
-      setPsLoaded(false);
-    } catch (err) { toast({ title: (err as Error).message, variant: "destructive" }); }
-    finally { setPsSaving(false); }
-  };
-
-  const handleQrUpload = async (method: "binance" | "nayapay", file: File) => {
-    setQrUploading(method);
-    try {
-      const authToken = token ?? localStorage.getItem("lms_token");
-      const fd = new FormData(); fd.append("file", file);
-      const resp = await fetch("/api/upload", { method: "POST", headers: { Authorization: `Bearer ${authToken}` }, body: fd });
-      const d = await resp.json() as { url?: string; error?: string };
-      if (!resp.ok) throw new Error(d.error ?? "Upload failed");
-      if (method === "binance") setPsBinanceQr(d.url!);
-      else setPsNayapayQr(d.url!);
-      toast({ title: "QR uploaded — save settings to apply" });
-    } catch (err) { toast({ title: (err as Error).message, variant: "destructive" }); }
-    finally { setQrUploading(null); }
-  };
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (user?.role === "admin") {
-      void fetchCommunityPayments();
-      const interval = setInterval(() => { void fetchCommunityPayments(); }, 30_000);
-      return () => clearInterval(interval);
-    }
-  // fetchCommunityPayments is defined above this useEffect
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
-
-  const handlePaymentAction = async (payment: CommunityPayment, status: "approved" | "rejected", reason?: string) => {
-    setActioningPaymentId(payment.id);
-    try {
-      const authToken = token ?? localStorage.getItem("lms_token");
-      const resp = await fetch(`/api/community-payments/${payment.id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-        body: JSON.stringify({ status, rejection_reason: reason ?? null }),
-      });
-      if (!resp.ok) { const d = await resp.json() as { error?: string }; throw new Error(d.error ?? "Failed"); }
-      toast({ title: status === "approved" ? "Payment approved — community is now live!" : "Payment rejected" });
-      setCommunityPayments(prev => prev.map(p => p.id === payment.id ? { ...p, status } : p));
-      setRejectingPaymentId(null);
-      setRejectionReason("");
-    } catch (err) { toast({ title: (err as Error).message, variant: "destructive" }); }
-    finally { setActioningPaymentId(null); }
-  };
 
   // ── Payment Methods CRUD ───────────────────────────────────────────────────
   const fetchPayMethods = async () => {
@@ -1247,7 +1056,6 @@ export default function AdminPage() {
             { label: "Total Users", value: stats?.totalUsers ?? 0, icon: Users, color: "text-blue-500" },
             { label: "Total Courses", value: stats?.totalCourses ?? 0, icon: BookOpen, color: "text-purple-500" },
             { label: "Enrollments", value: stats?.totalEnrollments ?? 0, icon: TrendingUp, color: "text-green-500" },
-            { label: "Community Posts", value: stats?.totalPosts ?? 0, icon: MessageSquare, color: "text-orange-500" },
           ].map(({ label, value, icon: Icon, color }) => (
             <Card key={label} data-testid={`admin-stat-${label.toLowerCase().replace(/\s+/g, "-")}`}>
               <CardContent className="pt-4 pb-3">
@@ -1337,21 +1145,9 @@ export default function AdminPage() {
                 <Badge variant="destructive" className="ml-1.5 text-xs px-1.5 py-0 h-4">{pendingEnrollments.length}</Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="communities" data-testid="tab-communities">
-              <Users2 className="w-3.5 h-3.5 mr-1" />
-              Comm.
-              {pendingCommunities.length > 0 && (
-                <Badge variant="destructive" className="ml-1.5 text-xs px-1.5 py-0 h-4">{pendingCommunities.length}</Badge>
-              )}
-            </TabsTrigger>
             <TabsTrigger value="payments" data-testid="tab-payments" onClick={() => { if (!payMethodsLoaded) void fetchPayMethods(); }}>
               <CreditCard className="w-3.5 h-3.5 mr-1" />
               Pay
-              {communityPayments.filter(p => p.status === "pending").length > 0 && (
-                <Badge variant="destructive" className="ml-1.5 text-xs px-1.5 py-0 h-4">
-                  {communityPayments.filter(p => p.status === "pending").length}
-                </Badge>
-              )}
             </TabsTrigger>
             <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
             <TabsTrigger value="courses" data-testid="tab-courses">Manage</TabsTrigger>
@@ -1784,180 +1580,6 @@ export default function AdminPage() {
           </TabsContent>
 
           {/* ── Users tab ─────────────────────────────────────────────── */}
-          {/* ── Community Requests tab ──────────────────────────────── */}
-          <TabsContent value="communities" className="mt-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Users2 className="w-4 h-4" />
-                  Community Requests
-                  {pendingCommunities.length > 0 && (
-                    <Badge variant="destructive" className="text-xs">{pendingCommunities.length} pending</Badge>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {communitiesLoading ? (
-                  <div className="space-y-3">
-                    {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
-                  </div>
-                ) : pendingCommunities.length === 0 ? (
-                  <div className="text-center py-10 text-muted-foreground">
-                    <CheckCircle className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                    <p className="font-medium">No pending community requests</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {pendingCommunities.map(community => {
-                      const pmt = community.latest_payment;
-                      return (
-                        <div
-                          key={community.id}
-                          className="rounded-xl border bg-card overflow-hidden"
-                          data-testid={`community-request-${community.id}`}
-                        >
-                          {/* ── Header row ── */}
-                          <div className="flex items-start justify-between gap-4 p-4 pb-3">
-                            <div className="flex items-start gap-3 min-w-0">
-                              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                {community.users?.avatar
-                                  ? <img src={community.users.avatar} className="w-9 h-9 rounded-full object-cover" />
-                                  : <Users2 className="w-4 h-4 text-primary" />
-                                }
-                              </div>
-                              <div className="min-w-0">
-                                <p className="font-semibold text-sm">{community.name}</p>
-                                {community.description && (
-                                  <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{community.description}</p>
-                                )}
-                                <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                                  <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                    <User className="w-3 h-3" />
-                                    <strong className="text-foreground">{community.users?.name ?? "Unknown"}</strong>
-                                  </span>
-                                  <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                    <span className="opacity-60">✉</span>
-                                    {community.users?.email}
-                                  </span>
-                                  <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                    <Clock className="w-3 h-3" />
-                                    {formatDistanceToNow(new Date(community.created_at), { addSuffix: true })}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex gap-2 flex-shrink-0">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-green-600 border-green-200 hover:bg-green-50 hover:border-green-300 dark:hover:bg-green-950/30"
-                                disabled={actioningCommunityId === community.id}
-                                onClick={() => void handleCommunityAction(community, "approved")}
-                                data-testid={`button-approve-community-${community.id}`}
-                              >
-                                <CheckCircle className="w-3.5 h-3.5 mr-1" />Approve
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-destructive border-destructive/20 hover:bg-destructive/5 hover:border-destructive/30"
-                                disabled={actioningCommunityId === community.id}
-                                onClick={() => void handleCommunityAction(community, "rejected")}
-                                data-testid={`button-reject-community-${community.id}`}
-                              >
-                                <XCircle className="w-3.5 h-3.5 mr-1" />Reject
-                              </Button>
-                            </div>
-                          </div>
-
-                          {/* ── Payment details strip ── */}
-                          <div className="border-t bg-muted/30 px-4 py-3 flex flex-wrap gap-x-6 gap-y-2 items-start">
-                            {/* Plan */}
-                            {community.plans && (
-                              <div className="flex items-center gap-1.5 text-xs">
-                                <Tag className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-                                <span className="text-muted-foreground">Plan:</span>
-                                <span className="font-semibold">{community.plans.name}</span>
-                                <span className="text-muted-foreground">(${community.plans.price})</span>
-                              </div>
-                            )}
-                            {/* Amount paid */}
-                            {pmt?.final_price != null && (
-                              <div className="flex items-center gap-1.5 text-xs">
-                                <CreditCard className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
-                                <span className="text-muted-foreground">Amount paid:</span>
-                                <span className="font-semibold text-green-600">${pmt.final_price.toFixed(2)}</span>
-                                {pmt.discount_amount && pmt.discount_amount > 0 && (
-                                  <span className="text-muted-foreground">(−${pmt.discount_amount.toFixed(2)} discount)</span>
-                                )}
-                              </div>
-                            )}
-                            {/* Payment method */}
-                            {pmt?.payment_method && (
-                              <div className="flex items-center gap-1.5 text-xs">
-                                <span className="text-muted-foreground">Via:</span>
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 capitalize">{pmt.payment_method}</Badge>
-                              </div>
-                            )}
-                            {/* Payment status */}
-                            {pmt && (
-                              <div className="flex items-center gap-1.5 text-xs">
-                                <span className="text-muted-foreground">Payment:</span>
-                                <span className={`font-semibold capitalize ${pmt.status === "approved" ? "text-green-600" : pmt.status === "rejected" ? "text-destructive" : "text-yellow-600"}`}>
-                                  {pmt.status}
-                                </span>
-                              </div>
-                            )}
-                            {!pmt && (
-                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground italic">
-                                <CreditCard className="w-3.5 h-3.5" /> No payment submitted yet
-                              </div>
-                            )}
-                          </div>
-
-                          {/* ── Screenshot ── */}
-                          {pmt?.screenshot_url && (
-                            <div className="border-t px-4 py-3 space-y-2">
-                              <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
-                                <ImageIcon className="w-3.5 h-3.5" /> Payment Screenshot
-                              </p>
-                              <div className="flex items-start gap-3">
-                                <button
-                                  onClick={() => setViewScreenshot(pmt.screenshot_url)}
-                                  className="group relative flex-shrink-0"
-                                  title="Click to view full size"
-                                >
-                                  <img
-                                    src={pmt.screenshot_url}
-                                    alt="Payment screenshot"
-                                    className="w-32 h-24 rounded-lg border object-cover group-hover:opacity-80 transition-opacity"
-                                  />
-                                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30 rounded-lg">
-                                    <ExternalLink className="w-5 h-5 text-white" />
-                                  </div>
-                                </button>
-                                <div className="space-y-1 text-xs text-muted-foreground">
-                                  <p>Screenshot submitted as proof of payment.</p>
-                                  <p className="text-[10px]">Submitted {formatDistanceToNow(new Date(pmt.created_at), { addSuffix: true })}</p>
-                                  <button
-                                    onClick={() => setViewScreenshot(pmt.screenshot_url)}
-                                    className="inline-flex items-center gap-1 text-primary hover:underline text-xs mt-1"
-                                  >
-                                    <ExternalLink className="w-3 h-3" /> View full size
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
           <TabsContent value="users" className="mt-4">
             <Card>
               <CardHeader className="pb-2">
@@ -2562,31 +2184,14 @@ export default function AdminPage() {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base flex items-center gap-2">
-                    <CreditCard className="w-4 h-4" /> Payment Settings
+                    <CreditCard className="w-4 h-4" /> Payment Methods
                   </CardTitle>
-                  <Button size="sm" onClick={() => { setPsLoaded(false); void fetchPaymentSettings(); }} variant="ghost" disabled={psLoading}>
-                    {psLoading ? "Loading…" : psLoaded ? "Reload" : "Load Settings"}
+                  <Button size="sm" onClick={() => { if (!payMethodsLoaded) void fetchPayMethods(); }} variant="ghost" disabled={payMethodsLoading}>
+                    {payMethodsLoading ? "Loading…" : "Refresh"}
                   </Button>
                 </div>
               </CardHeader>
-              {psLoaded && (
-                <CardContent className="space-y-5">
-                  {/* Plan Prices */}
-                  <div>
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Plan Pricing (USD)</p>
-                    <div className="grid grid-cols-3 gap-3">
-                      {([["Monthly", psMonthly, setPsMonthly], ["Yearly", psYearly, setPsYearly], ["Lifetime", psLifetime, setPsLifetime]] as const).map(([label, val, setter]) => (
-                        <div key={label} className="space-y-1">
-                          <Label className="text-xs">{label}</Label>
-                          <div className="relative">
-                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
-                            <Input className="pl-6 h-8 text-sm" type="number" min="0" step="0.01" value={val} onChange={e => setter(e.target.value)} />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
+              <CardContent className="space-y-5">
                   {/* Dynamic Payment Methods */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
@@ -2664,105 +2269,9 @@ export default function AdminPage() {
                     )}
                   </div>
 
-                  <Button onClick={() => void handleSavePaymentSettings()} disabled={psSaving} className="w-full">
-                    {psSaving ? "Saving…" : "Save Payment Settings"}
-                  </Button>
                 </CardContent>
-              )}
             </Card>
 
-            {/* Payment Requests */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <ImageIcon className="w-4 h-4" /> Payment Requests
-                  {communityPayments.filter(p => p.status === "pending").length > 0 && (
-                    <Badge variant="destructive" className="text-xs">{communityPayments.filter(p => p.status === "pending").length} pending</Badge>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {paymentsLoading ? (
-                  <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-20 w-full rounded-lg" />)}</div>
-                ) : communityPayments.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-10 text-sm">No payment submissions yet.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {communityPayments.map(payment => (
-                      <div key={payment.id} className="flex items-start justify-between gap-4 p-4 rounded-xl border bg-card">
-                        <div className="flex items-start gap-3 min-w-0">
-                          <Avatar className="w-9 h-9 flex-shrink-0">
-                            <AvatarImage src={payment.users?.avatar ?? undefined} />
-                            <AvatarFallback className="text-xs">{(payment.users?.name ?? "U").slice(0,2).toUpperCase()}</AvatarFallback>
-                          </Avatar>
-                          <div className="min-w-0">
-                            <p className="font-semibold text-sm">{payment.communities?.name ?? "Unknown Community"}</p>
-                            <p className="text-xs text-muted-foreground">{payment.users?.name} · {payment.users?.email}</p>
-                            <div className="flex items-center gap-2 mt-1 flex-wrap">
-                              <Badge variant="outline" className="text-[10px] capitalize px-1.5">{payment.plan}</Badge>
-                              {payment.payment_method && <Badge variant="outline" className="text-[10px] capitalize px-1.5">{payment.payment_method}</Badge>}
-                              <Badge variant={payment.status === "approved" ? "default" : payment.status === "rejected" ? "destructive" : "secondary"}
-                                className="text-[10px] capitalize px-1.5">
-                                {payment.status}
-                              </Badge>
-                              <span className="text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(payment.created_at), { addSuffix: true })}</span>
-                            </div>
-                            <button
-                              onClick={() => setViewScreenshot(payment.screenshot_url)}
-                              className="mt-1.5 text-xs text-primary hover:underline flex items-center gap-1"
-                            >
-                              <ImageIcon className="w-3 h-3" />View Screenshot
-                            </button>
-                          </div>
-                        </div>
-                        {payment.status === "pending" && (
-                          <div className="flex flex-col gap-2 flex-shrink-0 items-end">
-                            <div className="flex gap-2">
-                              <Button size="sm" variant="outline"
-                                className="text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-950/30 h-7 text-xs"
-                                disabled={actioningPaymentId === payment.id}
-                                onClick={() => void handlePaymentAction(payment, "approved")}
-                              >
-                                <CheckCircle className="w-3 h-3 mr-1" />Approve
-                              </Button>
-                              <Button size="sm" variant="outline"
-                                className="text-destructive border-destructive/20 hover:bg-destructive/5 h-7 text-xs"
-                                disabled={actioningPaymentId === payment.id}
-                                onClick={() => {
-                                  if (rejectingPaymentId === payment.id) {
-                                    setRejectingPaymentId(null); setRejectionReason("");
-                                  } else {
-                                    setRejectingPaymentId(payment.id); setRejectionReason("");
-                                  }
-                                }}
-                              >
-                                <XCircle className="w-3 h-3 mr-1" />Reject
-                              </Button>
-                            </div>
-                            {rejectingPaymentId === payment.id && (
-                              <div className="flex flex-col gap-1.5 w-56">
-                                <Input
-                                  className="h-7 text-xs"
-                                  placeholder="Reason for rejection (optional)"
-                                  value={rejectionReason}
-                                  onChange={e => setRejectionReason(e.target.value)}
-                                />
-                                <Button size="sm" variant="destructive" className="h-7 text-xs w-full"
-                                  disabled={actioningPaymentId === payment.id}
-                                  onClick={() => void handlePaymentAction(payment, "rejected", rejectionReason.trim() || undefined)}
-                                >
-                                  {actioningPaymentId === payment.id ? "Rejecting…" : "Confirm Reject"}
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
           </TabsContent>
 
           <TabsContent value="activity-log" className="mt-4">
