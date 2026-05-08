@@ -73,7 +73,7 @@ const NAV_ITEMS: { section: Section; label: string; icon: React.ElementType }[] 
   { section: "vip-posts",  label: "VIP Posts",         icon: Crown },
   { section: "posts",      label: "Community Posts",   icon: Users },
   { section: "messages",   label: "Messages",          icon: MessageSquare },
-  { section: "members",    label: "Members",           icon: UserCheck },
+  { section: "members",    label: "My Approval Panel",  icon: UserCheck },
   { section: "profile",    label: "Profile",           icon: User },
 ];
 
@@ -989,7 +989,7 @@ export default function CommunityDashboardPage() {
         return (
           <div className="p-6 space-y-6 max-w-3xl">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold flex items-center gap-2"><UserCheck className="w-5 h-5 text-primary" /> Members</h2>
+              <h2 className="text-lg font-bold flex items-center gap-2"><UserCheck className="w-5 h-5 text-primary" /> My Approval Panel</h2>
               <Button size="sm" variant="outline" onClick={copyInviteLink}>
                 <Copy className="w-3.5 h-3.5 mr-1.5" /> Copy Invite Link
               </Button>
