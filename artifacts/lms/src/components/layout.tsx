@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { NotificationBell } from "@/components/notification-bell";
 import {
   LayoutDashboard, BookOpen, Users, User, LogOut, Sun, Moon, Palette, Shield, Menu,
-  GraduationCap, Crown, MessageSquare, PanelLeftClose, PanelLeftOpen, Wrench, Users2, Globe,
+  GraduationCap, Crown, MessageSquare, PanelLeftClose, PanelLeftOpen, Wrench, Users2, Globe, BookmarkCheck,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -30,8 +30,16 @@ const navItems = [
   { href: "/profile", label: "Profile", icon: User },
 ];
 
+// Limited nav for users who joined via a community invite link
+const communityNavItems = [
+  { href: "/communities", label: "Communities", icon: Globe },
+  { href: "/my-communities", label: "My Communities", icon: BookmarkCheck },
+  { href: "/create-community", label: "Create Community", icon: Users2 },
+  { href: "/profile", label: "Profile", icon: User },
+];
+
 export function Layout({ children }: { children: React.ReactNode }) {
-  const { user, logout, token } = useAuth();
+  const { user, logout, token, isCommunityMember } = useAuth();
   const { theme, setTheme } = useTheme();
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -102,7 +110,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1">
-        {navItems.map(({ href, label, icon: Icon }) => {
+        {(isCommunityMember ? communityNavItems : navItems).map(({ href, label, icon: Icon }) => {
           const isActive = location === href || location.startsWith(href + "/");
           const showBadge = label === "Messages" && unreadCount > 0;
           const showPaid  = label === "Create Community";

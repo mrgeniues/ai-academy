@@ -27,6 +27,7 @@ import CommunityPaymentPage from "@/pages/community-payment";
 import CommunityDashboardPage from "@/pages/community-dashboard";
 import CommunityJoinPage from "@/pages/community-join";
 import CommunitiesDirectoryPage from "@/pages/communities-directory";
+import MyCommunitiesPage from "@/pages/my-communities";
 import JoinPage from "@/pages/join";
 import NotFound from "@/pages/not-found";
 import { WhatsAppButton } from "@/components/whatsapp-button";
@@ -196,6 +197,9 @@ function Router() {
         </Route>
         <Route path="/communities">
           <ProtectedRoute component={CommunitiesDirectoryPage} />
+        </Route>
+        <Route path="/my-communities">
+          <ProtectedRoute component={MyCommunitiesPage} />
         </Route>
         <Route path="/create-community">
           <ProtectedRoute component={CreateCommunityPage} />

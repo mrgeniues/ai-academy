@@ -32,6 +32,44 @@ async function getMembership(communityId: number, userId: number) {
   };
 }
 
+// ── GET /api/communities/my ── communities current user owns or is approved in ─
+router.get("/communities/my", requireAuth, async (req, res): Promise<void> => {
+  // Member community_ids where approved
+  const { data: memberships } = await supabase
+    .from("community_members")
+    .select("community_id")
+    .eq("user_id", req.userId!)
+    .eq("status", "approved");
+
+  const memberIds = (memberships ?? []).map(m => m.community_id as number);
+
+  // Build OR filter: owner OR approved member
+  let query = supabase
+    .from("communities")
+    .select("id, name, description, owner_id, invite_code")
+    .eq("status", "approved");
+
+  if (memberIds.length > 0) {
+    query = query.or(`owner_id.eq.${req.userId!},id.in.(${memberIds.join(",")})`);
+  } else {
+    query = query.eq("owner_id", req.userId!);
+  }
+
+  const { data: communities, error } = await query.order("created_at", { ascending: false });
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  if (!communities || communities.length === 0) { res.json([]); return; }
+
+  const ownerIds = [...new Set(communities.map(c => c.owner_id))];
+  const { data: owners } = await supabase.from("users").select("id, name, avatar").in("id", ownerIds);
+  const ownerMap = Object.fromEntries((owners ?? []).map(o => [o.id, o]));
+
+  res.json(communities.map(c => ({
+    ...c,
+    owner: ownerMap[c.owner_id] ?? null,
+    is_owner: c.owner_id === req.userId,
+  })));
+});
+
 // ── GET /api/communities/directory ── public listing of approved communities ──
 router.get("/communities/directory", requireAuth, async (req, res): Promise<void> => {
   const { data: communities, error } = await supabase

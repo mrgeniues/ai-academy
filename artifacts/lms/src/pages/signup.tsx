@@ -66,6 +66,10 @@ export default function SignupPage() {
       const json = await res.json() as { token?: string; error?: string };
       if (!res.ok) throw new Error(json.error ?? "Failed to create account");
 
+      // Tag user as community-member if they signed up via an invite link
+      if (inviteCode) {
+        localStorage.setItem("lms_join_source", "community");
+      }
       login(json.token!);
       // redirect handled by useEffect above
     } catch (err: unknown) {

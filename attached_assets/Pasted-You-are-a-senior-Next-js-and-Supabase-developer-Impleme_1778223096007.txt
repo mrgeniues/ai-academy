@@ -1,0 +1,120 @@
+You are a senior Next.js and Supabase developer.
+
+Implement a LIMITED SIDEBAR ACCESS SYSTEM for users who join through COMMUNITY INVITE LINKS.
+
+IMPORTANT:
+
+* Do NOT modify UI design
+* Do NOT add extra features
+* Do NOT change existing architecture
+* ONLY modify sidebar visibility logic
+* Keep everything else unchanged
+
+=====================================
+GOAL:
+
+Users who join through a COMMUNITY INVITE LINK should see ONLY community-related features.
+
+They should NOT see the full LMS sidebar.
+
+=====================================
+STEP 1: DETECT COMMUNITY-JOIN USERS
+
+Detect users who signed up/joined through:
+
+/community/join/[invite_code]
+
+Mark them as:
+
+community_member = true
+
+=====================================
+STEP 2: LIMITED SIDEBAR
+
+For COMMUNITY MEMBERS:
+
+ONLY show these sidebar options:
+
+1. Communities
+   → Show all approved public communities
+
+2. My Joined Communities
+   → Show communities user joined and got approved in
+
+3. Create Community (PAID)
+   → Paid community creation option
+
+4. Profile
+
+=====================================
+STEP 3: HIDE DEFAULT LMS FEATURES
+
+For COMMUNITY MEMBERS:
+
+HIDE these options completely:
+
+* Dashboard
+* Courses
+* AI Tools
+* VIP Posts
+* Community
+* Messages
+* Admin
+
+=====================================
+STEP 4: MY JOINED COMMUNITIES PAGE
+
+Inside:
+
+"My Joined Communities"
+
+Show:
+
+* Communities approved for this user
+* Clicking opens that community
+
+=====================================
+STEP 5: COMMUNITY CONTENT ACCESS
+
+Inside joined community:
+
+User can access ONLY:
+
+* Community posts
+* Courses
+* Tools
+* Chat
+
+based on what community owner added
+
+=====================================
+STEP 6: NORMAL WEBSITE USERS
+
+Users who joined from main website:
+
+→ Keep existing full LMS sidebar
+
+Do NOT affect them.
+
+=====================================
+STEP 7: CREATE COMMUNITY ACCESS
+
+Even community members should still see:
+
+"Create Community (PAID)"
+
+=====================================
+STEP 8: SECURITY
+
+* Validate joined community access
+* Prevent hidden routes access
+* Protect APIs
+
+=====================================
+OUTPUT:
+
+* Role-based sidebar rendering
+* Community-member UI restriction
+* My Joined Communities page logic
+
+Ensure no extra changes are made.
