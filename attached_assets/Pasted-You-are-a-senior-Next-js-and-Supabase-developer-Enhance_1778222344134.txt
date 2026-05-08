@@ -1,0 +1,175 @@
+You are a senior Next.js and Supabase developer.
+
+Enhance the AUTH + COMMUNITY ACCESS FLOW with a GLOBAL UNIQUE INVITE URL system and COMMUNITY DIRECTORY separation.
+
+IMPORTANT:
+
+* Do NOT modify existing UI design
+* Do NOT remove any features
+* Do NOT change existing architecture
+* ONLY add the required routing and visibility logic
+* Keep everything else unchanged
+
+=====================================
+GOAL:
+
+There should be TWO different signup flows:
+
+1. Signup via COMMUNITY INVITE LINK
+2. Signup via MAIN WEBSITE DOMAIN
+
+Both must behave differently.
+
+=====================================
+STEP 1: GLOBAL WEBSITE INVITE URL
+
+Create ONE global unique invite URL.
+
+It must auto use current domain dynamically.
+
+Example:
+
+https://yourdomain.com/join
+
+Do NOT hardcode domain.
+
+Use:
+window.location.origin
+
+=====================================
+STEP 2: GLOBAL INVITE FLOW
+
+When user signs up using:
+
+/join
+
+Then after signup/login:
+
+→ User should get NORMAL PLATFORM ACCESS
+
+Show:
+
+* Dashboard
+* Courses
+* AI Tools
+* VIP Posts
+* Community
+* Messages
+* Profile
+
+=====================================
+STEP 3: ACCOUNT APPROVAL FLOW
+
+If user joins using:
+
+MAIN WEBSITE URL
+
+→ Approval goes to MAIN WEB ADMIN
+
+=====================================
+STEP 4: CREATE COMMUNITY FEATURE
+
+Users who joined normally from website:
+
+Must see:
+
+"Create Community (PAID)"
+
+=====================================
+STEP 5: NEW SIDEBAR OPTION
+
+Add NEW separate sidebar option:
+
+"Communities"
+
+IMPORTANT:
+
+This is DIFFERENT from:
+"Create Community"
+
+=====================================
+STEP 6: COMMUNITIES DIRECTORY PAGE
+
+Inside "Communities":
+
+Show all APPROVED paid communities.
+
+Show:
+
+* Community Name
+* Description
+* Owner
+* Join button
+
+=====================================
+STEP 7: COMMUNITY JOIN FLOW
+
+When user clicks a community:
+
+→ Redirect to its invite/join page
+
+Example:
+
+/community/join/[invite_code]
+
+=====================================
+STEP 8: COMMUNITY APPROVAL FLOW
+
+If user joins via community invite link:
+
+→ Approval request goes ONLY to COMMUNITY OWNER
+
+NOT main admin
+
+=====================================
+STEP 9: COMMUNITY OWNER FEATURES
+
+After approval:
+
+User gets access ONLY to that community’s:
+
+* Courses
+* AI Tools
+* VIP Posts
+* Community Posts
+* Messages
+
+=====================================
+STEP 10: DATA ISOLATION
+
+Community data must remain isolated by:
+
+community_id
+
+=====================================
+STEP 11: ACCESS RULES
+
+MAIN WEBSITE USERS:
+
+* Can access platform normally
+* Can create paid communities
+* Can browse communities
+
+COMMUNITY INVITE USERS:
+
+* Access only after community owner approval
+* Community-scoped access
+
+=====================================
+STEP 12: SECURITY
+
+* Validate invite codes
+* Validate approval status
+* Protect routes
+* Prevent data leaks
+
+=====================================
+OUTPUT:
+
+* Global join URL system
+* Communities directory
+* Separate signup flows
+* Correct approval routing
+* Sidebar updates
+
+Ensure no extra changes are made.

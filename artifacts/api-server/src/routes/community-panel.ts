@@ -32,6 +32,49 @@ async function getMembership(communityId: number, userId: number) {
   };
 }
 
+// ── GET /api/communities/directory ── public listing of approved communities ──
+router.get("/communities/directory", requireAuth, async (req, res): Promise<void> => {
+  const { data: communities, error } = await supabase
+    .from("communities")
+    .select("id, name, description, owner_id, invite_code, created_at")
+    .eq("status", "approved")
+    .order("created_at", { ascending: false });
+
+  if (error) { res.status(500).json({ error: error.message }); return; }
+
+  const rows = communities ?? [];
+
+  // Lazy-generate missing invite codes
+  await Promise.all(rows.map(async (c) => {
+    if (!(c as Record<string, unknown>)["invite_code"]) {
+      const code = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+      await supabase.from("communities").update({ invite_code: code }).eq("id", c.id);
+      (c as Record<string, unknown>)["invite_code"] = code;
+    }
+  }));
+
+  // Fetch owner names + member counts in parallel
+  const ownerIds = [...new Set(rows.map(c => c.owner_id))];
+  const { data: owners } = await supabase.from("users").select("id, name, avatar").in("id", ownerIds);
+  const ownerMap = Object.fromEntries((owners ?? []).map(o => [o.id, o]));
+
+  const result = await Promise.all(rows.map(async (c) => {
+    const { count } = await supabase
+      .from("community_members")
+      .select("id", { count: "exact", head: true })
+      .eq("community_id", c.id)
+      .eq("status", "approved");
+    return {
+      ...c,
+      owner: ownerMap[c.owner_id] ?? null,
+      member_count: (count ?? 0) + 1,
+      is_owner: c.owner_id === req.userId,
+    };
+  }));
+
+  res.json(result);
+});
+
 // ── GET /api/communities/:id/panel ── community details + my membership ─────
 router.get("/communities/:id/panel", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(req.params["id"] as string, 10);

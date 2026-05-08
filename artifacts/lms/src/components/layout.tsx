@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { NotificationBell } from "@/components/notification-bell";
 import {
   LayoutDashboard, BookOpen, Users, User, LogOut, Sun, Moon, Palette, Shield, Menu,
-  GraduationCap, Crown, MessageSquare, PanelLeftClose, PanelLeftOpen, Wrench, Users2,
+  GraduationCap, Crown, MessageSquare, PanelLeftClose, PanelLeftOpen, Wrench, Users2, Globe,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -25,6 +25,7 @@ const navItems = [
   { href: "/vip-posts", label: "VIP Posts", icon: Crown },
   { href: "/community", label: "Community", icon: Users },
   { href: "/messages", label: "Messages", icon: MessageSquare },
+  { href: "/communities", label: "Communities", icon: Globe },
   { href: "/create-community", label: "Create Community", icon: Users2 },
   { href: "/profile", label: "Profile", icon: User },
 ];
