@@ -140,6 +140,16 @@ export default function CommunityDashboardPage() {
   const [ccLessons, setCcLessons] = useState<LessonDraft[]>([{ title: "", description: "", videoUrl: "" }]);
   const [creatingCourse, setCreatingCourse] = useState(false);
   const ccImageInputRef = useRef<HTMLInputElement>(null);
+  // Create tool dialog state
+  const [ctDialogOpen, setCtDialogOpen] = useState(false);
+  const [ctTitle, setCtTitle] = useState("");
+  const [ctDescription, setCtDescription] = useState("");
+  const [ctToolUrl, setCtToolUrl] = useState("");
+  const [ctVideoUrl, setCtVideoUrl] = useState("");
+  const [ctImageFile, setCtImageFile] = useState<File | null>(null);
+  const [ctImagePreview, setCtImagePreview] = useState<string | null>(null);
+  const [creatingTool, setCreatingTool] = useState(false);
+  const ctImageInputRef = useRef<HTMLInputElement>(null);
   // Course enrollment requests (for My Approval Panel)
   const [courseEnrollments, setCourseEnrollments] = useState<CourseEnrollment[]>([]);
   const [actingEnrollment, setActingEnrollment] = useState<number | null>(null);
@@ -356,6 +366,52 @@ export default function CommunityDashboardPage() {
     } catch (err) {
       toast({ title: (err as Error).message ?? "Failed", variant: "destructive" });
     } finally { setCreatingCourse(false); }
+  };
+
+  const resetCreateToolDialog = () => {
+    setCtTitle(""); setCtDescription(""); setCtToolUrl(""); setCtVideoUrl("");
+    setCtImageFile(null); setCtImagePreview(null);
+    if (ctImageInputRef.current) ctImageInputRef.current.value = "";
+  };
+
+  const createTool = async () => {
+    if (!ctTitle.trim()) { toast({ title: "Title is required", variant: "destructive" }); return; }
+    setCreatingTool(true);
+    try {
+      let imageUrl: string | null = null;
+      if (ctImageFile) {
+        const fd = new FormData();
+        fd.append("file", ctImageFile);
+        const uploadResp = await fetch(`${API}/upload`, { method: "POST", headers: authH(token), body: fd });
+        if (!uploadResp.ok) {
+          const e = await uploadResp.json().catch(() => ({})) as { error?: string };
+          throw new Error(e.error ?? "Image upload failed");
+        }
+        const uploadData = await uploadResp.json() as { url: string };
+        imageUrl = uploadData.url;
+      }
+      const res = await fetch(`${API}/communities/${communityId}/tools/create`, {
+        method: "POST", headers: jsonH(token),
+        body: JSON.stringify({
+          title: ctTitle.trim(),
+          description: ctDescription.trim() || null,
+          imageUrl,
+          videoUrl: ctVideoUrl.trim() || null,
+          toolUrl: ctToolUrl.trim() || null,
+        }),
+      });
+      if (res.ok) {
+        resetCreateToolDialog();
+        setCtDialogOpen(false);
+        fetchTools();
+        toast({ title: "AI Tool created and linked to your community!" });
+      } else {
+        const d = await res.json() as { error?: string };
+        throw new Error(d.error ?? "Failed to create tool");
+      }
+    } catch (err) {
+      toast({ title: (err as Error).message ?? "Failed", variant: "destructive" });
+    } finally { setCreatingTool(false); }
   };
 
   const handleCourseEnrollmentAction = async (enrollmentId: number, action: "approve" | "reject") => {
@@ -881,8 +937,72 @@ export default function CommunityDashboardPage() {
           <div className="p-6 space-y-6 max-w-4xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold flex items-center gap-2"><Wrench className="w-5 h-5 text-primary" /> AI Tools</h2>
-              <span className="text-sm text-muted-foreground">{tools.length} linked</span>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground">{tools.length} linked</span>
+                {community.isOwner && (
+                  <Button size="sm" onClick={() => setCtDialogOpen(true)}>
+                    <Plus className="w-3.5 h-3.5 mr-1.5" /> Create Tool
+                  </Button>
+                )}
+              </div>
             </div>
+
+            {/* Create Tool Dialog */}
+            <Dialog open={ctDialogOpen} onOpenChange={(open) => { setCtDialogOpen(open); if (!open) resetCreateToolDialog(); }}>
+              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2"><Wrench className="w-4 h-4 text-primary" /> Add New AI Tool</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
+                  <div>
+                    <Label>Title <span className="text-destructive">*</span></Label>
+                    <Input className="mt-1" placeholder="e.g. ChatGPT" value={ctTitle} onChange={e => setCtTitle(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Description</Label>
+                    <Textarea className="mt-1" placeholder="What this tool does…" rows={3} value={ctDescription} onChange={e => setCtDescription(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Tool URL</Label>
+                    <Input className="mt-1" placeholder="https://chat.openai.com" value={ctToolUrl} onChange={e => setCtToolUrl(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Preview Video URL <span className="text-xs text-muted-foreground font-normal">(YouTube)</span></Label>
+                    <Input className="mt-1" placeholder="https://youtube.com/watch?v=..." value={ctVideoUrl} onChange={e => setCtVideoUrl(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Thumbnail Image</Label>
+                    <input ref={ctImageInputRef} type="file" accept="image/*" className="hidden" onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setCtImageFile(file);
+                      setCtImagePreview(URL.createObjectURL(file));
+                    }} />
+                    {ctImagePreview ? (
+                      <div className="mt-1 relative w-full h-40 rounded-lg overflow-hidden border">
+                        <img src={ctImagePreview} alt="Preview" className="w-full h-full object-cover" />
+                        <button type="button" onClick={() => { setCtImageFile(null); setCtImagePreview(null); if (ctImageInputRef.current) ctImageInputRef.current.value = ""; }}
+                          className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button type="button" onClick={() => ctImageInputRef.current?.click()}
+                        className="mt-1 w-full h-36 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors">
+                        <ImageIcon className="w-6 h-6" />
+                        <span className="text-sm">Click to upload image</span>
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button variant="outline" className="flex-1" onClick={() => { setCtDialogOpen(false); resetCreateToolDialog(); }}>Cancel</Button>
+                    <Button className="flex-1" onClick={createTool} disabled={creatingTool || !ctTitle.trim()}>
+                      {creatingTool ? <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />Creating…</> : "Create Tool"}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             {/* Linked tools */}
             {tools.length === 0 ? (

@@ -382,6 +382,41 @@ router.get("/communities/:id/tools", requireAuth, async (req, res): Promise<void
   res.json(data ?? []);
 });
 
+// ── POST /api/communities/:id/tools/create ── create + link new tool ────────
+router.post("/communities/:id/tools/create", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { community, isOwner } = await getMembership(id, req.userId!);
+  if (!community || community.status !== "approved") { res.status(404).json({ error: "Not found" }); return; }
+  if (!isOwner) { res.status(403).json({ error: "Owner only" }); return; }
+
+  const parsed = z.object({
+    title: z.string().min(1),
+    description: z.string().nullish(),
+    imageUrl: z.string().url().nullish(),
+    videoUrl: z.string().url().nullish(),
+    toolUrl: z.string().url().nullish(),
+  }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "title required" }); return; }
+
+  const { title, description, imageUrl, videoUrl, toolUrl } = parsed.data;
+
+  // Create tool
+  const { data: tool, error: toolErr } = await supabase
+    .from("tools")
+    .insert({ title: title.trim(), description: description ?? null, image_url: imageUrl ?? null, video_url: videoUrl ?? null, tool_url: toolUrl ?? null })
+    .select("id, title, description, image_url, video_url, tool_url")
+    .single();
+
+  if (toolErr || !tool) { res.status(500).json({ error: toolErr?.message ?? "Failed to create tool" }); return; }
+
+  // Link to community
+  await supabase.from("community_tools").insert({ community_id: id, tool_id: tool.id });
+
+  res.status(201).json({ id: tool.id, title: tool.title, description: tool.description ?? null, image_url: tool.image_url ?? null, video_url: tool.video_url ?? null, tool_url: tool.tool_url ?? null });
+});
+
 // ── POST /api/communities/:id/tools ── add tool (owner only) ─────────────────
 router.post("/communities/:id/tools", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(req.params["id"] as string, 10);
