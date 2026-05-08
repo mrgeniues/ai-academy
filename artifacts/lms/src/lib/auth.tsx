@@ -11,7 +11,6 @@ interface AuthContextType {
   user: User | null | undefined;
   token: string | null;
   isLoading: boolean;
-  isCommunityMember: boolean;
   login: (token: string) => void;
   logout: () => void;
 }
@@ -20,9 +19,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem("lms_token"));
-  const [isCommunityMember, setIsCommunityMember] = useState<boolean>(
-    () => localStorage.getItem("lms_join_source") === "community"
-  );
   const [, setLocation] = useLocation();
   const { setTheme } = useTheme();
   const lastAppliedTheme = useRef<string | null>(null);
@@ -49,9 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("lms_token", newToken);
     setAuthTokenGetter(() => newToken);
     setToken(newToken);
-    const isCM = localStorage.getItem("lms_join_source") === "community";
-    setIsCommunityMember(isCM);
-    setLocation(isCM ? "/communities" : "/dashboard");
+    setLocation("/dashboard");
   };
 
   const logout = () => {
@@ -59,7 +53,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAuthTokenGetter(null);
     setToken(null);
     lastAppliedTheme.current = null;
-    // preserve lms_join_source so community member status survives logout/re-login
     setLocation("/login");
   };
 
@@ -70,7 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, isCommunityMember, login, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

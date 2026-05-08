@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { NotificationBell } from "@/components/notification-bell";
 import {
   LayoutDashboard, BookOpen, Users, User, LogOut, Sun, Moon, Palette, Shield, Menu,
-  GraduationCap, Crown, MessageSquare, PanelLeftClose, PanelLeftOpen, Wrench, Users2, Globe, BookmarkCheck,
+  GraduationCap, Crown, MessageSquare, PanelLeftClose, PanelLeftOpen, Wrench,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -25,21 +25,11 @@ const navItems = [
   { href: "/vip-posts", label: "VIP Posts", icon: Crown },
   { href: "/community", label: "Community", icon: Users },
   { href: "/messages", label: "Messages", icon: MessageSquare },
-  { href: "/communities", label: "Communities", icon: Globe },
-  { href: "/create-community", label: "Create Community", icon: Users2 },
-  { href: "/profile", label: "Profile", icon: User },
-];
-
-// Limited nav for users who joined via a community invite link
-const communityNavItems = [
-  { href: "/communities", label: "Communities", icon: Globe },
-  { href: "/my-communities", label: "My Communities", icon: BookmarkCheck },
-  { href: "/create-community", label: "Create Community", icon: Users2 },
   { href: "/profile", label: "Profile", icon: User },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const { user, logout, token, isCommunityMember } = useAuth();
+  const { user, logout, token } = useAuth();
   const { theme, setTheme } = useTheme();
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -110,10 +100,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1">
-        {(isCommunityMember ? communityNavItems : navItems).map(({ href, label, icon: Icon }) => {
+        {navItems.map(({ href, label, icon: Icon }) => {
           const isActive = location === href || location.startsWith(href + "/");
           const showBadge = label === "Messages" && unreadCount > 0;
-          const showPaid  = label === "Create Community";
           return (
             <Link
               key={href}
@@ -134,16 +123,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   isActive ? "bg-white/25 text-white" : "bg-primary text-white"
                 )}>
                   {unreadCount > 99 ? "99+" : unreadCount}
-                </span>
-              )}
-              {showPaid && (
-                <span className={cn(
-                  "ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none",
-                  isActive
-                    ? "bg-white/20 text-white"
-                    : "bg-green-500/15 text-green-500 dark:text-green-400"
-                )}>
-                  Paid
                 </span>
               )}
             </Link>

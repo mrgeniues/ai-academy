@@ -14,12 +14,6 @@ import maintenanceRouter from "./maintenance";
 import toolsRouter from "./tools";
 import settingsRouter from "./settings";
 import adminActionsRouter from "./admin-actions";
-import communitiesRouter from "./communities";
-import communityPanelRouter from "./community-panel";
-import communityPaymentsRouter from "./community-payments";
-import plansRouter from "./plans";
-import couponsRouter from "./coupons";
-import paymentMethodsRouter from "./payment-methods";
 import trackerRouter from "./tracker";
 
 const router: IRouter = Router();
@@ -39,12 +33,6 @@ router.use(maintenanceRouter);
 router.use(toolsRouter);
 router.use(settingsRouter);
 router.use(adminActionsRouter);
-router.use(communitiesRouter);
-router.use(communityPanelRouter);
-router.use(communityPaymentsRouter);
-router.use(plansRouter);
-router.use(couponsRouter);
-router.use(paymentMethodsRouter);
 router.use(trackerRouter);
 
 export default router;

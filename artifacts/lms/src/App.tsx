@@ -21,14 +21,6 @@ import MaintenancePage from "@/pages/maintenance";
 import AiToolsPage from "@/pages/ai-tools";
 import PostDetailPage from "@/pages/post-detail";
 import ToolDetailPage from "@/pages/tool-detail";
-import CreateCommunityPage from "@/pages/create-community";
-import CommunityPanelPage from "@/pages/community-panel";
-import CommunityPaymentPage from "@/pages/community-payment";
-import CommunityDashboardPage from "@/pages/community-dashboard";
-import CommunityJoinPage from "@/pages/community-join";
-import CommunitiesDirectoryPage from "@/pages/communities-directory";
-import MyCommunitiesPage from "@/pages/my-communities";
-import JoinPage from "@/pages/join";
 import NotFound from "@/pages/not-found";
 import { WhatsAppButton } from "@/components/whatsapp-button";
 import { useEffect, useRef } from "react";
@@ -183,28 +175,6 @@ function Router() {
         <Route path="/tool/:id">
           <ProtectedRoute component={ToolDetailPage} />
         </Route>
-        <Route path="/community/:id">
-          <ProtectedRoute component={CommunityPanelPage} />
-        </Route>
-        <Route path="/community-payment/:id">
-          <ProtectedRoute component={CommunityPaymentPage} />
-        </Route>
-        <Route path="/community-dashboard/:id">
-          <ProtectedRoute component={CommunityDashboardPage} />
-        </Route>
-        <Route path="/community/join/:code">
-          <ProtectedRoute component={CommunityJoinPage} />
-        </Route>
-        <Route path="/communities">
-          <ProtectedRoute component={CommunitiesDirectoryPage} />
-        </Route>
-        <Route path="/my-communities">
-          <ProtectedRoute component={MyCommunitiesPage} />
-        </Route>
-        <Route path="/create-community">
-          <ProtectedRoute component={CreateCommunityPage} />
-        </Route>
-        <Route path="/join" component={JoinPage} />
         <Route component={NotFound} />
       </Switch>
     </MaintenanceGuard>

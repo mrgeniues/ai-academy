@@ -6,7 +6,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
-import { GraduationCap, Eye, EyeOff, Users2 } from "lucide-react";
+import { GraduationCap, Eye, EyeOff } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -30,21 +30,11 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Read invite code from ?invite= query param
-  const inviteCode = typeof window !== "undefined"
-    ? new URLSearchParams(window.location.search).get("invite") ?? ""
-    : "";
-
   useEffect(() => {
     if (!isLoading && user) {
-      // If they landed here via invite link, send them back to join page
-      if (inviteCode) {
-        setLocation(`/community/join/${encodeURIComponent(inviteCode)}`);
-      } else {
-        setLocation("/dashboard");
-      }
+      setLocation("/dashboard");
     }
-  }, [user, isLoading, setLocation, inviteCode]);
+  }, [user, isLoading, setLocation]);
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -54,22 +44,14 @@ export default function SignupPage() {
   const onSubmit = async (data: FormData) => {
     setSubmitting(true);
     try {
-      // Call API directly so we can include invite_code
-      const body: Record<string, string> = { email: data.email, password: data.password, name: data.name };
-      if (inviteCode) body["invite_code"] = inviteCode;
-
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ email: data.email, password: data.password, name: data.name }),
       });
       const json = await res.json() as { token?: string; error?: string };
       if (!res.ok) throw new Error(json.error ?? "Failed to create account");
 
-      // Tag user as community-member if they signed up via an invite link
-      if (inviteCode) {
-        localStorage.setItem("lms_join_source", "community");
-      }
       login(json.token!);
       // redirect handled by useEffect above
     } catch (err: unknown) {
