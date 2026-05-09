@@ -71,3 +71,9 @@ id = "N-fR5wDovH9piL7zrHdxi"
 uri = "file://ai-academy-hostinger.zip"
 type = "unspecified"
 title = "AI Academy — Hostinger ZIP (1.4MB, verified OK)"
+
+[[outputs]]
+id = "mm2MghK6oM-1B8QLPiFps"
+uri = "file://artifacts/lms/public/learnhub-deploy.zip"
+type = "unspecified"
+title = "learnhub-deploy.zip — Hostinger Production Package"
