@@ -77,3 +77,9 @@ id = "mm2MghK6oM-1B8QLPiFps"
 uri = "file://artifacts/lms/public/learnhub-deploy.zip"
 type = "unspecified"
 title = "learnhub-deploy.zip — Hostinger Production Package"
+
+[[outputs]]
+id = "_ttHkybfju7tmmQEiOvAf"
+uri = "file://artifacts/lms/public/supabase-setup.txt"
+type = "text"
+title = "supabase-setup.sql — Open and copy ALL contents into Supabase SQL Editor"
