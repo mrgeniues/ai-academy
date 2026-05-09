@@ -422,12 +422,14 @@ VALUES ('media', 'media', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- Allow public read access on the media bucket
-CREATE POLICY IF NOT EXISTS "Public media read"
+DROP POLICY IF EXISTS "Public media read" ON storage.objects;
+CREATE POLICY "Public media read"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'media');
 
 -- Allow authenticated uploads to the media bucket
-CREATE POLICY IF NOT EXISTS "Authenticated media upload"
+DROP POLICY IF EXISTS "Authenticated media upload" ON storage.objects;
+CREATE POLICY "Authenticated media upload"
   ON storage.objects FOR INSERT
   WITH CHECK (bucket_id = 'media');
 
