@@ -4,7 +4,7 @@
   "license": "MIT",
   "scripts": {
     "preinstall": "sh -c 'rm -f package-lock.json yarn.lock'",
-    "build": "npm install -g pnpm && pnpm install --ignore-scripts",
+    "build": "pnpm install --ignore-scripts",
     "build:prod": "BASE_PATH=/ pnpm --filter @workspace/lms run build && pnpm --filter @workspace/api-server run build",
     "start:prod": "NODE_ENV=production pnpm --filter @workspace/api-server run start",
     "start": "NODE_ENV=production node --enable-source-maps ./artifacts/api-server/dist/index.mjs",
