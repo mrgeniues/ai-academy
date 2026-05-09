@@ -14,7 +14,7 @@
   "private": true,
   "pnpm": {
     "onlyBuiltDependencies": ["@swc/core", "esbuild", "msw", "unrs-resolver"],
-    "allowedScripts": ["prepare", "postinstall"]
+    "allowedScripts": ["prepare", "postinstall", "build", "esbuild"]
   },
   "devDependencies": {
     "typescript": "~5.9.2",

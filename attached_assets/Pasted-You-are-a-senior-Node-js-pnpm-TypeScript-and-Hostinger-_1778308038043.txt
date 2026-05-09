@@ -1,0 +1,122 @@
+You are a senior Node.js, pnpm, TypeScript and Hostinger deployment engineer.
+
+Fix my deployment issue completely.
+
+CURRENT ISSUE:
+
+Hostinger/Replit deployment fails because pnpm blocks esbuild build scripts.
+
+Current errors include:
+
+* ERR_PNPM_IGNORED_BUILDS
+* esbuild build scripts blocked
+* TypeScript build failing
+* deployment failing during install/build
+
+=====================================
+IMPORTANT RULES
+
+* Do NOT modify UI
+* Do NOT remove features
+* Do NOT modify auth system
+* Do NOT modify database
+* ONLY fix deployment/build/package configuration
+
+=====================================
+STEP 1 — FIX package.json
+
+Update the pnpm configuration EXACTLY to this:
+
+```json id="s9jlwm"
+"pnpm": {
+  "onlyBuiltDependencies": [
+    "@swc/core",
+    "esbuild",
+    "msw",
+    "unrs-resolver"
+  ],
+  "allowedScripts": [
+    "prepare",
+    "postinstall",
+    "build",
+    "esbuild"
+  ]
+}
+```
+
+Ensure:
+
+* valid JSON
+* no duplicate pnpm block
+* no syntax issues
+
+=====================================
+STEP 2 — CREATE/UPDATE .npmrc
+
+Ensure `.npmrc` contains:
+
+```ini id="6q2rmn"
+ignore-scripts=false
+script-shell=/bin/bash
+```
+
+=====================================
+STEP 3 — CLEAN PROJECT
+
+Delete completely:
+
+* node_modules
+* pnpm-lock.yaml
+* cache/temp files
+
+Then reinstall dependencies cleanly.
+
+=====================================
+STEP 4 — VERIFY INSTALLATION
+
+Ensure:
+
+* pnpm install works
+* esbuild installs correctly
+* no ignored build script warnings
+* no dependency conflicts
+
+=====================================
+STEP 5 — VERIFY BUILD
+
+Ensure:
+
+* TypeScript compiles correctly
+* production build succeeds
+* dist folder generates properly
+* no build/runtime errors
+
+=====================================
+STEP 6 — HOSTINGER COMPATIBILITY
+
+Ensure project works correctly on:
+
+* Hostinger Node.js hosting
+* GitHub deployment
+* ZIP deployment
+
+=====================================
+STEP 7 — VERIFY STARTUP
+
+Ensure:
+
+* correct build script
+* correct start script
+* production server starts correctly
+
+=====================================
+STEP 8 — FINAL OUTPUT
+
+Generate:
+
+1. Fixed package.json
+2. Fixed .npmrc
+3. Clean production-ready build
+4. Hostinger-ready deployment configuration
+
+Deployment must succeed without pnpm/esbuild errors.
