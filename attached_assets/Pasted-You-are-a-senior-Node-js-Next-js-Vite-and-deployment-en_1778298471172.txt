@@ -1,0 +1,143 @@
+You are a senior Node.js, Next.js, Vite and deployment engineer.
+
+Prepare my entire project for HOSTINGER production deployment and fix ALL deployment ZIP issues.
+
+IMPORTANT:
+
+* Do NOT modify any app features
+* Do NOT modify UI design
+* Do NOT remove functionality
+* ONLY prepare a clean production-ready deployment package
+* Ensure Hostinger compatibility
+* Ensure ZIP upload works correctly
+* Ensure Node.js hosting support works correctly
+
+=====================================
+CURRENT ISSUE:
+
+Hostinger upload freezes at:
+
+"Uploading files 0.00 B out of 0.00 B"
+
+This means the deployment package is invalid, too large, corrupted, or contains unsupported files.
+
+=====================================
+YOUR TASK:
+
+Fix everything automatically and generate a CLEAN production ZIP.
+
+=====================================
+STEP 1: REMOVE ALL UNNECESSARY FILES
+
+Delete and exclude:
+
+* node_modules
+* .git
+* .cache
+* .next/cache
+* dist cache files
+* temp files
+* logs
+* Replit cache
+* hidden unnecessary files
+
+=====================================
+STEP 2: VERIFY PACKAGE STRUCTURE
+
+Ensure ZIP root contains files directly.
+
+BAD:
+
+project/project/src
+
+GOOD:
+
+src
+public
+package.json
+
+=====================================
+STEP 3: ENSURE NODE.JS HOSTING COMPATIBILITY
+
+Ensure:
+
+* package.json is correct
+* start script exists
+* build script exists
+* production dependencies are correct
+* no broken imports
+* no missing modules
+
+=====================================
+STEP 4: CREATE CLEAN PRODUCTION BUILD
+
+Generate proper production build.
+
+If Vite:
+
+* run build correctly
+
+If Next.js:
+
+* generate proper production output
+
+=====================================
+STEP 5: CREATE HOSTINGER-READY ZIP
+
+Requirements:
+
+* lightweight ZIP
+* under 200MB if possible
+* no corrupted archive
+* no nested root folders
+* directly extractable in Hostinger
+
+=====================================
+STEP 6: VERIFY ZIP
+
+Before generating ZIP:
+
+* verify ZIP integrity
+* verify extraction works
+* verify package structure
+* verify Node.js startup works
+
+=====================================
+STEP 7: ENSURE STARTUP WORKS
+
+Ensure project can run with:
+
+npm install
+npm start
+
+OR proper Hostinger Node.js startup command.
+
+=====================================
+STEP 8: CREATE DEPLOYMENT NOTES
+
+Provide:
+
+* startup command
+* Node.js version recommendation
+* root folder path
+* environment variable requirements
+
+=====================================
+STEP 9: FINAL OUTPUT
+
+Generate:
+
+1. CLEAN production-ready ZIP
+2. Correct deployment structure
+3. Hostinger deployment instructions
+
+=====================================
+STRICT RULES:
+
+* Do NOT change features
+* Do NOT change database
+* Do NOT change auth system
+* Do NOT change UI
+* ONLY fix deployment/build/package issues
+
+Ensure the final ZIP uploads successfully to Hostinger without freezing.
