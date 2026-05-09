@@ -1,0 +1,135 @@
+You are a senior Node.js deployment engineer.
+
+I want DIRECT ZIP UPLOAD support for Hostinger.
+
+IMPORTANT:
+
+* I do NOT want GitHub deployment
+* I do NOT want FileZilla
+* I do NOT want FTP
+* I ONLY want direct ZIP upload support in Hostinger File Manager
+
+Fix my project completely for DIRECT ZIP deployment.
+
+=====================================
+GOAL:
+
+Generate a ZIP file that can be uploaded DIRECTLY into Hostinger File Manager without any freezing, corruption, or upload issues.
+
+=====================================
+STRICT REQUIREMENTS:
+
+1. ZIP must upload normally in Hostinger
+2. ZIP must NOT freeze at:
+   "Uploading files 0.00 B out of 0.00 B"
+3. ZIP must NOT contain corrupted files
+4. ZIP must NOT contain unnecessary folders
+5. ZIP must work with Hostinger Node.js hosting
+6. ZIP must be lightweight and optimized
+7. ZIP must extract correctly inside Hostinger
+
+=====================================
+STEP 1: CLEAN PROJECT
+
+Remove completely:
+
+* node_modules
+* .git
+* .cache
+* .next/cache
+* dist cache
+* logs
+* temp files
+* Replit cache files
+* hidden unnecessary files
+
+=====================================
+STEP 2: GENERATE PRODUCTION BUILD
+
+Create a proper production-ready build.
+
+Ensure:
+
+* all imports work
+* no missing modules
+* no broken dependencies
+* no development-only packages included unnecessarily
+
+=====================================
+STEP 3: FIX PACKAGE.JSON
+
+Ensure package.json contains:
+
+* proper start script
+* proper build script
+* proper production dependencies
+* Node.js compatibility
+
+=====================================
+STEP 4: CREATE CORRECT ZIP STRUCTURE
+
+IMPORTANT:
+
+ZIP ROOT must directly contain files like:
+
+* dist/
+* public/
+* package.json
+* package-lock.json
+
+DO NOT create nested folders like:
+
+project/project/src
+
+=====================================
+STEP 5: VERIFY STARTUP
+
+Ensure app starts correctly using:
+
+npm install
+npm start
+
+OR correct Node.js startup command for Hostinger.
+
+=====================================
+STEP 6: OPTIMIZE ZIP
+
+Requirements:
+
+* ZIP size should be as small as possible
+* Prefer under 200MB
+* Remove all duplicate assets
+* Remove build junk
+
+=====================================
+STEP 7: TEST ZIP
+
+Before final output:
+
+* verify ZIP integrity
+* verify extraction works
+* verify Node.js app starts successfully
+* verify no upload corruption
+
+=====================================
+STEP 8: FINAL OUTPUT
+
+Generate:
+
+1. FINAL CLEAN ZIP
+2. Hostinger startup command
+3. Required Node.js version
+4. Required environment variables
+5. Exact upload steps for direct ZIP upload only
+
+=====================================
+VERY IMPORTANT:
+
+Do NOT suggest:
+
+* GitHub deployment
+* FileZilla
+* FTP
+* External deployment methods
+
+ONLY prepare DIRECT ZIP deployment package for Hostinger.
