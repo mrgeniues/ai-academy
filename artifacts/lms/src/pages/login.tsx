@@ -280,23 +280,6 @@ export default function LoginPage() {
                 </Link>
               </p>
 
-              {/* Database configuration link */}
-              <div className="mt-8 pt-6 border-t border-border">
-                <button
-                  type="button"
-                  onClick={handleOpenDbDialog}
-                  className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground mx-auto transition-colors"
-                  data-testid="button-open-db-config"
-                >
-                  <Database className="w-3.5 h-3.5" />
-                  Configure database connection
-                  {dbCurrentUrl && (
-                    <span className="font-mono text-xs truncate max-w-[140px] text-muted-foreground/70">
-                      ({dbCurrentUrl.replace("https://", "").split(".")[0]}…)
-                    </span>
-                  )}
-                </button>
-              </div>
             </>
           )}
 
