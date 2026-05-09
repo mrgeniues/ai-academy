@@ -1,0 +1,104 @@
+You are a senior Node.js + Hostinger deployment engineer.
+
+Fix my project deployment issue for Hostinger Node.js hosting.
+
+CURRENT ERROR:
+
+[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: esbuild
+
+Hostinger deployment fails because pnpm security blocks esbuild build scripts.
+
+=====================================
+YOUR TASK:
+
+Fix the project completely for Hostinger deployment.
+
+IMPORTANT:
+
+* Do NOT change UI
+* Do NOT remove features
+* Do NOT modify database logic
+* Do NOT modify auth system
+* ONLY fix deployment/build issues
+
+=====================================
+STEP 1 — FIX package.json
+
+Add correct pnpm configuration:
+
+```json
+"pnpm": {
+  "onlyBuiltDependencies": [
+    "@swc/core",
+    "esbuild",
+    "msw",
+    "unrs-resolver"
+  ]
+}
+```
+
+Ensure JSON structure stays valid.
+
+=====================================
+STEP 2 — VERIFY DEPENDENCIES
+
+Ensure:
+
+* esbuild installs correctly
+* pnpm install works
+* npm install works
+* no dependency conflicts
+* no ignored build scripts
+
+=====================================
+STEP 3 — CLEAN PROJECT
+
+Remove unnecessary files:
+
+* node_modules
+* cache files
+* temp files
+* corrupted lock files
+
+Then reinstall dependencies cleanly.
+
+=====================================
+STEP 4 — VERIFY BUILD
+
+Ensure:
+
+* production build works
+* no build errors
+* no startup errors
+* dist folder generates correctly
+
+=====================================
+STEP 5 — HOSTINGER COMPATIBILITY
+
+Ensure project works on:
+
+* Hostinger Node.js hosting
+* direct GitHub deployment
+* direct ZIP deployment
+
+=====================================
+STEP 6 — VERIFY STARTUP
+
+Ensure correct scripts exist:
+
+* build
+* start
+
+And app starts correctly in production.
+
+=====================================
+STEP 7 — FINAL OUTPUT
+
+Generate:
+
+1. Fully fixed project
+2. Correct package.json
+3. Production-ready build
+4. Hostinger-ready deployment setup
+
+Make sure deployment succeeds without esbuild/pnpm errors.

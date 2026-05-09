@@ -13,8 +13,7 @@
   },
   "private": true,
   "pnpm": {
-    "onlyBuiltDependencies": ["@swc/core", "esbuild", "msw", "unrs-resolver"],
-    "neverBuiltDependencies": []
+    "onlyBuiltDependencies": ["@swc/core", "esbuild", "msw", "unrs-resolver"]
   },
   "devDependencies": {
     "typescript": "~5.9.2",
