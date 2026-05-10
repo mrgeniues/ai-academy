@@ -435,64 +435,9 @@ CREATE POLICY "Authenticated media upload"
 
 
 -- ================================================================
--- SEED DATA
--- Safe to re-run — uses ON CONFLICT DO NOTHING.
--- Passwords for all demo users: password123
+-- NO SEED DATA
+-- The database starts clean. Create your admin account via the
+-- signup page and set the role to 'admin' directly in Supabase:
+--   UPDATE users SET role = 'admin', is_approved = TRUE
+--   WHERE email = 'your@email.com';
 -- ================================================================
-
-INSERT INTO users (email, password_hash, name, role, is_approved) VALUES
-  ('admin@lms.com',     '$2b$10$kJnu2jmgF5a9RsKtsGDEhOSDowhs3t.fGIagheU95AW09hIcmbhHy', 'Admin User',    'admin',   TRUE),
-  ('alice@example.com', '$2b$10$kJnu2jmgF5a9RsKtsGDEhOSDowhs3t.fGIagheU95AW09hIcmbhHy', 'Alice Johnson', 'creator', TRUE),
-  ('bob@example.com',   '$2b$10$kJnu2jmgF5a9RsKtsGDEhOSDowhs3t.fGIagheU95AW09hIcmbhHy', 'Bob Smith',     'member',  TRUE)
-ON CONFLICT (email) DO NOTHING;
-
-INSERT INTO courses (title, description, thumbnail, visibility, enrollment_mode, created_by)
-SELECT
-  'Introduction to Web Development',
-  'Learn HTML, CSS, and JavaScript from scratch. Build your first website.',
-  'https://images.unsplash.com/photo-1593720213428-28a5b9e94613?w=640',
-  'public', 'open', id
-FROM users WHERE email = 'alice@example.com'
-ON CONFLICT DO NOTHING;
-
-INSERT INTO courses (title, description, thumbnail, visibility, enrollment_mode, created_by)
-SELECT
-  'Advanced React Patterns',
-  'Deep dive into React hooks, context, performance optimization and design patterns.',
-  'https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=640',
-  'public', 'approval_required', id
-FROM users WHERE email = 'alice@example.com'
-ON CONFLICT DO NOTHING;
-
-INSERT INTO courses (title, description, thumbnail, visibility, enrollment_mode, created_by)
-SELECT
-  'Node.js & Express API Design',
-  'Build production-ready REST APIs with Node.js, Express, authentication and databases.',
-  'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=640',
-  'private', 'approval_required', id
-FROM users WHERE email = 'admin@lms.com'
-ON CONFLICT DO NOTHING;
-
-INSERT INTO lessons (course_id, title, description, "order", is_public)
-SELECT 1, 'HTML Fundamentals',     'Learn the building blocks of web pages.', 1, true
-WHERE EXISTS (SELECT 1 FROM courses WHERE id = 1)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO lessons (course_id, title, description, "order", is_public)
-SELECT 1, 'CSS Styling Basics',    'Style your HTML with colors, fonts, and layout.', 2, true
-WHERE EXISTS (SELECT 1 FROM courses WHERE id = 1)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO lessons (course_id, title, description, "order", is_public)
-SELECT 1, 'JavaScript Essentials', 'Variables, functions, DOM manipulation, and events.', 3, true
-WHERE EXISTS (SELECT 1 FROM courses WHERE id = 1)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO posts (user_id, content) VALUES
-  ((SELECT id FROM users WHERE email = 'alice@example.com'),
-   'Welcome to AI Academy! Check out the new courses and let me know what topics you want next.'),
-  ((SELECT id FROM users WHERE email = 'bob@example.com'),
-   'Just finished the Web Development course — absolutely loved it. Highly recommend!'),
-  ((SELECT id FROM users WHERE email = 'admin@lms.com'),
-   'Platform update: progress tracking and new features are now live. Keep learning!')
-ON CONFLICT DO NOTHING;

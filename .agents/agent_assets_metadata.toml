@@ -88,4 +88,4 @@ title = "supabase-setup.sql (fixed) — Paste ALL contents into Supabase SQL Edi
 id = "CF7w_orzMRCqoPhWYNKVq"
 uri = "file://artifacts/lms/public/aiacademy-hostinger.zip"
 type = "unspecified"
-title = "aiacademy-hostinger.zip — Theme + Profile fix"
+title = "aiacademy-hostinger.zip — Clean start, no demo data"
