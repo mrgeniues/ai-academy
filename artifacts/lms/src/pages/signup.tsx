@@ -6,9 +6,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
-import { GraduationCap, Eye, EyeOff, Users2 } from "lucide-react";
+import { GraduationCap, Eye, EyeOff } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useSearch } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 
 const schema = z.object({
@@ -30,8 +29,6 @@ export default function SignupPage() {
   const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const search = useSearch();
-  const inviteCode = new URLSearchParams(search).get("invite") ?? "";
 
   useEffect(() => {
     if (!isLoading && user) {
@@ -56,7 +53,6 @@ export default function SignupPage() {
       if (!res.ok) throw new Error(json.error ?? "Failed to create account");
 
       login(json.token!);
-      // redirect handled by useEffect above
     } catch (err: unknown) {
       const error = err as { message?: string };
       toast({
@@ -119,16 +115,8 @@ export default function SignupPage() {
 
           <h1 className="text-2xl font-bold mb-1">Create your account</h1>
           <p className="text-muted-foreground text-sm mb-8">
-            {inviteCode ? "Create an account to join the community" : "Join the community and start learning"}
+            Join the community and start learning
           </p>
-
-          {/* Invite code banner */}
-          {inviteCode && (
-            <div className="flex items-center gap-2 mb-6 p-3 rounded-xl bg-primary/5 border border-primary/20 text-sm">
-              <Users2 className="w-4 h-4 text-primary shrink-0" />
-              <span className="text-primary font-medium">You've been invited to join a community. Sign up to continue.</span>
-            </div>
-          )}
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -153,7 +141,7 @@ export default function SignupPage() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input data-testid="input-email" type="email" placeholder="you@example.com" {...field} />
+                      <Input data-testid="input-email" type="email" placeholder="you@gmail.com" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
