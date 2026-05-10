@@ -224,6 +224,14 @@ router.patch("/users/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  // Optional columns — stripped out if the DB column doesn't exist yet
+  const OPTIONAL_COLS: Record<string, string> = {
+    theme:        "theme",
+    bio:          "bio",
+    avatar:       "avatar",
+    social_links: "social_links",
+  };
+
   const updates: Record<string, unknown> = {};
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
   if (parsed.data.avatar !== undefined) updates.avatar = parsed.data.avatar;
@@ -231,42 +239,59 @@ router.patch("/users/:id", requireAuth, async (req, res): Promise<void> => {
   if (parsed.data.theme !== undefined) updates.theme = parsed.data.theme;
   if (parsed.data.socialLinks !== undefined) updates.social_links = parsed.data.socialLinks;
 
-  let { data: user, error } = await supabase
-    .from("users")
-    .update(updates)
-    .eq("id", id)
-    .select()
-    .maybeSingle();
+  // Try the update; if a column doesn't exist, drop it and retry (up to N times)
+  let currentUpdates = { ...updates };
+  let user: Record<string, unknown> | null = null;
+  let lastError: { message?: string; code?: string } | null = null;
 
-  // If update fails because theme column doesn't exist yet, retry without it
-  if (error?.message?.includes("theme")) {
-    const { theme: _theme, ...updatesWithoutTheme } = updates;
-    void _theme;
-    if (Object.keys(updatesWithoutTheme).length === 0) {
-      // theme was the only field — just return current user
-      const { data: currentUser } = await supabase.from("users").select("*").eq("id", id).maybeSingle();
-      if (currentUser) {
-        res.json(formatUser(currentUser as Parameters<typeof formatUser>[0]));
-        return;
-      }
-    } else {
-      const retry = await supabase
-        .from("users")
-        .update(updatesWithoutTheme)
-        .eq("id", id)
-        .select()
-        .maybeSingle();
-      user = retry.data;
-      error = retry.error;
+  for (let attempt = 0; attempt <= Object.keys(OPTIONAL_COLS).length; attempt++) {
+    if (Object.keys(currentUpdates).length === 0) break;
+
+    const result = await supabase
+      .from("users")
+      .update(currentUpdates)
+      .eq("id", id)
+      .select()
+      .maybeSingle();
+
+    if (!result.error) {
+      user = result.data as Record<string, unknown> | null;
+      lastError = null;
+      break;
+    }
+
+    lastError = result.error;
+    const msg = result.error.message ?? "";
+    const code = result.error.code ?? "";
+
+    // Detect missing-column error (Supabase REST = PGRST204, Postgres = 42703)
+    const isMissingCol = code === "PGRST204" || code === "42703" || msg.includes("does not exist");
+    if (!isMissingCol) break; // real error — stop retrying
+
+    // Find which optional column caused the error and strip it
+    const badCol = Object.keys(OPTIONAL_COLS).find(col => msg.includes(col));
+    if (!badCol) break; // unknown column — can't fix automatically
+
+    const { [badCol]: _dropped, ...rest } = currentUpdates;
+    void _dropped;
+    currentUpdates = rest;
+  }
+
+  // If all columns were stripped, just return the current user without error
+  if (Object.keys(currentUpdates).length === 0 || (lastError === null && !user)) {
+    const { data: currentUser } = await supabase.from("users").select("*").eq("id", id).maybeSingle();
+    if (currentUser) {
+      res.json(formatUser(currentUser as Parameters<typeof formatUser>[0]));
+      return;
     }
   }
 
-  if (error || !user) {
-    res.status(500).json({ error: error?.message ?? "Failed to update user" });
+  if (lastError || !user) {
+    res.status(500).json({ error: lastError?.message ?? "Failed to update user" });
     return;
   }
 
-  res.json(formatUser(user));
+  res.json(formatUser(user as Parameters<typeof formatUser>[0]));
 });
 
 router.patch("/users/:id/block", requireAdmin, async (req, res): Promise<void> => {

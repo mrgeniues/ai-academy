@@ -117279,30 +117279,49 @@ router4.patch("/users/:id", requireAuth, async (req, res) => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const OPTIONAL_COLS = {
+    theme: "theme",
+    bio: "bio",
+    avatar: "avatar",
+    social_links: "social_links"
+  };
   const updates = {};
   if (parsed.data.name !== void 0) updates.name = parsed.data.name;
   if (parsed.data.avatar !== void 0) updates.avatar = parsed.data.avatar;
   if (parsed.data.bio !== void 0) updates.bio = parsed.data.bio;
   if (parsed.data.theme !== void 0) updates.theme = parsed.data.theme;
   if (parsed.data.socialLinks !== void 0) updates.social_links = parsed.data.socialLinks;
-  let { data: user, error: error40 } = await supabase.from("users").update(updates).eq("id", id).select().maybeSingle();
-  if (error40?.message?.includes("theme")) {
-    const { theme: _theme, ...updatesWithoutTheme } = updates;
-    void _theme;
-    if (Object.keys(updatesWithoutTheme).length === 0) {
-      const { data: currentUser } = await supabase.from("users").select("*").eq("id", id).maybeSingle();
-      if (currentUser) {
-        res.json(formatUser(currentUser));
-        return;
-      }
-    } else {
-      const retry = await supabase.from("users").update(updatesWithoutTheme).eq("id", id).select().maybeSingle();
-      user = retry.data;
-      error40 = retry.error;
+  let currentUpdates = { ...updates };
+  let user = null;
+  let lastError = null;
+  for (let attempt = 0; attempt <= Object.keys(OPTIONAL_COLS).length; attempt++) {
+    if (Object.keys(currentUpdates).length === 0) break;
+    const result = await supabase.from("users").update(currentUpdates).eq("id", id).select().maybeSingle();
+    if (!result.error) {
+      user = result.data;
+      lastError = null;
+      break;
+    }
+    lastError = result.error;
+    const msg = result.error.message ?? "";
+    const code = result.error.code ?? "";
+    const isMissingCol = code === "PGRST204" || code === "42703" || msg.includes("does not exist");
+    if (!isMissingCol) break;
+    const badCol = Object.keys(OPTIONAL_COLS).find((col) => msg.includes(col));
+    if (!badCol) break;
+    const { [badCol]: _dropped, ...rest } = currentUpdates;
+    void _dropped;
+    currentUpdates = rest;
+  }
+  if (Object.keys(currentUpdates).length === 0 || lastError === null && !user) {
+    const { data: currentUser } = await supabase.from("users").select("*").eq("id", id).maybeSingle();
+    if (currentUser) {
+      res.json(formatUser(currentUser));
+      return;
     }
   }
-  if (error40 || !user) {
-    res.status(500).json({ error: error40?.message ?? "Failed to update user" });
+  if (lastError || !user) {
+    res.status(500).json({ error: lastError?.message ?? "Failed to update user" });
     return;
   }
   res.json(formatUser(user));
