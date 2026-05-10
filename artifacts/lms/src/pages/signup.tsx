@@ -6,8 +6,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
-import { GraduationCap, Eye, EyeOff } from "lucide-react";
+import { GraduationCap, Eye, EyeOff, Users2 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useSearch } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 
 const schema = z.object({
@@ -29,6 +30,8 @@ export default function SignupPage() {
   const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const search = useSearch();
+  const inviteCode = new URLSearchParams(search).get("invite") ?? "";
 
   useEffect(() => {
     if (!isLoading && user) {

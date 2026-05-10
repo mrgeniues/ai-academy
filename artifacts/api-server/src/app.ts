@@ -1,5 +1,6 @@
 import express, { type Express } from "express";
 import cors from "cors";
+import compression from "compression";
 import pinoHttp from "pino-http";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -10,6 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app: Express = express();
 
+app.use(compression());
 app.use(
   pinoHttp({
     logger,
@@ -39,7 +41,15 @@ if (process.env["NODE_ENV"] === "production") {
   const staticPath = process.env["STATIC_PATH"]
     ? path.resolve(process.cwd(), process.env["STATIC_PATH"])
     : path.resolve(__dirname, "../../lms/dist/public");
-  app.use(express.static(staticPath));
+  // Cache hashed assets (JS/CSS) for 1 year, HTML never cached
+  app.use(express.static(staticPath, {
+    maxAge: "1y",
+    setHeaders(res, filePath) {
+      if (filePath.endsWith(".html")) {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      }
+    },
+  }));
   app.use((_req, res) => {
     res.sendFile(path.join(staticPath, "index.html"));
   });
