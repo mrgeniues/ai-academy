@@ -118681,12 +118681,13 @@ router8.post("/posts", requireAuth, async (req, res) => {
     if (fileType) insertPayload.file_type = fileType;
     insertPayload.video_url = encodeFileAsVideoUrl(fileUrl, fileType);
   }
-  const { data: post2, error: error40 } = await insertWithRetry("posts", insertPayload, "*, author:users(*)");
+  const { data: post2, error: error40 } = await insertWithRetry("posts", insertPayload, "*");
   if (error40 || !post2) {
     console.error("[POST /posts] Supabase error:", error40);
     res.status(500).json({ error: "Failed to create post" });
     return;
   }
+  const { data: authorRow } = await supabase.from("users").select("*").eq("id", req.userId).single();
   const isAdmin = req.userRole === "admin";
   const vipPost = isVip ?? false;
   const preview = content.slice(0, 80) + (content.length > 80 ? "\u2026" : "");
@@ -118711,7 +118712,7 @@ router8.post("/posts", requireAuth, async (req, res) => {
     commentCount: 0,
     isLiked: false,
     createdAt: post2.created_at,
-    author: formatUser(post2.author)
+    author: formatUser(authorRow)
   });
 });
 router8.delete("/posts/:id", requireAuth, async (req, res) => {
@@ -118817,12 +118818,13 @@ router8.post("/posts/:postId/comments", requireAuth, async (req, res) => {
     insertPayload.video_url = encodeFileAsVideoUrl(fileUrl, fileType);
   }
   if (parentId) insertPayload.parent_id = parentId;
-  const { data: newComment, error: error40 } = await insertWithRetry("comments", insertPayload, "*, author:users(*)");
+  const { data: newComment, error: error40 } = await insertWithRetry("comments", insertPayload, "*");
   if (error40 || !newComment) {
     console.error("[POST /posts/:postId/comments] Supabase error:", error40);
     res.status(500).json({ error: "Failed to create comment" });
     return;
   }
+  const { data: commentAuthorRow } = await supabase.from("users").select("*").eq("id", req.userId).single();
   broadcastNotification({
     type: "comment",
     title: "New Comment",
@@ -118844,7 +118846,7 @@ router8.post("/posts/:postId/comments", requireAuth, async (req, res) => {
     likesCount: 0,
     isLiked: false,
     createdAt: newComment.created_at,
-    author: formatUser(newComment.author)
+    author: formatUser(commentAuthorRow)
   });
 });
 router8.post("/comments/:id/like", requireAuth, async (req, res) => {

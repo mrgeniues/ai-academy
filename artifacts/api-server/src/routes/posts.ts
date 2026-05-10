@@ -260,13 +260,20 @@ router.post("/posts", requireAuth, async (req, res): Promise<void> => {
     insertPayload.video_url = encodeFileAsVideoUrl(fileUrl, fileType);
   }
 
-  const { data: post, error } = await insertWithRetry("posts", insertPayload, "*, author:users(*)");
+  // Insert first, then fetch author separately — avoids FK join issues on cold schema cache
+  const { data: post, error } = await insertWithRetry("posts", insertPayload, "*");
 
   if (error || !post) {
     console.error("[POST /posts] Supabase error:", error);
     res.status(500).json({ error: "Failed to create post" });
     return;
   }
+
+  const { data: authorRow } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", req.userId!)
+    .single();
 
   const isAdmin = req.userRole === "admin";
   const vipPost = isVip ?? false;
@@ -294,7 +301,7 @@ router.post("/posts", requireAuth, async (req, res): Promise<void> => {
     commentCount: 0,
     isLiked: false,
     createdAt: post.created_at,
-    author: formatUser((post as Record<string, unknown>).author as Parameters<typeof formatUser>[0]),
+    author: formatUser(authorRow as Parameters<typeof formatUser>[0]),
   });
 });
 
@@ -438,13 +445,20 @@ router.post("/posts/:postId/comments", requireAuth, async (req, res): Promise<vo
   }
   if (parentId) insertPayload.parent_id = parentId;
 
-  const { data: newComment, error } = await insertWithRetry("comments", insertPayload, "*, author:users(*)");
+  // Insert first, then fetch author separately — avoids FK join issues on cold schema cache
+  const { data: newComment, error } = await insertWithRetry("comments", insertPayload, "*");
 
   if (error || !newComment) {
     console.error("[POST /posts/:postId/comments] Supabase error:", error);
     res.status(500).json({ error: "Failed to create comment" });
     return;
   }
+
+  const { data: commentAuthorRow } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", req.userId!)
+    .single();
 
   broadcastNotification({
     type: "comment",
@@ -468,7 +482,7 @@ router.post("/posts/:postId/comments", requireAuth, async (req, res): Promise<vo
     likesCount: 0,
     isLiked: false,
     createdAt: (newComment as Record<string, unknown>).created_at,
-    author: formatUser((newComment as Record<string, unknown>).author as Parameters<typeof formatUser>[0]),
+    author: formatUser(commentAuthorRow as Parameters<typeof formatUser>[0]),
   });
 });
 
