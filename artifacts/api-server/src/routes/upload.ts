@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import multer from "multer";
 import { requireAuth } from "../lib/auth";
 import { supabase } from "../lib/supabase";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -33,12 +34,25 @@ const upload = multer({
   },
 });
 
-async function ensureBucket(): Promise<void> {
-  const { data: buckets } = await supabase.storage.listBuckets();
-  const exists = (buckets ?? []).some(b => b.name === "media");
-  if (!exists) {
-    await supabase.storage.createBucket("media", { public: true, fileSizeLimit: 52428800 });
+async function ensureBucket(): Promise<{ ok: boolean; reason?: string }> {
+  const { data: buckets, error: listErr } = await supabase.storage.listBuckets();
+  if (listErr) {
+    logger.warn({ err: listErr.message }, "[upload] Could not list storage buckets");
+    return { ok: false, reason: "storage_list_failed: " + listErr.message };
   }
+  const exists = (buckets ?? []).some(b => b.name === "media");
+  if (exists) return { ok: true };
+
+  const { error: createErr } = await supabase.storage.createBucket("media", {
+    public: true,
+    fileSizeLimit: 52428800,
+  });
+  if (createErr) {
+    logger.warn({ err: createErr.message }, "[upload] Could not create media bucket");
+    return { ok: false, reason: "bucket_create_failed: " + createErr.message };
+  }
+  logger.info("[upload] Created media storage bucket");
+  return { ok: true };
 }
 
 router.post("/upload", requireAuth, upload.single("file"), async (req, res): Promise<void> => {
@@ -47,9 +61,15 @@ router.post("/upload", requireAuth, upload.single("file"), async (req, res): Pro
     return;
   }
 
-  try {
-    await ensureBucket();
-  } catch { /* bucket may already exist */ }
+  const bucketResult = await ensureBucket();
+  if (!bucketResult.ok) {
+    logger.error({ reason: bucketResult.reason }, "[upload] Storage bucket not available");
+    res.status(500).json({
+      error: "Storage not available. Please create a public 'media' bucket in your Supabase dashboard → Storage.",
+      detail: bucketResult.reason,
+    });
+    return;
+  }
 
   const ext = req.file.originalname.split(".").pop() ?? "bin";
   const filePath = `${req.userId!}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
@@ -62,6 +82,7 @@ router.post("/upload", requireAuth, upload.single("file"), async (req, res): Pro
     });
 
   if (error) {
+    logger.error({ err: error.message, filePath }, "[upload] Supabase storage upload failed");
     res.status(500).json({ error: "Upload failed: " + error.message });
     return;
   }

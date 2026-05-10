@@ -24,15 +24,29 @@ import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { FollowListModal } from "@/components/follow-list-modal";
 
+function normalizeUrl(v: string | undefined): string {
+  if (!v) return "";
+  const trimmed = v.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
+const optionalUrl = z
+  .string()
+  .optional()
+  .transform(normalizeUrl)
+  .refine(v => v === "" || /^https?:\/\/.+/i.test(v), { message: "Enter a valid URL" });
+
 const schema = z.object({
   name: z.string().min(2, "Name required"),
   bio: z.string().optional(),
-  facebook: z.string().url().optional().or(z.literal("")),
-  instagram: z.string().url().optional().or(z.literal("")),
-  tiktok: z.string().url().optional().or(z.literal("")),
-  twitter: z.string().url().optional().or(z.literal("")),
-  whatsapp: z.string().url().optional().or(z.literal("")),
-  linkedin: z.string().url().optional().or(z.literal("")),
+  facebook: optionalUrl,
+  instagram: optionalUrl,
+  tiktok: optionalUrl,
+  twitter: optionalUrl,
+  whatsapp: optionalUrl,
+  linkedin: optionalUrl,
 });
 
 type FormData = z.infer<typeof schema>;

@@ -119114,6 +119114,26 @@ var notifications_default = router10;
 // src/routes/upload.ts
 var import_express11 = __toESM(require_express2(), 1);
 var import_multer = __toESM(require_multer(), 1);
+
+// src/lib/logger.ts
+var import_pino = __toESM(require_pino(), 1);
+var isProduction = process.env.NODE_ENV === "production";
+var logger = (0, import_pino.default)({
+  level: process.env.LOG_LEVEL ?? "info",
+  redact: [
+    "req.headers.authorization",
+    "req.headers.cookie",
+    "res.headers['set-cookie']"
+  ],
+  ...isProduction ? {} : {
+    transport: {
+      target: "pino-pretty",
+      options: { colorize: true }
+    }
+  }
+});
+
+// src/routes/upload.ts
 var router11 = (0, import_express11.Router)();
 var ALLOWED_IMAGE_TYPES = [
   "image/jpeg",
@@ -119143,20 +119163,37 @@ var upload = (0, import_multer.default)({
   }
 });
 async function ensureBucket() {
-  const { data: buckets } = await supabase.storage.listBuckets();
-  const exists2 = (buckets ?? []).some((b) => b.name === "media");
-  if (!exists2) {
-    await supabase.storage.createBucket("media", { public: true, fileSizeLimit: 52428800 });
+  const { data: buckets, error: listErr } = await supabase.storage.listBuckets();
+  if (listErr) {
+    logger.warn({ err: listErr.message }, "[upload] Could not list storage buckets");
+    return { ok: false, reason: "storage_list_failed: " + listErr.message };
   }
+  const exists2 = (buckets ?? []).some((b) => b.name === "media");
+  if (exists2) return { ok: true };
+  const { error: createErr } = await supabase.storage.createBucket("media", {
+    public: true,
+    fileSizeLimit: 52428800
+  });
+  if (createErr) {
+    logger.warn({ err: createErr.message }, "[upload] Could not create media bucket");
+    return { ok: false, reason: "bucket_create_failed: " + createErr.message };
+  }
+  logger.info("[upload] Created media storage bucket");
+  return { ok: true };
 }
 router11.post("/upload", requireAuth, upload.single("file"), async (req, res) => {
   if (!req.file) {
     res.status(400).json({ error: "No file provided" });
     return;
   }
-  try {
-    await ensureBucket();
-  } catch {
+  const bucketResult = await ensureBucket();
+  if (!bucketResult.ok) {
+    logger.error({ reason: bucketResult.reason }, "[upload] Storage bucket not available");
+    res.status(500).json({
+      error: "Storage not available. Please create a public 'media' bucket in your Supabase dashboard \u2192 Storage.",
+      detail: bucketResult.reason
+    });
+    return;
   }
   const ext = req.file.originalname.split(".").pop() ?? "bin";
   const filePath = `${req.userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
@@ -119165,6 +119202,7 @@ router11.post("/upload", requireAuth, upload.single("file"), async (req, res) =>
     upsert: false
   });
   if (error40) {
+    logger.error({ err: error40.message, filePath }, "[upload] Supabase storage upload failed");
     res.status(500).json({ error: "Upload failed: " + error40.message });
     return;
   }
@@ -119859,24 +119897,6 @@ router17.use(settings_default);
 router17.use(admin_actions_default);
 router17.use(tracker_default);
 var routes_default = router17;
-
-// src/lib/logger.ts
-var import_pino = __toESM(require_pino(), 1);
-var isProduction = process.env.NODE_ENV === "production";
-var logger = (0, import_pino.default)({
-  level: process.env.LOG_LEVEL ?? "info",
-  redact: [
-    "req.headers.authorization",
-    "req.headers.cookie",
-    "res.headers['set-cookie']"
-  ],
-  ...isProduction ? {} : {
-    transport: {
-      target: "pino-pretty",
-      options: { colorize: true }
-    }
-  }
-});
 
 // src/app.ts
 var __dirname2 = path2.dirname(fileURLToPath2(import.meta.url));
