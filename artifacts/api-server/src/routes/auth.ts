@@ -134,6 +134,7 @@ router.post("/auth/signup", async (req, res): Promise<void> => {
     .single();
 
   if (error || !user) {
+    req.log.error({ supabaseError: error?.message, supabaseCode: error?.code, details: error?.details }, "Supabase insert failed during signup");
     res.status(500).json({ error: "Failed to create user" });
     return;
   }

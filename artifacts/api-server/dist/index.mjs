@@ -91376,6 +91376,7 @@ router3.post("/auth/signup", async (req, res) => {
   const isApproved = inviteCommunityId !== null;
   const { data: user, error } = await supabase.from("users").insert({ email, password_hash: passwordHash, name, role: "member", is_approved: isApproved }).select().single();
   if (error || !user) {
+    req.log.error({ supabaseError: error?.message, supabaseCode: error?.code, details: error?.details }, "Supabase insert failed during signup");
     res.status(500).json({ error: "Failed to create user" });
     return;
   }
