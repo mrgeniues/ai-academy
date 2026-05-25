@@ -764,11 +764,6 @@ export default function CommunityPage() {
             <h1 className="text-2xl font-bold">Community</h1>
             <p className="text-muted-foreground text-sm mt-1">Share your thoughts and connect with fellow learners</p>
           </div>
-          <Link href="/create-community">
-            <Button size="sm" variant="outline" className="flex-shrink-0 gap-1.5">
-              <Plus className="w-3.5 h-3.5" />Create Community
-            </Button>
-          </Link>
         </div>
 
         {/* Communities directory strip */}
