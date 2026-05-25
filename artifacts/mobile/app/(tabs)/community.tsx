@@ -1,6 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as Clipboard from "expo-clipboard";
+import { customFetch } from "@workspace/api-client-react";
 import {
   useCreatePost,
   useListPosts,
@@ -71,33 +72,20 @@ function MyCommunityCard({ token }: { token: string | null }) {
   const [membersLoading, setMembersLoading] = useState(false);
   const [actioning, setActioning]   = useState<number | null>(null);
 
-  const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
-
   const fetchCommunity = useCallback(async () => {
     if (!token) { setLoading(false); return; }
     try {
-      // /communities/mine returns an array — pick first approved one
-      const res = await fetch("/api/communities/mine", { headers: authHeader });
-      if (!res.ok) { setCommunity(null); setLoading(false); return; }
-      const list = await res.json() as Array<{ id: number; name: string; description: string | null; status: string }>;
+      const list = await customFetch<Array<{ id: number; name: string; description: string | null; status: string }>>("/api/communities/mine");
       const approved = list.find(c => c.status === "approved");
       if (!approved) { setCommunity(null); setLoading(false); return; }
 
-      // Fetch panel for invite_code + member counts
-      const panelRes = await fetch(`/api/communities/${approved.id}/panel`, { headers: authHeader });
-      if (!panelRes.ok) { setCommunity(null); setLoading(false); return; }
-      const panel = await panelRes.json() as { id: number; name: string; description: string | null; status: string; invite_code: string | null };
+      const [panel, allMembers] = await Promise.all([
+        customFetch<{ id: number; name: string; description: string | null; status: string; invite_code: string | null }>(`/api/communities/${approved.id}/panel`),
+        customFetch<CommunityMember[]>(`/api/communities/${approved.id}/members`).catch(() => [] as CommunityMember[]),
+      ]);
 
-      // Fetch member counts
-      const membersRes = await fetch(`/api/communities/${approved.id}/members`, { headers: authHeader });
-      let memberCount = 0;
-      let pendingCount = 0;
-      if (membersRes.ok) {
-        const allMembers = await membersRes.json() as CommunityMember[];
-        memberCount = allMembers.filter(m => m.status === "approved").length;
-        pendingCount = allMembers.filter(m => m.status === "pending").length;
-      }
-
+      const memberCount = allMembers.filter(m => m.status === "approved").length;
+      const pendingCount = allMembers.filter(m => m.status === "pending").length;
       setCommunity({ ...panel, member_count: memberCount, pending_count: pendingCount });
     } catch {
       setCommunity(null);
@@ -109,13 +97,11 @@ function MyCommunityCard({ token }: { token: string | null }) {
   const fetchMembers = useCallback(async (communityId: number) => {
     setMembersLoading(true);
     try {
-      const res = await fetch(`/api/communities/${communityId}/members`, { headers: authHeader });
-      if (!res.ok) return;
-      const data = await res.json() as CommunityMember[];
+      const data = await customFetch<CommunityMember[]>(`/api/communities/${communityId}/members`);
       setMembers(data);
     } catch { /* silent */ }
     finally { setMembersLoading(false); }
-  }, [token]);
+  }, []);
 
   useEffect(() => { void fetchCommunity(); }, [fetchCommunity]);
 
@@ -129,9 +115,8 @@ function MyCommunityCard({ token }: { token: string | null }) {
     if (!community) return;
     setActioning(memberId);
     try {
-      await fetch(`/api/communities/${community.id}/members/${memberId}`, {
+      await customFetch(`/api/communities/${community.id}/members/${memberId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", ...authHeader },
         body: JSON.stringify({ status: action }),
       });
       setMembers(prev => prev.map(m => m.id === memberId ? { ...m, status: action } : m));

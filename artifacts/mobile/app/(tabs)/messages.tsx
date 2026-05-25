@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { customFetch } from "@workspace/api-client-react";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   ActivityIndicator,
@@ -100,13 +101,11 @@ function ConversationItem({
 function ChatScreen({
   otherId,
   otherName,
-  token,
   myId,
   onBack,
 }: {
   otherId: number;
   otherName: string;
-  token: string | null;
   myId: number;
   onBack: () => void;
 }) {
@@ -119,17 +118,13 @@ function ChatScreen({
   const listRef = useRef<FlatList>(null);
   const topPad = insets.top + (Platform.OS === "web" ? 67 : 0);
 
-  const authHeader: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-
   const fetchMessages = useCallback(async () => {
     try {
-      const res = await fetch(`/api/messages/${otherId}`, { headers: authHeader });
-      if (!res.ok) return;
-      const data = await res.json() as Message[];
+      const data = await customFetch<Message[]>(`/api/messages/${otherId}`);
       setMessages(data);
     } catch { /* silent */ }
     finally { setLoading(false); }
-  }, [otherId, token]);
+  }, [otherId]);
 
   useEffect(() => {
     void fetchMessages();
@@ -142,16 +137,13 @@ function ChatScreen({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSending(true);
     try {
-      const res = await fetch(`/api/messages/${otherId}`, {
+      await customFetch(`/api/messages/${otherId}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeader },
         body: JSON.stringify({ content: text.trim() }),
       });
-      if (res.ok) {
-        setText("");
-        await fetchMessages();
-        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
-      }
+      setText("");
+      await fetchMessages();
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     } catch { /* silent */ }
     finally { setSending(false); }
   }
@@ -272,18 +264,14 @@ export default function MessagesScreen() {
   const [activeConv, setActiveConv] = useState<{ userId: number; name: string } | null>(null);
 
   const topPad = insets.top + (Platform.OS === "web" ? 67 : 0);
-  const authHeader: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-
   const fetchConversations = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const res = await fetch("/api/messages/conversations", { headers: authHeader });
-      if (!res.ok) { setConversations([]); return; }
-      const data = await res.json() as Conversation[];
+      const data = await customFetch<Conversation[]>("/api/messages/conversations");
       setConversations(data);
     } catch { setConversations([]); }
     finally { setLoading(false); setRefreshing(false); }
-  }, [token]);
+  }, []);
 
   useEffect(() => { void fetchConversations(); }, [fetchConversations]);
 
@@ -292,7 +280,6 @@ export default function MessagesScreen() {
       <ChatScreen
         otherId={activeConv.userId}
         otherName={activeConv.name}
-        token={token}
         myId={user.id}
         onBack={() => { setActiveConv(null); void fetchConversations(true); }}
       />
