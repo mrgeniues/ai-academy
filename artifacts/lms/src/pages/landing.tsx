@@ -303,7 +303,7 @@ export default function LandingPage() {
                 <img
                   src="/founder.png"
                   alt="AI Academy Founder"
-                  style={{ width: "100%", height: 220, objectFit: "cover", display: "block" }}
+                  style={{ width: "100%", height: "auto", objectFit: "contain", display: "block" }}
                 />
                 {/* Name plate below photo */}
                 <div style={{ padding: "12px 14px", background: "#0f172a" }}>
