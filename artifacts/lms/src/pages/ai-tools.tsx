@@ -12,8 +12,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Wrench, Plus, Trash2, ImageIcon, X, ExternalLink, Play, Clock, Pencil, Link2 } from "lucide-react";
+import { Wrench, Plus, Trash2, ImageIcon, X, ExternalLink, Play, Clock, Pencil, Link2, Star, Zap } from "lucide-react";
 import { YouTubePlayer, isYouTubeUrl, extractYouTubeId, buildYouTubeEmbedUrl } from "@/components/youtube-player";
+
+const TOOL_PALETTE = ["#6366f1","#10b981","#f97316","#8b5cf6","#06b6d4","#ec4899","#3b82f6","#f59e0b"];
 
 type Tool = {
   id: number;
@@ -264,13 +266,14 @@ export default function AiToolsPage() {
             animate="visible"
             variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.07 } } }}
           >
-            {tools.map(tool => {
+            {tools.map((tool, idx) => {
               const request = requestMap.get(tool.id);
               const hasRequested = !!request;
               const isApproved = request?.isApproved === true;
               const isYT = tool.videoUrl ? isYouTubeUrl(tool.videoUrl) : false;
               const ytId = isYT && tool.videoUrl ? extractYouTubeId(tool.videoUrl) : null;
               const embedUrl = ytId ? buildYouTubeEmbedUrl(ytId) : null;
+              const accent = TOOL_PALETTE[idx % TOOL_PALETTE.length];
 
               return (
                 <motion.div
@@ -278,122 +281,141 @@ export default function AiToolsPage() {
                   variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0 } }}
                   transition={{ duration: 0.3 }}
                 >
-                  <Card className="overflow-hidden flex flex-col h-full">
+                  <Card
+                    className="overflow-hidden flex flex-col h-full border-0"
+                    style={{ boxShadow: `0 0 0 1px ${accent}28, 0 4px 20px rgba(0,0,0,0.12)`, borderTop: `3px solid ${accent}` }}
+                  >
                     {/* Thumbnail / Video */}
-                    {embedUrl ? (
-                      <div className="relative bg-black">
-                        <div className="w-full" style={{ aspectRatio: "16/9" }}>
-                          <iframe
-                            src={embedUrl}
-                            className="w-full h-full border-0"
-                            allow="autoplay; encrypted-media; picture-in-picture"
-                            allowFullScreen
-                            loading="lazy"
-                            title={tool.title}
-                          />
+                    <div className="relative">
+                      {embedUrl ? (
+                        <div className="relative bg-black">
+                          <div className="w-full" style={{ aspectRatio: "16/9" }}>
+                            <iframe
+                              src={embedUrl}
+                              className="w-full h-full border-0"
+                              allow="autoplay; encrypted-media; picture-in-picture"
+                              allowFullScreen
+                              loading="lazy"
+                              title={tool.title}
+                            />
+                          </div>
+                          <div className="absolute top-2 left-2">
+                            <Badge variant="secondary" className="text-xs gap-1">
+                              <Play className="w-3 h-3" /> Preview
+                            </Badge>
+                          </div>
                         </div>
-                        <div className="absolute top-2 left-2">
-                          <Badge variant="secondary" className="text-xs gap-1">
-                            <Play className="w-3 h-3" /> Preview
-                          </Badge>
+                      ) : tool.imageUrl ? (
+                        <div className="relative aspect-video overflow-hidden bg-muted">
+                          <img src={tool.imageUrl} alt={tool.title} className="w-full h-full object-cover" />
                         </div>
+                      ) : (
+                        <div className="aspect-video flex items-center justify-center" style={{ background: `linear-gradient(135deg,${accent}22,${accent}0a)` }}>
+                          <div className="flex flex-col items-center gap-2">
+                            <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: `${accent}20`, border: `2px solid ${accent}30` }}>
+                              <Zap className="w-7 h-7" style={{ color: accent }} />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {/* Action icons overlay */}
+                      <div className="absolute top-2 right-2 flex gap-1">
+                        <button
+                          onClick={() => {
+                            const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+                            navigator.clipboard.writeText(`${window.location.origin}${base}/tool/${tool.id}`);
+                            toast({ title: "Link copied!" });
+                          }}
+                          className="w-7 h-7 rounded-lg flex items-center justify-center bg-black/30 backdrop-blur-sm hover:bg-black/50 transition-colors"
+                          title="Copy shareable link"
+                        >
+                          <Link2 className="w-3.5 h-3.5 text-white" />
+                        </button>
+                        {isAdmin && (
+                          <>
+                            <button
+                              onClick={() => openEdit(tool)}
+                              className="w-7 h-7 rounded-lg flex items-center justify-center bg-black/30 backdrop-blur-sm hover:bg-black/50 transition-colors"
+                              data-testid={`button-edit-tool-${tool.id}`}
+                            >
+                              <Pencil className="w-3.5 h-3.5 text-white" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(tool.id)}
+                              className="w-7 h-7 rounded-lg flex items-center justify-center bg-black/30 backdrop-blur-sm hover:bg-red-500/70 transition-colors"
+                              data-testid={`button-delete-tool-${tool.id}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-white" />
+                            </button>
+                          </>
+                        )}
                       </div>
-                    ) : tool.imageUrl ? (
-                      <div className="relative aspect-video overflow-hidden bg-muted">
-                        <img src={tool.imageUrl} alt={tool.title} className="w-full h-full object-cover" />
-                      </div>
-                    ) : (
-                      <div className="aspect-video bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center">
-                        <Wrench className="w-10 h-10 text-primary/30" />
-                      </div>
-                    )}
+                    </div>
 
                     <CardContent className="pt-4 pb-4 flex flex-col flex-1 gap-3">
                       <div className="flex-1 space-y-1.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <h3 className="font-semibold text-sm leading-tight">{tool.title}</h3>
-                          <div className="flex gap-1 flex-shrink-0">
-                            <button
-                              onClick={() => {
-                                const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
-                                navigator.clipboard.writeText(`${window.location.origin}${base}/tool/${tool.id}`);
-                                toast({ title: "Link copied!" });
-                              }}
-                              className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
-                              title="Copy shareable link"
-                            >
-                              <Link2 className="w-3.5 h-3.5" />
-                            </button>
-                            {isAdmin && (
-                              <>
-                                <button
-                                  onClick={() => openEdit(tool)}
-                                  className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
-                                  data-testid={`button-edit-tool-${tool.id}`}
-                                >
-                                  <Pencil className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => handleDelete(tool.id)}
-                                  className="p-1 rounded text-muted-foreground hover:text-destructive transition-colors"
-                                  data-testid={`button-delete-tool-${tool.id}`}
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </>
-                            )}
-                          </div>
+                        {/* Stars */}
+                        <div className="flex gap-0.5 mb-1">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star key={i} className="w-3 h-3" fill={accent} style={{ color: accent }} />
+                          ))}
                         </div>
+                        <h3 className="font-bold text-sm leading-tight">{tool.title}</h3>
                         {tool.description && (
                           <p className="text-xs text-muted-foreground line-clamp-2">{tool.description}</p>
                         )}
                       </div>
 
                       {/* Action buttons */}
-                      <div className="flex gap-2 mt-auto">
+                      <div className="flex gap-2 mt-auto pt-1" style={{ borderTop: "1px solid var(--border)" }}>
                         {isAdmin ? (
-                          // Admin: just show the link directly
                           tool.toolUrl ? (
                             <a href={tool.toolUrl} target="_blank" rel="noopener noreferrer" className="flex-1">
-                              <Button variant="outline" size="sm" className="w-full text-sm">
-                                <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> Open Tool
-                              </Button>
+                              <button
+                                className="w-full flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold text-white transition-opacity hover:opacity-90"
+                                style={{ background: `linear-gradient(135deg,${accent},${accent}bb)` }}
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" /> Open Tool
+                              </button>
                             </a>
                           ) : (
-                            <Button variant="outline" size="sm" className="flex-1 text-sm" disabled>
+                            <button className="flex-1 rounded-lg py-2 text-xs font-semibold text-muted-foreground bg-muted cursor-not-allowed" disabled>
                               No link set
-                            </Button>
+                            </button>
                           )
                         ) : isApproved ? (
-                          // Approved user: open tool
                           tool.toolUrl ? (
                             <a href={tool.toolUrl} target="_blank" rel="noopener noreferrer" className="flex-1">
-                              <Button size="sm" className="w-full text-sm" data-testid={`button-open-tool-${tool.id}`}>
-                                <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> Access Tool
-                              </Button>
+                              <button
+                                className="w-full flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold text-white transition-opacity hover:opacity-90"
+                                style={{ background: `linear-gradient(135deg,${accent},${accent}bb)` }}
+                                data-testid={`button-open-tool-${tool.id}`}
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" /> Access Tool
+                              </button>
                             </a>
                           ) : (
-                            <Button size="sm" className="flex-1 text-sm" disabled>Access Tool</Button>
+                            <button className="flex-1 rounded-lg py-2 text-xs font-semibold text-muted-foreground bg-muted cursor-not-allowed" disabled>
+                              Access Tool
+                            </button>
                           )
                         ) : hasRequested ? (
-                          // Pending approval
-                          <Badge
-                            variant="outline"
-                            className="flex-1 justify-center py-1.5 text-xs border-amber-400 text-amber-600 dark:text-amber-400 gap-1"
+                          <div
+                            className="flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold border"
+                            style={{ color: "#f59e0b", borderColor: "#f59e0b55", background: "#f59e0b0e" }}
                           >
-                            <Clock className="w-3 h-3" /> Wait for admin approval
-                          </Badge>
+                            <Clock className="w-3.5 h-3.5" /> Awaiting approval
+                          </div>
                         ) : (
-                          // Not yet requested
-                          <Button
-                            size="sm"
-                            className="flex-1 text-sm"
+                          <button
+                            className="flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold text-white transition-opacity hover:opacity-90"
+                            style={{ background: `linear-gradient(135deg,${accent},${accent}bb)` }}
                             onClick={() => handleRequest(tool.id)}
                             disabled={requesting === tool.id}
                             data-testid={`button-access-tool-${tool.id}`}
                           >
                             {requesting === tool.id ? "Requesting…" : "Access Tool"}
-                          </Button>
+                          </button>
                         )}
                       </div>
                     </CardContent>
