@@ -6,7 +6,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "npm install -g pnpm && pnpm install && BASE_PATH=/ pnpm --filter @workspace/lms run build && pnpm --filter @workspace/api-server run build",
+    "build": "echo 'Using pre-built dist files from repository'",
     "start": "node --enable-source-maps artifacts/api-server/dist/index.mjs",
     "build:prod": "BASE_PATH=/ pnpm --filter @workspace/lms run build && pnpm --filter @workspace/api-server run build",
     "start:prod": "NODE_ENV=production pnpm --filter @workspace/api-server run start",
