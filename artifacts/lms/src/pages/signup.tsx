@@ -71,12 +71,14 @@ export default function SignupPage() {
     <div className="min-h-screen flex bg-background">
       {/* Left panel */}
       <div className="hidden lg:flex flex-col justify-between w-1/2 bg-sidebar p-12">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
-            <GraduationCap className="w-5 h-5 text-white" />
+        <Link href="/">
+          <div className="flex items-center gap-3 cursor-pointer">
+            <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
+              <GraduationCap className="w-5 h-5 text-white" />
+            </div>
+            <span className="font-bold text-xl text-white">AI Academy 3.0</span>
           </div>
-          <span className="font-bold text-xl text-white">AI Academy 3.0</span>
-        </div>
+        </Link>
 
         <div>
           <h2 className="text-3xl font-bold text-white mb-4">Start learning today</h2>
@@ -106,12 +108,14 @@ export default function SignupPage() {
       {/* Right panel */}
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-sm">
-          <div className="flex items-center gap-2 mb-8 lg:hidden">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <GraduationCap className="w-5 h-5 text-white" />
+          <Link href="/">
+            <div className="flex items-center gap-2 mb-8 lg:hidden cursor-pointer">
+              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+                <GraduationCap className="w-5 h-5 text-white" />
+              </div>
+              <span className="font-bold text-lg">AI Academy 3.0</span>
             </div>
-            <span className="font-bold text-lg">AI Academy 3.0</span>
-          </div>
+          </Link>
 
           <h1 className="text-2xl font-bold mb-1">Create your account</h1>
           <p className="text-muted-foreground text-sm mb-8">
