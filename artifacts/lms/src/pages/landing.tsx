@@ -230,37 +230,131 @@ export default function LandingPage() {
       </section>
 
       {/* ── JOIN CTA ────────────────────────────────────────────────── */}
+      <style>{`
+        @keyframes floatPhoto { 0%,100%{transform:translateY(0px)} 50%{transform:translateY(-12px)} }
+        @keyframes glowPulse  { 0%,100%{opacity:0.55;transform:scale(1)} 50%{opacity:1;transform:scale(1.04)} }
+        @keyframes spinSlow   { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+        @keyframes badgePop   { 0%{opacity:0;transform:scale(0.7) translateY(8px)} 100%{opacity:1;transform:scale(1) translateY(0)} }
+        .photo-float { animation: floatPhoto 4s ease-in-out infinite; }
+        .glow-ring   { animation: glowPulse 3s ease-in-out infinite; }
+        .spin-ring   { animation: spinSlow 12s linear infinite; }
+        .badge-pop   { animation: badgePop 0.6s cubic-bezier(.34,1.56,.64,1) both; }
+      `}</style>
+
       <section id="join" className="max-w-6xl mx-auto px-6 pb-16 pt-4">
         <div className="rounded-3xl overflow-hidden grid md:grid-cols-2" style={{ background: "#0f172a" }}>
+
+          {/* Left — content */}
           <div className="p-10 flex flex-col justify-center">
-            <div className="text-4xl mb-4 leading-none" style={{ color: "#f59e0b" }}>"</div>
-            <p className="text-lg font-medium leading-relaxed mb-6" style={{ color: "#e2e8f0" }}>
-              The best investment you can make is in yourself. Knowledge is the one asset that can't be taken away.
+            <h2 className="text-3xl font-extrabold mb-3" style={{ color: "#f8fafc" }}>Start learning today</h2>
+            <p className="text-sm leading-relaxed mb-7" style={{ color: "#94a3b8" }}>
+              Join our community of learners and unlock access to high-quality courses taught by experts.
             </p>
-            {stats && (
-              <div className="flex gap-6">
-                {[
-                  [stats.totalCourses, "Courses"],
-                  [stats.totalMembers, "Members"],
-                  [stats.totalLessons, "Lessons"],
-                ].map(([n, l]) => (
-                  <div key={String(l)}>
-                    <div className="text-xl font-extrabold" style={{ color: "#f59e0b" }}>{Number(n) > 0 ? `${n}+` : "—"}</div>
-                    <div className="text-xs" style={{ color: "#64748b" }}>{l}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="p-10 flex flex-col justify-center items-center text-center border-l" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
-            <h3 className="text-2xl font-extrabold mb-2" style={{ color: "#f8fafc" }}>Ready to start learning?</h3>
-            <p className="text-sm mb-6" style={{ color: "#64748b" }}>Create your free account and join the AI Academy community today.</p>
+            <ul className="space-y-3 mb-8">
+              {[
+                stats ? `Access ${stats.totalCourses}+ professional courses` : "Access professional courses",
+                "Connect with a growing community",
+                "Track your progress and achievements",
+                "Learn at your own pace",
+              ].map((item) => (
+                <li key={item} className="flex items-center gap-3 text-sm" style={{ color: "#e2e8f0" }}>
+                  <span className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: "#f59e0b" }}>
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                      <path d="M2 5l2 2 4-4" stroke="#0f172a" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </span>
+                  {item}
+                </li>
+              ))}
+            </ul>
             <Link href="/signup">
-              <button className="px-8 py-3 rounded-xl font-bold text-sm transition-all hover:opacity-90 active:scale-95 mb-3" style={{ background: "#f59e0b", color: "#0f172a" }}>
-                Create Free Account
+              <button className="inline-flex items-center gap-2 px-7 py-3 rounded-xl font-bold text-sm transition-all hover:opacity-90 active:scale-95" style={{ background: "#f59e0b", color: "#0f172a" }}>
+                Create Free Account →
               </button>
             </Link>
-            <span className="text-xs" style={{ color: "#475569" }}>No credit card required</span>
+            <span className="mt-3 text-xs" style={{ color: "#475569" }}>No credit card required</span>
+          </div>
+
+          {/* Right — animated photo card */}
+          <div className="relative flex items-center justify-center p-10 border-l" style={{ borderColor: "rgba(255,255,255,0.06)", minHeight: 360 }}>
+
+            {/* Spinning gradient ring (outermost) */}
+            <div className="spin-ring absolute" style={{
+              width: 260, height: 260, borderRadius: "50%",
+              background: "conic-gradient(from 0deg, #f59e0b, #fb923c, transparent, transparent, #f59e0b)",
+              opacity: 0.18,
+            }} />
+
+            {/* Glow halo */}
+            <div className="glow-ring absolute" style={{
+              width: 232, height: 232, borderRadius: "50%",
+              background: "radial-gradient(circle, rgba(245,158,11,0.25) 0%, transparent 70%)",
+            }} />
+
+            {/* Photo card — floating */}
+            <div className="photo-float relative z-10" style={{ width: 200 }}>
+              <div style={{
+                borderRadius: 24,
+                overflow: "hidden",
+                border: "3px solid rgba(245,158,11,0.55)",
+                boxShadow: "0 0 0 6px rgba(245,158,11,0.1), 0 24px 60px rgba(0,0,0,0.55)",
+                background: "#1e293b",
+              }}>
+                <img
+                  src="/founder.png"
+                  alt="AI Academy Founder"
+                  style={{ width: "100%", height: 220, objectFit: "cover", display: "block" }}
+                />
+                {/* Name plate below photo */}
+                <div style={{ padding: "12px 14px", background: "#0f172a" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#f8fafc" }}>AI Academy 3.0</div>
+                  <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>Your AI Learning Journey Starts Here</div>
+                </div>
+              </div>
+
+              {/* Top-right badge — "Expert Instructor" */}
+              <div className="badge-pop absolute" style={{
+                top: -14, right: -18,
+                background: "#f59e0b",
+                color: "#0f172a",
+                fontSize: 10,
+                fontWeight: 800,
+                padding: "4px 10px",
+                borderRadius: 20,
+                boxShadow: "0 4px 12px rgba(245,158,11,0.45)",
+                animationDelay: "0.2s",
+                whiteSpace: "nowrap",
+              }}>
+                ⭐ Expert Instructor
+              </div>
+            </div>
+
+            {/* Floating stat pills */}
+            <div className="badge-pop absolute" style={{
+              bottom: 52, left: 20,
+              background: "rgba(15,23,42,0.9)",
+              backdropFilter: "blur(8px)",
+              border: "1px solid rgba(245,158,11,0.3)",
+              borderRadius: 12,
+              padding: "8px 14px",
+              animationDelay: "0.4s",
+            }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "#f59e0b" }}>{stats ? `${stats.totalMembers}+` : "1K+"}</div>
+              <div style={{ fontSize: 10, color: "#94a3b8" }}>Active Members</div>
+            </div>
+
+            <div className="badge-pop absolute" style={{
+              top: 40, left: 14,
+              background: "rgba(15,23,42,0.9)",
+              backdropFilter: "blur(8px)",
+              border: "1px solid rgba(245,158,11,0.3)",
+              borderRadius: 12,
+              padding: "8px 14px",
+              animationDelay: "0.6s",
+            }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "#f59e0b" }}>{stats ? `${stats.totalCourses}+` : "50+"}</div>
+              <div style={{ fontSize: 10, color: "#94a3b8" }}>Courses</div>
+            </div>
           </div>
         </div>
       </section>
