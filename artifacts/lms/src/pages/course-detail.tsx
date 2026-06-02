@@ -472,61 +472,87 @@ export default function CourseDetailPage() {
         {/* Lesson content area */}
         {((course.isEnrolled && course.enrollmentApproved === true) || isAdmin) && course.lessons && course.lessons.length > 0 ? (
           <div className="grid lg:grid-cols-3 gap-6">
-            {/* Lesson list */}
-            <div className="space-y-1.5">
+            {/* Lesson list — Timeline Style */}
+            <div>
               <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-3">
                 Course Lessons
               </h3>
-              {course.lessons.map((lesson, i) => {
-                const isActive = activeLesson?.id === lesson.id;
-                const isCompleted = lesson.isCompleted ?? false;
-                return (
-                  <div key={lesson.id} className="flex items-center gap-1">
-                    <button
-                      data-testid={`button-lesson-${lesson.id}`}
-                      onClick={() => setSelectedLesson(lesson.id)}
-                      className={`flex-1 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-all ${
-                        isActive ? "bg-primary text-white shadow-sm" : "hover:bg-muted"
-                      }`}
-                    >
-                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 border ${
-                        isCompleted
-                          ? isActive ? "bg-white/20 border-white/30 text-white" : "bg-green-100 border-green-300 text-green-600"
-                          : isActive ? "bg-white/10 border-white/20" : "border-border"
-                      }`}>
-                        {isCompleted ? <CheckCircle className="w-3.5 h-3.5" /> : i + 1}
-                      </span>
-                      <span className="flex-1 truncate">{lesson.title}</span>
-                      {/* Visibility badge */}
-                      {lesson.isPublic === false
-                        ? <Lock className={`w-3 h-3 flex-shrink-0 ${isActive ? "text-white/60" : "text-red-400"}`} title="Private" />
-                        : <Globe className={`w-3 h-3 flex-shrink-0 ${isActive ? "text-white/60" : "text-green-500"}`} title="Public" />
-                      }
-                      {lesson.videoUrl && <PlayCircle className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? "text-white/70" : "text-muted-foreground"}`} />}
-                    </button>
-                    {isAdmin && (
-                      <>
-                        <button
-                          onClick={() => openEditLesson(lesson)}
-                          className="p-1.5 text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                          data-testid={`button-edit-lesson-${lesson.id}`}
-                          title="Edit lesson"
+              <div className="relative">
+                {/* Vertical connecting line */}
+                <div
+                  className="absolute top-3 bottom-3"
+                  style={{ left: 23, width: 2, background: "linear-gradient(to bottom, #f59e0b55, #e2e8f0)" }}
+                />
+                {course.lessons.map((lesson, i) => {
+                  const isActive = activeLesson?.id === lesson.id;
+                  const isCompleted = lesson.isCompleted ?? false;
+                  return (
+                    <div key={lesson.id} className="flex items-center gap-1 relative mb-1">
+                      <button
+                        data-testid={`button-lesson-${lesson.id}`}
+                        onClick={() => setSelectedLesson(lesson.id)}
+                        className="flex-1 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-all hover:bg-muted"
+                        style={isActive ? {
+                          background: "#f59e0b14",
+                          borderLeft: "3px solid #f59e0b",
+                          paddingLeft: 9,
+                        } : {}}
+                      >
+                        {/* Timeline circle */}
+                        <span
+                          className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 relative z-10"
+                          style={
+                            isCompleted
+                              ? { background: "#f59e0b", color: "#fff", border: "none" }
+                              : isActive
+                                ? { background: "#fff", border: "2px solid #f59e0b", boxShadow: "0 0 0 3px #f59e0b22", color: "#f59e0b" }
+                                : { background: "var(--background)", border: "2px solid var(--border)", color: "var(--muted-foreground)" }
+                          }
                         >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteLesson(lesson.id)}
-                          className="p-1.5 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
-                          data-testid={`button-delete-lesson-${lesson.id}`}
-                          title="Delete lesson"
+                          {isCompleted
+                            ? <CheckCircle className="w-3.5 h-3.5" />
+                            : isActive
+                              ? <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#f59e0b" }} />
+                              : i + 1
+                          }
+                        </span>
+                        <span
+                          className="flex-1 truncate"
+                          style={isActive ? { color: "var(--foreground)", fontWeight: 600 } : isCompleted ? { color: "var(--muted-foreground)" } : {}}
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                );
-              })}
+                          {lesson.title}
+                        </span>
+                        {/* Visibility badge */}
+                        {lesson.isPublic === false
+                          ? <Lock className="w-3 h-3 flex-shrink-0 text-red-400" title="Private" />
+                          : <Globe className="w-3 h-3 flex-shrink-0 text-green-500" title="Public" />
+                        }
+                        {lesson.videoUrl && <PlayCircle className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />}
+                      </button>
+                      {isAdmin && (
+                        <>
+                          <button
+                            onClick={() => openEditLesson(lesson)}
+                            className="p-1.5 text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                            data-testid={`button-edit-lesson-${lesson.id}`}
+                            title="Edit lesson"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteLesson(lesson.id)}
+                            className="p-1.5 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
+                            data-testid={`button-delete-lesson-${lesson.id}`}
+                            title="Delete lesson"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Lesson viewer */}
