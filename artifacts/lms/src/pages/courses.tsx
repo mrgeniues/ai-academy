@@ -15,8 +15,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { BookOpen, Users, Plus, GraduationCap, Lock, Globe, Trash2, ImageIcon, X, MessageCircle, Link as LinkIcon, Pencil, Zap, Clock } from "lucide-react";
+import { BookOpen, Users, Plus, GraduationCap, Lock, Globe, Trash2, ImageIcon, X, MessageCircle, Link as LinkIcon, Pencil, Zap, Clock, CheckCircle2 } from "lucide-react";
 import { Link, useSearch, useLocation } from "wouter";
+
+const COURSE_PALETTE = ["#6366f1","#10b981","#f97316","#8b5cf6","#06b6d4","#ec4899","#3b82f6","#f59e0b"];
 
 
 type CourseWithExtras = {
@@ -499,12 +501,13 @@ export default function CoursesPage() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
           >
-            {filteredCourses.map(course => {
+            {filteredCourses.map((course, idx) => {
               const isEnrolled = enrolledIds.has(course.id);
               const progress = progressMap.get(course.id) ?? 0;
               const isPrivate = course.visibility === "private";
               const canAccess = !isPrivate || isAdmin;
               const showLink = course.externalUrl && (isEnrolled || isAdmin);
+              const accent = COURSE_PALETTE[idx % COURSE_PALETTE.length];
 
               return (
                 <motion.div
@@ -512,28 +515,50 @@ export default function CoursesPage() {
                   whileHover={{ scale: 1.02 }}
                   transition={{ type: "tween", duration: 0.2 }}
                 >
-                <Card data-testid={`card-course-${course.id}`} className="overflow-hidden hover:shadow-md transition-shadow flex flex-col">
-                  {/* Thumbnail */}
-                  <div className="relative">
+                <Card
+                  data-testid={`card-course-${course.id}`}
+                  className="overflow-hidden flex flex-col border-0"
+                  style={{ boxShadow: `0 2px 12px rgba(0,0,0,0.08), 0 0 0 1px ${accent}22` }}
+                >
+                  {/* Thumbnail with gradient overlay */}
+                  <div className="relative h-44 overflow-hidden">
                     {course.thumbnail ? (
-                      <img src={course.thumbnail} alt={course.title} className="w-full h-44 object-cover" />
+                      <img src={course.thumbnail} alt={course.title} className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-44 bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
-                        <GraduationCap className="w-12 h-12 text-primary/40" />
+                      <div
+                        className="w-full h-full flex items-center justify-center"
+                        style={{ background: `linear-gradient(135deg,${accent}dd,${accent}66)` }}
+                      >
+                        <div
+                          className="absolute inset-0"
+                          style={{ backgroundImage: "radial-gradient(circle,rgba(255,255,255,0.08) 1px,transparent 1px)", backgroundSize: "20px 20px" }}
+                        />
+                        <GraduationCap className="w-14 h-14 text-white/30" />
                       </div>
                     )}
+                    {/* Gradient fade to bottom for title overlay */}
+                    <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.2) 50%, transparent 100%)" }} />
+                    {/* Title overlaid on thumbnail */}
+                    <div className="absolute bottom-0 left-0 right-0 p-3">
+                      <h3 className="font-bold text-sm text-white leading-tight drop-shadow">{course.title}</h3>
+                    </div>
+                    {/* Visibility badge */}
                     <div className="absolute top-2 right-2">
                       {isPrivate ? (
-                        <Badge variant="destructive" className="gap-1 text-xs"><Lock className="w-3 h-3" /> Private</Badge>
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-red-500/85 text-white">
+                          <Lock className="w-2.5 h-2.5" /> Private
+                        </span>
                       ) : (
-                        <Badge variant="secondary" className="gap-1 text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"><Globe className="w-3 h-3" /> Public</Badge>
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/85 text-white">
+                          <Globe className="w-2.5 h-2.5" /> Public
+                        </span>
                       )}
                     </div>
-                    {/* Admin edit button — top-left of thumbnail */}
+                    {/* Admin edit */}
                     {isAdmin && (
                       <button
                         onClick={() => openEditDialog(course)}
-                        className="absolute top-2 left-2 p-1.5 rounded-md bg-black/60 hover:bg-primary text-white transition-colors"
+                        className="absolute top-2 left-2 w-7 h-7 rounded-lg flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 text-white transition-colors"
                         title="Edit course"
                       >
                         <Pencil className="w-3.5 h-3.5" />
@@ -542,18 +567,15 @@ export default function CoursesPage() {
                   </div>
 
                   <CardContent className="p-4 space-y-3 flex flex-col flex-1">
-                    <div>
-                      <h3 className="font-semibold text-base leading-tight">{course.title}</h3>
-                      {course.description && (
-                        <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{course.description}</p>
-                      )}
-                    </div>
+                    {course.description && (
+                      <p className="text-xs text-muted-foreground line-clamp-2">{course.description}</p>
+                    )}
 
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" /> {course.lessonCount} lessons</span>
-                      <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {course.enrollmentCount} enrolled</span>
+                      <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" style={{ color: accent }} /> {course.lessonCount} lessons</span>
+                      <span className="flex items-center gap-1"><Users className="w-3 h-3" style={{ color: accent }} /> {course.enrollmentCount} enrolled</span>
                       {showLink && (
-                        <a href={course.externalUrl!} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline ml-auto">
+                        <a href={course.externalUrl!} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:underline ml-auto" style={{ color: accent }}>
                           <LinkIcon className="w-3 h-3" /> Link
                         </a>
                       )}
@@ -561,77 +583,79 @@ export default function CoursesPage() {
 
                     {/* Progress */}
                     {isEnrolled && (
-                      <div className="space-y-1">
+                      <div className="space-y-1.5">
                         <div className="flex justify-between text-xs">
                           <span className="text-muted-foreground">Progress</span>
-                          <span className="font-medium">{progress}% completed</span>
+                          <span className="font-semibold" style={{ color: accent }}>{progress}% completed</span>
                         </div>
-                        <Progress value={progress} className="h-1.5" />
+                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, background: `linear-gradient(90deg,${accent},${accent}99)` }} />
+                        </div>
                       </div>
                     )}
 
-                    {/* Enrollment mode indicator — only for non-admin, unenrolled students on public courses */}
+                    {/* Enrollment mode indicator */}
                     {canAccess && !isEnrolled && !isAdmin && (
                       course.enrollmentMode === "open" ? (
-                        <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-                          <Zap className="w-3.5 h-3.5" />
-                          <span>Instant Access</span>
+                        <div className="flex items-center gap-1.5 text-xs font-medium" style={{ color: accent }}>
+                          <Zap className="w-3.5 h-3.5" /> Instant Access
                         </div>
                       ) : (
                         <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
-                          <Clock className="w-3.5 h-3.5" />
-                          <span>Approval Required</span>
+                          <Clock className="w-3.5 h-3.5" /> Approval Required
                         </div>
                       )
                     )}
 
                     {/* Actions */}
-                    <div className="flex gap-2 mt-auto pt-1">
+                    <div className="flex gap-2 mt-auto pt-2" style={{ borderTop: "1px solid var(--border)" }}>
                       {canAccess && isEnrolled && !approvedIds.has(course.id) && !isAdmin ? (
-                        <Button
+                        <button
                           data-testid={`button-view-course-${course.id}`}
-                          variant="outline"
-                          size="sm"
-                          className="flex-1 text-sm"
+                          className="flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold border transition-colors text-muted-foreground hover:text-foreground"
                           onClick={() => setPendingAlertCourse(course)}
                         >
-                          <Clock className="w-3 h-3 mr-1" /> View Course
-                        </Button>
+                          <Clock className="w-3.5 h-3.5" /> View Course
+                        </button>
                       ) : canAccess ? (
                         <Link href={`/courses/${course.id}`} className="flex-1">
-                          <Button data-testid={`button-view-course-${course.id}`} variant="outline" className="w-full text-sm" size="sm">
+                          <button
+                            data-testid={`button-view-course-${course.id}`}
+                            className="w-full flex items-center justify-center rounded-lg py-2 text-xs font-bold text-white transition-opacity hover:opacity-90"
+                            style={{ background: `linear-gradient(135deg,${accent},${accent}bb)` }}
+                          >
                             View Course
-                          </Button>
+                          </button>
                         </Link>
                       ) : (
-                        <Button
+                        <button
                           data-testid={`button-view-course-${course.id}`}
-                          variant="outline"
-                          size="sm"
-                          className="flex-1 text-sm"
+                          className="flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold border transition-colors text-muted-foreground hover:text-foreground"
                           onClick={() => handleCourseClick(course)}
                         >
-                          <Lock className="w-3 h-3 mr-1" /> View Course
-                        </Button>
+                          <Lock className="w-3.5 h-3.5" /> View Course
+                        </button>
                       )}
                       {canAccess && !isEnrolled && (
-                        <Button
+                        <button
                           data-testid={`button-enroll-${course.id}`}
-                          size="sm"
-                          className="flex-1 text-sm"
+                          className="flex-1 flex items-center justify-center rounded-lg py-2 text-xs font-bold border transition-colors"
+                          style={{ color: accent, borderColor: `${accent}55`, background: `${accent}10` }}
                           onClick={() => handleEnroll(course.id)}
                           disabled={enrollMutation.isPending}
                         >
                           Enroll Free
-                        </Button>
+                        </button>
                       )}
                       {isEnrolled && approvedIds.has(course.id) && (
-                        <Badge variant="secondary" className="px-3 text-xs flex items-center gap-1">✓ Enrolled</Badge>
+                        <span className="flex items-center gap-1 px-3 text-xs font-semibold rounded-lg py-2" style={{ color: accent, background: `${accent}10` }}>
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Enrolled
+                        </span>
                       )}
                       {isEnrolled && !approvedIds.has(course.id) && !isAdmin && (
-                        <Badge variant="outline" className="px-3 text-xs flex items-center gap-1 border-amber-400 text-amber-600 dark:text-amber-400">
-                          ⏳ Pending Approval
-                        </Badge>
+                        <span className="flex items-center gap-1 px-3 text-xs font-semibold rounded-lg py-2 border border-amber-400/40 text-amber-600 dark:text-amber-400 bg-amber-400/10">
+                          ⏳ Pending
+                        </span>
                       )}
                     </div>
                   </CardContent>
