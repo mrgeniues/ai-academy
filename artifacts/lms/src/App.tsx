@@ -22,6 +22,7 @@ import AiToolsPage from "@/pages/ai-tools";
 import PostDetailPage from "@/pages/post-detail";
 import ToolDetailPage from "@/pages/tool-detail";
 import NotFound from "@/pages/not-found";
+import LandingPage from "@/pages/landing";
 import { WhatsAppButton } from "@/components/whatsapp-button";
 import { useEffect, useRef } from "react";
 
@@ -122,7 +123,7 @@ function Router() {
     <MaintenanceGuard>
       <Switch>
         <Route path="/">
-          <Redirect to="/dashboard" />
+          <PublicRoute component={LandingPage} />
         </Route>
         <Route path="/login">
           <PublicRoute component={LoginPage} />
