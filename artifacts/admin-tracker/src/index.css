@@ -29,25 +29,31 @@
 }
 
 :root {
-  --background: 222 47% 11%;
+  /* Navy + Gold — matching LMS Theme 2 */
+  --background: 222 47% 6%;
   --foreground: 213 31% 91%;
-  --card: 222 47% 15%;
+  --card: 222 47% 10%;
   --card-foreground: 213 31% 91%;
-  --border: 216 34% 22%;
-  --input: 216 34% 22%;
-  --ring: 258 89% 66%;
-  --muted: 223 47% 18%;
-  --muted-foreground: 215 20% 55%;
-  --primary: 258 89% 66%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 223 47% 18%;
+  --border: 216 34% 17%;
+  --input: 216 34% 17%;
+  --ring: 43 96% 56%;
+  --muted: 223 47% 14%;
+  --muted-foreground: 215 20% 50%;
+  --primary: 43 96% 56%;
+  --primary-foreground: 222 47% 6%;
+  --secondary: 223 47% 14%;
   --secondary-foreground: 213 31% 91%;
-  --accent: 43 96% 56%;
-  --accent-foreground: 0 0% 10%;
+  --accent: 239 84% 67%;
+  --accent-foreground: 0 0% 100%;
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
   --app-font-sans: 'Inter', system-ui, sans-serif;
   --radius: 0.625rem;
+  /* Theme color palette for stats */
+  --theme-gold: #f59e0b;
+  --theme-indigo: #6366f1;
+  --theme-teal: #14b8a6;
+  --theme-rose: #ef4444;
 }
 
 @layer base {
