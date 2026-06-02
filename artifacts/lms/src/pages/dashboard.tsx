@@ -29,29 +29,30 @@ type DialogType = "members" | "enrollments" | "my-courses" | "progress" | null;
 
 // ── Clickable Stat Card ───────────────────────────────────────────────────────
 
-function StatCard({ title, value, icon: Icon, description, color, onClick }: {
+function StatCard({ title, value, icon: Icon, description, bg, onClick }: {
   title: string;
   value: number | string;
   icon: React.ElementType;
   description?: string;
-  color: string;
+  bg: string;
   onClick?: () => void;
 }) {
   return (
     <Card
       data-testid={`stat-${title.toLowerCase().replace(/\s+/g, "-")}`}
       onClick={onClick}
-      className={onClick ? "cursor-pointer hover:border-primary/50 transition-colors hover:shadow-md" : ""}
+      className={`border-0 ${onClick ? "cursor-pointer transition-all hover:scale-[1.02]" : ""}`}
+      style={{ background: bg, boxShadow: `0 4px 18px ${bg}55` }}
     >
       <CardContent className="pt-6">
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-sm text-muted-foreground font-medium">{title}</p>
-            <p className="text-3xl font-bold mt-1">{value}</p>
-            {description && <p className="text-xs text-muted-foreground mt-1">{description}</p>}
+            <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.82)" }}>{title}</p>
+            <p className="text-3xl font-bold mt-1" style={{ color: "#fff" }}>{value}</p>
+            {description && <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.7)" }}>{description}</p>}
           </div>
-          <div className={`p-2.5 rounded-xl ${color}`}>
-            <Icon className="w-5 h-5" />
+          <div className="p-2.5 rounded-xl" style={{ background: "rgba(255,255,255,0.22)" }}>
+            <Icon className="w-5 h-5" style={{ color: "#fff" }} />
           </div>
         </div>
       </CardContent>
@@ -360,28 +361,28 @@ export default function DashboardPage() {
                 title: "Total Members",
                 value: stats?.totalUsers ?? 0,
                 icon: Users,
-                color: "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400",
+                bg: "#3b82f6",
                 onClick: () => openDialog("members"),
               },
               {
                 title: "Total Courses",
                 value: stats?.totalCourses ?? 0,
                 icon: BookOpen,
-                color: "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400",
+                bg: "#8b5cf6",
                 onClick: () => setLocation("/courses"),
               },
               {
                 title: "Enrollments",
                 value: stats?.totalEnrollments ?? 0,
                 icon: TrendingUp,
-                color: "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400",
+                bg: "#10b981",
                 onClick: () => openDialog("enrollments"),
               },
               {
                 title: "Community Posts",
                 value: stats?.totalPosts ?? 0,
                 icon: MessageSquare,
-                color: "bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400",
+                bg: "#f97316",
                 onClick: () => setLocation("/community"),
               },
               {
@@ -389,7 +390,7 @@ export default function DashboardPage() {
                 value: stats?.myEnrollments ?? 0,
                 icon: Award,
                 description: "Enrolled courses",
-                color: "bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400",
+                bg: "#f59e0b",
                 onClick: () => openDialog("my-courses"),
               },
               {
@@ -397,7 +398,7 @@ export default function DashboardPage() {
                 value: `${stats?.myProgress ?? 0}%`,
                 icon: Clock,
                 description: "Across all courses",
-                color: "bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400",
+                bg: "#06b6d4",
                 onClick: () => openDialog("progress"),
               },
             ].map(card => (
@@ -407,7 +408,7 @@ export default function DashboardPage() {
                   value={card.value}
                   icon={card.icon}
                   description={card.description}
-                  color={card.color}
+                  bg={card.bg}
                   onClick={card.onClick}
                 />
               </motion.div>
