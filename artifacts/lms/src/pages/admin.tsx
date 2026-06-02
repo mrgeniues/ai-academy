@@ -818,23 +818,23 @@ export default function AdminPage() {
         {/* Analytics overview */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: "Total Users", value: stats?.totalUsers ?? 0, icon: Users, color: "text-blue-500" },
-            { label: "Total Courses", value: stats?.totalCourses ?? 0, icon: BookOpen, color: "text-purple-500" },
-            { label: "Enrollments", value: stats?.totalEnrollments ?? 0, icon: TrendingUp, color: "text-green-500" },
-          ].map(({ label, value, icon: Icon, color }) => (
-            <Card key={label} data-testid={`admin-stat-${label.toLowerCase().replace(/\s+/g, "-")}`}>
+            { label: "Total Users", value: stats?.totalUsers ?? 0, icon: Users, bg: "#3b82f6" },
+            { label: "Total Courses", value: stats?.totalCourses ?? 0, icon: BookOpen, bg: "#8b5cf6" },
+            { label: "Enrollments", value: stats?.totalEnrollments ?? 0, icon: TrendingUp, bg: "#10b981" },
+          ].map(({ label, value, icon: Icon, bg }) => (
+            <Card key={label} data-testid={`admin-stat-${label.toLowerCase().replace(/\s+/g, "-")}`} className="border-0" style={{ background: bg, boxShadow: `0 4px 18px ${bg}55` }}>
               <CardContent className="pt-4 pb-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-muted-foreground">{label}</p>
-                    <p className="text-2xl font-bold">{value}</p>
+                    <p className="text-xs" style={{ color: "rgba(255,255,255,0.8)" }}>{label}</p>
+                    <p className="text-2xl font-bold" style={{ color: "#fff" }}>{value}</p>
                     {label === "Total Courses" && stats && (
-                      <p className="text-xs text-muted-foreground mt-0.5" data-testid="enrollment-mode-summary">
+                      <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.7)" }} data-testid="enrollment-mode-summary">
                         {stats.openCourses} open / {stats.approvalGatedCourses} approval-gated
                       </p>
                     )}
                   </div>
-                  <Icon className={`w-8 h-8 ${color} opacity-60`} />
+                  <Icon className="w-8 h-8" style={{ color: "rgba(255,255,255,0.65)" }} />
                 </div>
               </CardContent>
             </Card>
@@ -845,49 +845,49 @@ export default function AdminPage() {
         {(pendingUsers.length > 0 || pendingEnrollments.length > 0 || pendingToolRequests.length > 0) && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-testid="pending-approvals-summary">
             {pendingUsers.length > 0 && (
-              <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20" data-testid="pending-users-card">
+              <Card className="border-0" style={{ background: "#f59e0b", boxShadow: "0 4px 18px #f59e0b55" }} data-testid="pending-users-card">
                 <CardContent className="pt-4 pb-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs text-muted-foreground">Pending Accounts</p>
-                      <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{pendingUsers.length}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
+                      <p className="text-xs" style={{ color: "rgba(255,255,255,0.8)" }}>Pending Accounts</p>
+                      <p className="text-2xl font-bold" style={{ color: "#fff" }}>{pendingUsers.length}</p>
+                      <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.7)" }}>
                         {pendingUsers.length === 1 ? "account awaiting" : "accounts awaiting"} approval
                       </p>
                     </div>
-                    <Clock className="w-8 h-8 text-amber-500 opacity-60" />
+                    <Clock className="w-8 h-8" style={{ color: "rgba(255,255,255,0.65)" }} />
                   </div>
                 </CardContent>
               </Card>
             )}
             {pendingEnrollments.length > 0 && (
-              <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20" data-testid="pending-enrollments-card">
+              <Card className="border-0" style={{ background: "#f97316", boxShadow: "0 4px 18px #f9731655" }} data-testid="pending-enrollments-card">
                 <CardContent className="pt-4 pb-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs text-muted-foreground">Pending Enrollments</p>
-                      <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{pendingEnrollments.length}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
+                      <p className="text-xs" style={{ color: "rgba(255,255,255,0.8)" }}>Pending Enrollments</p>
+                      <p className="text-2xl font-bold" style={{ color: "#fff" }}>{pendingEnrollments.length}</p>
+                      <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.7)" }}>
                         {pendingEnrollments.length === 1 ? "enrollment awaiting" : "enrollments awaiting"} approval
                       </p>
                     </div>
-                    <GraduationCap className="w-8 h-8 text-amber-500 opacity-60" />
+                    <GraduationCap className="w-8 h-8" style={{ color: "rgba(255,255,255,0.65)" }} />
                   </div>
                 </CardContent>
               </Card>
             )}
             {pendingToolRequests.length > 0 && (
-              <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20" data-testid="pending-tool-requests-card">
+              <Card className="border-0" style={{ background: "#6366f1", boxShadow: "0 4px 18px #6366f155" }} data-testid="pending-tool-requests-card">
                 <CardContent className="pt-4 pb-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs text-muted-foreground">Pending Tool Requests</p>
-                      <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{pendingToolRequests.length}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
+                      <p className="text-xs" style={{ color: "rgba(255,255,255,0.8)" }}>Pending Tool Requests</p>
+                      <p className="text-2xl font-bold" style={{ color: "#fff" }}>{pendingToolRequests.length}</p>
+                      <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.7)" }}>
                         {pendingToolRequests.length === 1 ? "request awaiting" : "requests awaiting"} approval
                       </p>
                     </div>
-                    <Wrench className="w-8 h-8 text-amber-500 opacity-60" />
+                    <Wrench className="w-8 h-8" style={{ color: "rgba(255,255,255,0.65)" }} />
                   </div>
                 </CardContent>
               </Card>
