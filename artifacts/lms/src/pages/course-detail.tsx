@@ -16,7 +16,7 @@ import { RichTextEditor } from "@/components/rich-text-editor";
 import { RichTextDisplay } from "@/components/rich-text-display";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { BookOpen, Users, PlayCircle, CheckCircle, Circle, FileText, Plus, ArrowLeft, Trash2, Lock, MessageCircle, Globe, ExternalLink, Clock, Pencil, Zap, XCircle, Link2 } from "lucide-react";
+import { BookOpen, Users, PlayCircle, CheckCircle, Circle, FileText, Plus, ArrowLeft, Trash2, Lock, MessageCircle, Globe, ExternalLink, Clock, Pencil, Zap, XCircle, Link2, ChevronLeft, ChevronRight } from "lucide-react";
 import { YouTubePlayer, isYouTubeUrl } from "@/components/youtube-player";
 import { Link } from "wouter";
 
@@ -296,6 +296,11 @@ export default function CourseDetailPage() {
   const totalLessons = course.lessons?.length ?? course.lessonCount;
   const completedLessons = course.completedLessons ?? 0;
   const progress = course.progress ?? (totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0);
+  const lessonsList = course.lessons ?? [];
+  const currentLessonIdx = selectedLesson !== null ? lessonsList.findIndex(l => l.id === selectedLesson) : -1;
+  const popupLesson = currentLessonIdx >= 0 ? lessonsList[currentLessonIdx] : null;
+  const goPrevLesson = () => { if (currentLessonIdx > 0) setSelectedLesson(lessonsList[currentLessonIdx - 1].id); };
+  const goNextLesson = () => { if (currentLessonIdx < lessonsList.length - 1) setSelectedLesson(lessonsList[currentLessonIdx + 1].id); };
 
   return (
     <Layout hideSidebar>
@@ -471,198 +476,51 @@ export default function CourseDetailPage() {
 
         {/* Lesson content area */}
         {((course.isEnrolled && course.enrollmentApproved === true) || isAdmin) && course.lessons && course.lessons.length > 0 ? (
-          <div className="grid lg:grid-cols-3 gap-6">
-            {/* Lesson list — Timeline Style */}
-            <div>
-              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-3">
-                Course Lessons
-              </h3>
-              <div className="relative">
-                {/* Vertical connecting line */}
-                <div
-                  className="absolute top-3 bottom-3"
-                  style={{ left: 23, width: 2, background: "linear-gradient(to bottom, #f59e0b55, #e2e8f0)" }}
-                />
-                {course.lessons.map((lesson, i) => {
-                  const isActive = activeLesson?.id === lesson.id;
-                  const isCompleted = lesson.isCompleted ?? false;
-                  return (
-                    <div key={lesson.id} className="flex items-center gap-1 relative mb-1">
+          <div className="border border-border rounded-xl overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-border bg-muted/30 flex items-center justify-between">
+              <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">Course Lessons</h3>
+              <span className="text-xs text-muted-foreground">{course.lessons.length} lectures</span>
+            </div>
+            {course.lessons.map((lesson, i) => {
+              const isCompleted = lesson.isCompleted ?? false;
+              return (
+                <div key={lesson.id} className="flex items-center border-b border-border last:border-b-0 hover:bg-muted/40 transition-colors group">
+                  <button
+                    data-testid={`button-lesson-${lesson.id}`}
+                    onClick={() => setSelectedLesson(lesson.id)}
+                    className="flex-1 flex items-center gap-3 px-5 py-4 text-left"
+                  >
+                    <span className="text-sm text-muted-foreground w-5 text-right flex-shrink-0 tabular-nums">{i + 1}</span>
+                    <span className="text-muted-foreground/40 flex-shrink-0">—</span>
+                    <span className={`flex-1 text-sm font-medium ${isCompleted ? "line-through text-muted-foreground" : ""}`}>
+                      {lesson.title}
+                    </span>
+                    {isCompleted && <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />}
+                    {lesson.isPublic === false && <Lock className="w-3.5 h-3.5 text-red-400 flex-shrink-0" title="Private" />}
+                  </button>
+                  {isAdmin && (
+                    <div className="flex items-center gap-1 pr-4 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
-                        data-testid={`button-lesson-${lesson.id}`}
-                        onClick={() => setSelectedLesson(lesson.id)}
-                        className="flex-1 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-all hover:bg-muted"
-                        style={isActive ? {
-                          background: "#f59e0b14",
-                          borderLeft: "3px solid #f59e0b",
-                          paddingLeft: 9,
-                        } : {}}
+                        onClick={() => openEditLesson(lesson)}
+                        className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                        data-testid={`button-edit-lesson-${lesson.id}`}
+                        title="Edit lesson"
                       >
-                        {/* Timeline circle */}
-                        <span
-                          className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 relative z-10"
-                          style={
-                            isCompleted
-                              ? { background: "#f59e0b", color: "#fff", border: "none" }
-                              : isActive
-                                ? { background: "#fff", border: "2px solid #f59e0b", boxShadow: "0 0 0 3px #f59e0b22", color: "#f59e0b" }
-                                : { background: "var(--background)", border: "2px solid var(--border)", color: "var(--muted-foreground)" }
-                          }
-                        >
-                          {isCompleted
-                            ? <CheckCircle className="w-3.5 h-3.5" />
-                            : isActive
-                              ? <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#f59e0b" }} />
-                              : i + 1
-                          }
-                        </span>
-                        <span
-                          className="flex-1 truncate"
-                          style={isActive ? { color: "var(--foreground)", fontWeight: 600 } : isCompleted ? { color: "var(--muted-foreground)" } : {}}
-                        >
-                          {lesson.title}
-                        </span>
-                        {lesson.isPublic === false && (
-                          <Lock className="w-3 h-3 flex-shrink-0 text-red-400 opacity-60" title="Private" />
-                        )}
+                        <Pencil className="w-3.5 h-3.5" />
                       </button>
-                      {isAdmin && (
-                        <>
-                          <button
-                            onClick={() => openEditLesson(lesson)}
-                            className="p-1.5 text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                            data-testid={`button-edit-lesson-${lesson.id}`}
-                            title="Edit lesson"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteLesson(lesson.id)}
-                            className="p-1.5 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
-                            data-testid={`button-delete-lesson-${lesson.id}`}
-                            title="Delete lesson"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </>
-                      )}
+                      <button
+                        onClick={() => handleDeleteLesson(lesson.id)}
+                        className="p-1.5 text-muted-foreground hover:text-destructive transition-colors"
+                        data-testid={`button-delete-lesson-${lesson.id}`}
+                        title="Delete lesson"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Lesson viewer */}
-            <div className="lg:col-span-2">
-              {activeLesson ? (
-                <Card>
-                  <CardHeader className="pb-3 border-b">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      {activeLesson.isPublic === false
-                        ? <Lock className="w-5 h-5 text-red-400" />
-                        : <FileText className="w-5 h-5 text-primary" />
-                      }
-                      {activeLesson.title}
-                      {activeLesson.isPublic === false && (
-                        <Badge variant="destructive" className="ml-auto text-xs font-medium">Private</Badge>
-                      )}
-                    </CardTitle>
-                    {/* Only show description in header for public lessons / admins */}
-                    {activeLesson.isPublic !== false && activeLesson.description && (
-                      <div className="text-sm text-muted-foreground mt-1">
-                        <RichTextDisplay html={activeLesson.description} />
-                      </div>
-                    )}
-                  </CardHeader>
-                  <CardContent className="pt-4 space-y-4">
-                    {/* ── PRIVATE LESSON WALL ──────────────────────────────────────── */}
-                    {activeLesson.isPublic === false && !isAdmin ? (
-                      <div className="flex flex-col items-center justify-center py-14 gap-4 text-center">
-                        <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                          <Lock className="w-8 h-8 text-red-500" />
-                        </div>
-                        <div>
-                          <p className="font-semibold text-base">This lesson is private. Contact admin.</p>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Reach out to unlock access to this lesson.
-                          </p>
-                        </div>
-                        <a href="https://wa.me/923278035433" target="_blank" rel="noopener noreferrer">
-                          <Button size="sm" className="gap-2 bg-green-500 hover:bg-green-600 text-white">
-                            <MessageCircle className="w-4 h-4" /> Contact Admin on WhatsApp
-                          </Button>
-                        </a>
-                      </div>
-                    ) : (
-                      <>
-                        {/* ── PUBLIC / ADMIN CONTENT ──────────────────────────────── */}
-                        {activeLesson.videoUrl && (
-                          isYouTubeUrl(activeLesson.videoUrl) ? (
-                            <YouTubePlayer
-                              url={activeLesson.videoUrl}
-                            />
-                          ) : (
-                            <div className="rounded-lg overflow-hidden bg-muted">
-                              <a
-                                data-testid="link-video"
-                                href={activeLesson.videoUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-2 text-primary hover:underline text-sm p-4"
-                              >
-                                <PlayCircle className="w-5 h-5" /> Watch Video
-                              </a>
-                            </div>
-                          )
-                        )}
-                        {activeLesson.content && (
-                          <div className="text-sm text-foreground">
-                            <RichTextDisplay html={activeLesson.content} />
-                          </div>
-                        )}
-
-                        {/* Mark complete / undo — only for enrolled non-admin users on public lessons */}
-                        {course.isEnrolled && !isAdmin && (
-                          <div className="flex items-center gap-3 pt-2 border-t border-border">
-                            {activeLesson.isCompleted ? (
-                              <Button
-                                data-testid="button-update-progress"
-                                size="sm"
-                                variant="outline"
-                                className="gap-2 text-green-600 border-green-300 hover:bg-green-50"
-                                onClick={() => handleToggleComplete(activeLesson.id, true)}
-                                disabled={completingLesson === activeLesson.id}
-                              >
-                                <CheckCircle className="w-4 h-4" />
-                                {completingLesson === activeLesson.id ? "Updating..." : "Completed — Click to Undo"}
-                              </Button>
-                            ) : (
-                              <Button
-                                data-testid="button-update-progress"
-                                size="sm"
-                                className="gap-2"
-                                onClick={() => handleToggleComplete(activeLesson.id, false)}
-                                disabled={completingLesson === activeLesson.id}
-                              >
-                                <Circle className="w-4 h-4" />
-                                {completingLesson === activeLesson.id ? "Updating..." : "Mark as Complete"}
-                              </Button>
-                            )}
-                            <span className="text-xs text-muted-foreground">
-                              {completedLessons}/{totalLessons} lessons completed
-                            </span>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="flex items-center justify-center h-48 text-muted-foreground text-sm border rounded-xl">
-                  Select a lesson to begin
+                  )}
                 </div>
-              )}
-            </div>
+              );
+            })}
           </div>
         ) : course.isEnrolled && course.enrollmentApproved !== true && !isAdmin ? (
           <Card>
@@ -696,6 +554,129 @@ export default function CourseDetailPage() {
           </Card>
         ) : null}
       </div>
+
+      {/* ── Video Popup Dialog ─────────────────────────────────────────────── */}
+      <Dialog open={selectedLesson !== null} onOpenChange={open => { if (!open) setSelectedLesson(null); }}>
+        <DialogContent className="max-w-4xl w-full p-0 gap-0 overflow-hidden [&>button]:hidden">
+          {/* Gradient header */}
+          <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-[#3b0764] to-[#1e3a8a]">
+            <button
+              onClick={() => setSelectedLesson(null)}
+              className="flex items-center gap-1.5 text-white/80 hover:text-white text-sm transition-colors flex-shrink-0"
+            >
+              <ArrowLeft className="w-4 h-4" /> Back to Lessons
+            </button>
+            <span className="flex-1 text-white font-semibold text-sm truncate">
+              {popupLesson ? `Lesson ${currentLessonIdx + 1}: ${popupLesson.title}` : ""}
+            </span>
+            <div className="flex items-center gap-0.5 flex-shrink-0">
+              <button
+                onClick={goPrevLesson}
+                disabled={currentLessonIdx <= 0}
+                className="p-1.5 text-white/70 hover:text-white disabled:opacity-30 transition-colors rounded"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-white/70 text-sm tabular-nums px-1">
+                {currentLessonIdx + 1} / {lessonsList.length}
+              </span>
+              <button
+                onClick={goNextLesson}
+                disabled={currentLessonIdx >= lessonsList.length - 1}
+                className="p-1.5 text-white/70 hover:text-white disabled:opacity-30 transition-colors rounded"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            <button
+              onClick={() => setSelectedLesson(null)}
+              className="p-1.5 text-white/70 hover:text-white transition-colors rounded flex-shrink-0"
+            >
+              <XCircle className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Video content */}
+          {popupLesson && (
+            <div className="p-5 space-y-4">
+              {popupLesson.isPublic === false && !isAdmin ? (
+                <div className="flex flex-col items-center justify-center py-14 gap-4 text-center">
+                  <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                    <Lock className="w-8 h-8 text-red-500" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-base">This lesson is private.</p>
+                    <p className="text-sm text-muted-foreground mt-1">Contact the admin to unlock access.</p>
+                  </div>
+                  <a href="https://wa.me/923278035433" target="_blank" rel="noopener noreferrer">
+                    <Button size="sm" className="gap-2 bg-green-500 hover:bg-green-600 text-white">
+                      <MessageCircle className="w-4 h-4" /> Contact Admin on WhatsApp
+                    </Button>
+                  </a>
+                </div>
+              ) : popupLesson.videoUrl ? (
+                isYouTubeUrl(popupLesson.videoUrl) ? (
+                  <YouTubePlayer url={popupLesson.videoUrl} />
+                ) : (
+                  <div className="rounded-lg overflow-hidden bg-muted">
+                    <a
+                      data-testid="link-video"
+                      href={popupLesson.videoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-primary hover:underline text-sm p-4"
+                    >
+                      <PlayCircle className="w-5 h-5" /> Watch Video
+                    </a>
+                  </div>
+                )
+              ) : (
+                <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
+                  <PlayCircle className="w-12 h-12 text-muted-foreground/30" />
+                  <p className="text-muted-foreground text-sm">No video available for this lesson</p>
+                </div>
+              )}
+
+              {popupLesson.content && (
+                <div className="text-sm text-foreground">
+                  <RichTextDisplay html={popupLesson.content} />
+                </div>
+              )}
+
+              {/* Mark complete */}
+              {course.isEnrolled && !isAdmin && popupLesson.isPublic !== false && (
+                <div className="flex items-center gap-3 pt-2 border-t border-border">
+                  {popupLesson.isCompleted ? (
+                    <Button
+                      data-testid="button-update-progress"
+                      size="sm"
+                      variant="outline"
+                      className="gap-2 text-green-600 border-green-300 hover:bg-green-50"
+                      onClick={() => handleToggleComplete(popupLesson.id, true)}
+                      disabled={completingLesson === popupLesson.id}
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      {completingLesson === popupLesson.id ? "Updating..." : "Completed — Click to Undo"}
+                    </Button>
+                  ) : (
+                    <Button
+                      data-testid="button-update-progress"
+                      size="sm"
+                      className="gap-2"
+                      onClick={() => handleToggleComplete(popupLesson.id, false)}
+                      disabled={completingLesson === popupLesson.id}
+                    >
+                      <Circle className="w-4 h-4" />
+                      {completingLesson === popupLesson.id ? "Updating..." : "Mark as Complete"}
+                    </Button>
+                  )}
+                  <span className="text-xs text-muted-foreground">{completedLessons}/{totalLessons} lessons completed</span>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* ── Edit Lesson Dialog ─────────────────────────────────────────────── */}
       <Dialog open={editLessonOpen} onOpenChange={open => { if (!open) { setEditLessonOpen(false); setEditLesson(null); } }}>
