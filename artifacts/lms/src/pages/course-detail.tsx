@@ -446,7 +446,7 @@ export default function CourseDetailPage() {
                     <Plus className="w-4 h-4" /> Add Lesson
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-h-[90vh] overflow-y-auto">
+                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
                   <DialogHeader><DialogTitle>Add Lesson</DialogTitle></DialogHeader>
                   <div className="space-y-4 py-2">
                     <div>
@@ -713,7 +713,7 @@ export default function CourseDetailPage() {
 
       {/* ── Edit Lesson Dialog ─────────────────────────────────────────────── */}
       <Dialog open={editLessonOpen} onOpenChange={open => { if (!open) { setEditLessonOpen(false); setEditLesson(null); } }}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader><DialogTitle>Edit Lesson</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div>
