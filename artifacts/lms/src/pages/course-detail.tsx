@@ -446,7 +446,7 @@ export default function CourseDetailPage() {
                     <Plus className="w-4 h-4" /> Add Lesson
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="max-h-[90vh] overflow-y-auto">
                   <DialogHeader><DialogTitle>Add Lesson</DialogTitle></DialogHeader>
                   <div className="space-y-4 py-2">
                     <div>
