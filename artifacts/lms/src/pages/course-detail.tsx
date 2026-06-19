@@ -522,12 +522,9 @@ export default function CourseDetailPage() {
                         >
                           {lesson.title}
                         </span>
-                        {/* Visibility badge */}
-                        {lesson.isPublic === false
-                          ? <Lock className="w-3 h-3 flex-shrink-0 text-red-400" title="Private" />
-                          : <Globe className="w-3 h-3 flex-shrink-0 text-green-500" title="Public" />
-                        }
-                        {lesson.videoUrl && <PlayCircle className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />}
+                        {lesson.isPublic === false && (
+                          <Lock className="w-3 h-3 flex-shrink-0 text-red-400 opacity-60" title="Private" />
+                        )}
                       </button>
                       {isAdmin && (
                         <>
