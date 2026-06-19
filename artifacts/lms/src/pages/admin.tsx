@@ -102,6 +102,16 @@ export default function AdminPage() {
   const [blockUserReason, setBlockUserReason] = useState("");
   const [showBulkRejectReason, setShowBulkRejectReason] = useState(false);
   const [bulkRejectReason, setBulkRejectReason] = useState("");
+  const [activeTab, setActiveTab] = useState("pending");
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const tab = (e as CustomEvent<string>).detail;
+      if (tab) setActiveTab(tab);
+    };
+    window.addEventListener("admin:switch-tab", handler);
+    return () => window.removeEventListener("admin:switch-tab", handler);
+  }, []);
 
   // Audit log state
   type AdminAction = {
@@ -896,7 +906,7 @@ export default function AdminPage() {
         )}
 
         {/* Management tabs */}
-        <Tabs defaultValue="pending">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid grid-cols-12 w-full max-w-5xl">
             <TabsTrigger value="pending" data-testid="tab-pending">
               Approvals

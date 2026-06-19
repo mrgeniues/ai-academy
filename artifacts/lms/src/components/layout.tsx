@@ -9,6 +9,7 @@ import { NotificationBell } from "@/components/notification-bell";
 import {
   LayoutDashboard, BookOpen, Users, User, LogOut, Sun, Moon, Palette, Shield, Menu,
   GraduationCap, Crown, MessageSquare, PanelLeftClose, PanelLeftOpen, Wrench,
+  UserCheck, Settings, ScrollText, Database, ArrowLeft, TrendingUp, FileText, Megaphone,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -26,6 +27,17 @@ const navItems = [
   { href: "/community", label: "Community", icon: Users },
   { href: "/messages", label: "Messages", icon: MessageSquare },
   { href: "/profile", label: "Profile", icon: User },
+];
+
+const adminNavItems = [
+  { href: "/admin", label: "Approvals", icon: UserCheck, tab: "approvals" },
+  { href: "/admin", label: "Courses", icon: BookOpen, tab: "courses" },
+  { href: "/admin", label: "Users", icon: Users, tab: "users" },
+  { href: "/admin", label: "Manage", icon: Settings, tab: "manage" },
+  { href: "/admin", label: "Posts", icon: FileText, tab: "posts" },
+  { href: "/admin", label: "Tools", icon: Wrench, tab: "tools" },
+  { href: "/admin", label: "Maintenance", icon: Database, tab: "maintenance" },
+  { href: "/admin", label: "Log", icon: ScrollText, tab: "log" },
 ];
 
 export function Layout({ children, hideSidebar = false }: { children: React.ReactNode; hideSidebar?: boolean }) {
@@ -76,6 +88,20 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
     ? user.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
     : "?";
 
+  const isAdminPage = location === "/admin";
+
+  // Map sidebar admin nav labels to tab values
+  const adminTabMap: Record<string, string> = {
+    "Approvals": "pending",
+    "Courses": "course-approval",
+    "Users": "users",
+    "Manage": "courses",
+    "Posts": "posts",
+    "Tools": "tool-access",
+    "Maintenance": "maintenance",
+    "Log": "activity-log",
+  };
+
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo + collapse button */}
@@ -99,67 +125,100 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
-        {navItems.map(({ href, label, icon: Icon }) => {
-          const isActive = location === href || location.startsWith(href + "/");
-          const showBadge = label === "Messages" && unreadCount > 0;
-          return (
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        {isAdminPage ? (
+          <>
+            {/* Back to main nav */}
             <Link
-              key={href}
-              href={href}
-              data-testid={`nav-${label.toLowerCase()}`}
+              href="/dashboard"
               onClick={() => setSidebarOpen(false)}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-                isActive
-                  ? "bg-primary text-white shadow-sm"
-                  : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              }`}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all duration-200 mb-2"
             >
-              <Icon className="w-4 h-4 flex-shrink-0" />
-              <span className="flex-1">{label}</span>
-              {showBadge && (
-                <span className={cn(
-                  "ml-auto min-w-[1.25rem] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center leading-none",
-                  isActive ? "bg-white/25 text-white" : "bg-primary text-white"
-                )}>
-                  {unreadCount > 99 ? "99+" : unreadCount}
-                </span>
-              )}
+              <ArrowLeft className="w-4 h-4 flex-shrink-0" />
+              <span className="flex-1">Back to App</span>
             </Link>
-          );
-        })}
-
-        {user?.role === "admin" && (
-          <Link
-            href="/admin"
-            data-testid="nav-admin"
-            onClick={() => setSidebarOpen(false)}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-              location === "/admin"
-                ? "bg-primary text-white shadow-sm"
-                : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            }`}
-          >
-            <Shield className="w-4 h-4 flex-shrink-0" />
-            <span className="flex-1">Admin</span>
-            {pendingApprovals.total > 0 && (
-              <TooltipProvider delayDuration={200}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
+            <div className="px-3 pb-1 pt-1">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40">Admin Panel</p>
+            </div>
+            {adminNavItems.map(({ label, icon: Icon }) => {
+              const tabValue = adminTabMap[label];
+              return (
+                <button
+                  key={label}
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent("admin:switch-tab", { detail: tabValue }));
+                    setSidebarOpen(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all duration-200 text-left"
+                >
+                  <Icon className="w-4 h-4 flex-shrink-0" />
+                  <span className="flex-1">{label}</span>
+                  {label === "Approvals" && pendingApprovals.users > 0 && (
+                    <span className="ml-auto min-w-[1.25rem] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center leading-none bg-red-500 text-white">
+                      {pendingApprovals.users > 99 ? "99+" : pendingApprovals.users}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </>
+        ) : (
+          <>
+            {navItems.map(({ href, label, icon: Icon }) => {
+              const isActive = location === href || location.startsWith(href + "/");
+              const showBadge = label === "Messages" && unreadCount > 0;
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  data-testid={`nav-${label.toLowerCase()}`}
+                  onClick={() => setSidebarOpen(false)}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                    isActive
+                      ? "bg-primary text-white shadow-sm"
+                      : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  }`}
+                >
+                  <Icon className="w-4 h-4 flex-shrink-0" />
+                  <span className="flex-1">{label}</span>
+                  {showBadge && (
                     <span className={cn(
                       "ml-auto min-w-[1.25rem] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center leading-none",
-                      location === "/admin" ? "bg-white/25 text-white" : "bg-red-500 text-white"
+                      isActive ? "bg-white/25 text-white" : "bg-primary text-white"
                     )}>
-                      {pendingApprovals.total > 99 ? "99+" : pendingApprovals.total}
+                      {unreadCount > 99 ? "99+" : unreadCount}
                     </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">
-                    {pendingTooltip}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+                  )}
+                </Link>
+              );
+            })}
+
+            {user?.role === "admin" && (
+              <Link
+                href="/admin"
+                data-testid="nav-admin"
+                onClick={() => setSidebarOpen(false)}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              >
+                <Shield className="w-4 h-4 flex-shrink-0" />
+                <span className="flex-1">Admin</span>
+                {pendingApprovals.total > 0 && (
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="ml-auto min-w-[1.25rem] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center leading-none bg-red-500 text-white">
+                          {pendingApprovals.total > 99 ? "99+" : pendingApprovals.total}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">
+                        {pendingTooltip}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </Link>
             )}
-          </Link>
+          </>
         )}
       </nav>
 
