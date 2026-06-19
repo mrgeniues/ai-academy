@@ -232,6 +232,28 @@ export default function CourseDetailPage() {
 
   const activeLesson = course?.lessons?.find(l => l.id === selectedLesson) ?? course?.lessons?.[0];
 
+  // ── YouTube duration fetch — must be ABOVE all early returns (Rules of Hooks) ──
+  const ytLessonsEarly = (course?.lessons ?? []).filter(l => l.videoUrl && isYouTubeUrl(l.videoUrl));
+  const { data: durationsMap } = useQuery<Record<number, string>>({
+    queryKey: ["yt-durations", ytLessonsEarly.map(l => l.id).join(",")],
+    queryFn: async () => {
+      const results = await Promise.all(
+        ytLessonsEarly.map(async l => {
+          try {
+            const res = await fetch(`/api/youtube-duration?url=${encodeURIComponent(l.videoUrl!)}`);
+            const data = await res.json() as { duration?: string };
+            return { id: l.id, duration: data.duration ?? "" };
+          } catch {
+            return { id: l.id, duration: "" };
+          }
+        })
+      );
+      return Object.fromEntries(results.map(r => [r.id, r.duration]));
+    },
+    enabled: ytLessonsEarly.length > 0,
+    staleTime: 60 * 60 * 1000,
+  });
+
   if (isLoading) {
     return (
       <Layout hideSidebar>
@@ -301,27 +323,6 @@ export default function CourseDetailPage() {
   const popupLesson = currentLessonIdx >= 0 ? lessonsList[currentLessonIdx] : null;
   const goPrevLesson = () => { if (currentLessonIdx > 0) setSelectedLesson(lessonsList[currentLessonIdx - 1].id); };
   const goNextLesson = () => { if (currentLessonIdx < lessonsList.length - 1) setSelectedLesson(lessonsList[currentLessonIdx + 1].id); };
-
-  const ytLessons = lessonsList.filter(l => l.videoUrl && isYouTubeUrl(l.videoUrl));
-  const { data: durationsMap } = useQuery<Record<number, string>>({
-    queryKey: ["yt-durations", ytLessons.map(l => l.id).join(",")],
-    queryFn: async () => {
-      const results = await Promise.all(
-        ytLessons.map(async l => {
-          try {
-            const res = await fetch(`/api/youtube-duration?url=${encodeURIComponent(l.videoUrl!)}`);
-            const data = await res.json() as { duration?: string };
-            return { id: l.id, duration: data.duration ?? "" };
-          } catch {
-            return { id: l.id, duration: "" };
-          }
-        })
-      );
-      return Object.fromEntries(results.map(r => [r.id, r.duration]));
-    },
-    enabled: ytLessons.length > 0,
-    staleTime: 60 * 60 * 1000,
-  });
 
   return (
     <Layout hideSidebar>
