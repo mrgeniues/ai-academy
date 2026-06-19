@@ -511,20 +511,22 @@ export default function CourseDetailPage() {
                   <button
                     data-testid={`button-lesson-${lesson.id}`}
                     onClick={() => setSelectedLesson(lesson.id)}
-                    className="flex-1 flex items-center gap-3 px-5 py-4 text-left"
+                    className="flex-1 min-w-0 flex items-center gap-3 px-5 py-4 text-left"
                   >
                     <span className="text-sm text-muted-foreground w-5 text-right flex-shrink-0 tabular-nums">{i + 1}</span>
                     <span className="text-muted-foreground/40 flex-shrink-0">—</span>
-                    <span className={`flex-1 text-sm font-medium ${isCompleted ? "line-through text-muted-foreground" : ""}`}>
+                    <span className={`flex-1 min-w-0 truncate text-sm font-medium ${isCompleted ? "line-through text-muted-foreground" : ""}`}>
                       {lesson.title}
                     </span>
-                    {duration && (
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0 tabular-nums">
-                        <Clock className="w-3 h-3" />{duration}
-                      </span>
-                    )}
-                    {isCompleted && <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />}
-                    {lesson.isPublic === false && <Lock className="w-3.5 h-3.5 text-red-400 flex-shrink-0" title="Private" />}
+                    <span className="flex items-center gap-2 flex-shrink-0 ml-2">
+                      {duration && (
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
+                          <Clock className="w-3 h-3" />{duration}
+                        </span>
+                      )}
+                      {isCompleted && <CheckCircle className="w-4 h-4 text-green-500" />}
+                      {lesson.isPublic === false && <Lock className="w-3.5 h-3.5 text-red-400" title="Private" />}
+                    </span>
                   </button>
                   {isAdmin && (
                     <div className="flex items-center gap-1 pr-4 opacity-0 group-hover:opacity-100 transition-opacity">
