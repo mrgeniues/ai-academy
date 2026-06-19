@@ -234,7 +234,7 @@ export default function CourseDetailPage() {
 
   if (isLoading) {
     return (
-      <Layout>
+      <Layout hideSidebar>
         <div className="p-6 max-w-6xl mx-auto space-y-4">
           <Skeleton className="h-8 w-48" />
           <Skeleton className="h-56 w-full rounded-xl" />
@@ -249,7 +249,7 @@ export default function CourseDetailPage() {
 
   if (!course) {
     return (
-      <Layout>
+      <Layout hideSidebar>
         <div className="p-6 text-center">
           <p className="text-muted-foreground">Course not found</p>
           <Link href="/courses"><Button variant="outline" className="mt-4">Back to courses</Button></Link>
@@ -261,7 +261,7 @@ export default function CourseDetailPage() {
   // Private course restriction for non-admins
   if (isPrivate && !isAdmin) {
     return (
-      <Layout>
+      <Layout hideSidebar>
         <div className="p-6 max-w-6xl mx-auto">
           <Link href="/courses">
             <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6">
@@ -298,7 +298,7 @@ export default function CourseDetailPage() {
   const progress = course.progress ?? (totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0);
 
   return (
-    <Layout>
+    <Layout hideSidebar>
       <div className="p-6 max-w-6xl mx-auto space-y-6">
         {/* Back + Share */}
         <div className="flex items-center justify-between">

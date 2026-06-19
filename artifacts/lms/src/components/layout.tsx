@@ -28,7 +28,7 @@ const navItems = [
   { href: "/profile", label: "Profile", icon: User },
 ];
 
-export function Layout({ children }: { children: React.ReactNode }) {
+export function Layout({ children, hideSidebar = false }: { children: React.ReactNode; hideSidebar?: boolean }) {
   const { user, logout, token } = useAuth();
   const { theme, setTheme } = useTheme();
   const [location] = useLocation();
@@ -206,28 +206,30 @@ export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Desktop sidebar */}
-      <aside className={cn(
-        "hidden md:flex flex-col bg-sidebar border-r border-sidebar-border flex-shrink-0 transition-all duration-300 overflow-hidden",
-        collapsed ? "w-12" : "w-64"
-      )}>
-        {collapsed ? (
-          /* Mini collapsed sidebar — just the expand button */
-          <div className="flex flex-col items-center pt-4 gap-3 h-full">
-            <button
-              onClick={toggleCollapsed}
-              title="Expand sidebar"
-              className="p-2 rounded-lg text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
-            >
-              <PanelLeftOpen className="w-5 h-5" />
-            </button>
-          </div>
-        ) : (
-          <SidebarContent />
-        )}
-      </aside>
+      {!hideSidebar && (
+        <aside className={cn(
+          "hidden md:flex flex-col bg-sidebar border-r border-sidebar-border flex-shrink-0 transition-all duration-300 overflow-hidden",
+          collapsed ? "w-12" : "w-64"
+        )}>
+          {collapsed ? (
+            /* Mini collapsed sidebar — just the expand button */
+            <div className="flex flex-col items-center pt-4 gap-3 h-full">
+              <button
+                onClick={toggleCollapsed}
+                title="Expand sidebar"
+                className="p-2 rounded-lg text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+              >
+                <PanelLeftOpen className="w-5 h-5" />
+              </button>
+            </div>
+          ) : (
+            <SidebarContent />
+          )}
+        </aside>
+      )}
 
       {/* Mobile sidebar overlay */}
-      {sidebarOpen && (
+      {!hideSidebar && sidebarOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex">
           <div className="fixed inset-0 bg-black/60" onClick={() => setSidebarOpen(false)} />
           <aside className="relative flex flex-col w-64 bg-sidebar border-r border-sidebar-border">
@@ -240,9 +242,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Mobile header */}
         <header className="md:hidden flex items-center gap-3 px-4 py-3 bg-card border-b border-border">
-          <button data-testid="menu-toggle" onClick={() => setSidebarOpen(true)} className="p-1">
-            <Menu className="w-5 h-5" />
-          </button>
+          {!hideSidebar && (
+            <button data-testid="menu-toggle" onClick={() => setSidebarOpen(true)} className="p-1">
+              <Menu className="w-5 h-5" />
+            </button>
+          )}
           <div className="flex items-center gap-2 flex-1">
             <GraduationCap className="w-5 h-5 text-primary" />
             <span className="font-bold text-base">AI Academy 3.0</span>
