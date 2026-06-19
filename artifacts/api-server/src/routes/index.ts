@@ -16,6 +16,7 @@ import toolsRouter from "./tools";
 import settingsRouter from "./settings";
 import adminActionsRouter from "./admin-actions";
 import trackerRouter from "./tracker";
+import youtubeRouter from "./youtube";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use(toolsRouter);
 router.use(settingsRouter);
 router.use(adminActionsRouter);
 router.use(trackerRouter);
+router.use(youtubeRouter);
 
 export default router;

@@ -302,6 +302,27 @@ export default function CourseDetailPage() {
   const goPrevLesson = () => { if (currentLessonIdx > 0) setSelectedLesson(lessonsList[currentLessonIdx - 1].id); };
   const goNextLesson = () => { if (currentLessonIdx < lessonsList.length - 1) setSelectedLesson(lessonsList[currentLessonIdx + 1].id); };
 
+  const ytLessons = lessonsList.filter(l => l.videoUrl && isYouTubeUrl(l.videoUrl));
+  const { data: durationsMap } = useQuery<Record<number, string>>({
+    queryKey: ["yt-durations", ytLessons.map(l => l.id).join(",")],
+    queryFn: async () => {
+      const results = await Promise.all(
+        ytLessons.map(async l => {
+          try {
+            const res = await fetch(`/api/youtube-duration?url=${encodeURIComponent(l.videoUrl!)}`);
+            const data = await res.json() as { duration?: string };
+            return { id: l.id, duration: data.duration ?? "" };
+          } catch {
+            return { id: l.id, duration: "" };
+          }
+        })
+      );
+      return Object.fromEntries(results.map(r => [r.id, r.duration]));
+    },
+    enabled: ytLessons.length > 0,
+    staleTime: 60 * 60 * 1000,
+  });
+
   return (
     <Layout hideSidebar>
       <div className="p-6 max-w-6xl mx-auto space-y-6">
@@ -483,6 +504,7 @@ export default function CourseDetailPage() {
             </div>
             {course.lessons.map((lesson, i) => {
               const isCompleted = lesson.isCompleted ?? false;
+              const duration = durationsMap?.[lesson.id];
               return (
                 <div key={lesson.id} className="flex items-center border-b border-border last:border-b-0 hover:bg-muted/40 transition-colors group">
                   <button
@@ -495,6 +517,11 @@ export default function CourseDetailPage() {
                     <span className={`flex-1 text-sm font-medium ${isCompleted ? "line-through text-muted-foreground" : ""}`}>
                       {lesson.title}
                     </span>
+                    {duration && (
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0 tabular-nums">
+                        <Clock className="w-3 h-3" />{duration}
+                      </span>
+                    )}
                     {isCompleted && <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />}
                     {lesson.isPublic === false && <Lock className="w-3.5 h-3.5 text-red-400 flex-shrink-0" title="Private" />}
                   </button>
@@ -558,6 +585,7 @@ export default function CourseDetailPage() {
       {/* ── Video Popup Dialog ─────────────────────────────────────────────── */}
       <Dialog open={selectedLesson !== null} onOpenChange={open => { if (!open) setSelectedLesson(null); }}>
         <DialogContent className="max-w-4xl w-full p-0 gap-0 overflow-hidden [&>button]:hidden">
+          <DialogTitle className="sr-only">{popupLesson?.title ?? "Lesson Video"}</DialogTitle>
           {/* Gradient header */}
           <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-[#3b0764] to-[#1e3a8a]">
             <button

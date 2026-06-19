@@ -20605,27 +20605,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router19;
+    module.exports = Router20;
     module.exports.Route = Route;
-    function Router19(options) {
-      if (!(this instanceof Router19)) {
-        return new Router19(options);
+    function Router20(options) {
+      if (!(this instanceof Router20)) {
+        return new Router20(options);
       }
       const opts = options || {};
-      function router19(req, res, next) {
-        router19.handle(req, res, next);
+      function router20(req, res, next) {
+        router20.handle(req, res, next);
       }
-      Object.setPrototypeOf(router19, this);
-      router19.caseSensitive = opts.caseSensitive;
-      router19.mergeParams = opts.mergeParams;
-      router19.params = {};
-      router19.strict = opts.strict;
-      router19.stack = [];
-      return router19;
+      Object.setPrototypeOf(router20, this);
+      router20.caseSensitive = opts.caseSensitive;
+      router20.mergeParams = opts.mergeParams;
+      router20.params = {};
+      router20.strict = opts.strict;
+      router20.stack = [];
+      return router20;
     }
-    Router19.prototype = function() {
+    Router20.prototype = function() {
     };
-    Router19.prototype.param = function param(name, fn) {
+    Router20.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20645,7 +20645,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router19.prototype.handle = function handle(req, res, callback) {
+    Router20.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20772,7 +20772,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router19.prototype.use = function use(handler) {
+    Router20.prototype.use = function use(handler) {
       let offset = 0;
       let path3 = "/";
       if (typeof handler !== "function") {
@@ -20805,7 +20805,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router19.prototype.route = function route(path3) {
+    Router20.prototype.route = function route(path3) {
       const route2 = new Route(path3);
       const layer = new Layer(path3, {
         sensitive: this.caseSensitive,
@@ -20820,7 +20820,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router19.prototype[method] = function(path3) {
+      Router20.prototype[method] = function(path3) {
         const route = this.route(path3);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -21003,13 +21003,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve = __require("node:path").resolve;
     var once = require_once();
-    var Router19 = require_router();
+    var Router20 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router19 = null;
+      var router20 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21018,13 +21018,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router19 === null) {
-            router19 = new Router19({
+          if (router20 === null) {
+            router20 = new Router20({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router19;
+          return router20;
         }
       });
     };
@@ -21095,15 +21095,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router19 = this.router;
+      var router20 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router19.use(path3, fn2);
+          return router20.use(path3, fn2);
         }
         debug(".use app under %s", path3);
         fn2.mountpath = path3;
         fn2.parent = this;
-        router19.use(path3, function mounted_app(req, res, next) {
+        router20.use(path3, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -21193,7 +21193,7 @@ var require_application = __commonJS({
       return this;
     };
     app2.render = function render2(name, options, callback) {
-      var cache = this.cache;
+      var cache2 = this.cache;
       var done = callback;
       var engines = this.engines;
       var opts = options;
@@ -21207,7 +21207,7 @@ var require_application = __commonJS({
         renderOptions.cache = this.enabled("view cache");
       }
       if (renderOptions.cache) {
-        view = cache[name];
+        view = cache2[name];
       }
       if (!view) {
         var View2 = this.get("view");
@@ -21223,7 +21223,7 @@ var require_application = __commonJS({
           return done(err);
         }
         if (renderOptions.cache) {
-          cache[name] = view;
+          cache2[name] = view;
         }
       }
       tryRender(view, renderOptions, done);
@@ -23630,7 +23630,7 @@ var require_express = __commonJS({
     var EventEmitter = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router19 = require_router();
+    var Router20 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23652,8 +23652,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router19.Route;
-    exports.Router = Router19;
+    exports.Route = Router20.Route;
+    exports.Router = Router20;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -28179,12 +28179,12 @@ var require_levels = __commonJS({
     function genLsCache(instance) {
       const formatter = instance[formattersSym].level;
       const { labels } = instance.levels;
-      const cache = {};
+      const cache2 = {};
       for (const label in labels) {
         const level = formatter(labels[label], Number(label));
-        cache[label] = JSON.stringify(level).slice(0, -1);
+        cache2[label] = JSON.stringify(level).slice(0, -1);
       }
-      instance[lsCacheSym] = cache;
+      instance[lsCacheSym] = cache2;
       return instance;
     }
     function isStandardLevel(level, useOnlyCustomLevels) {
@@ -43978,7 +43978,7 @@ var require_range2 = __commonJS({
       parseRange(range) {
         const memoOpts = (this.options.includePrerelease && FLAG_INCLUDE_PRERELEASE) | (this.options.loose && FLAG_LOOSE);
         const memoKey = memoOpts + ":" + range;
-        const cached = cache.get(memoKey);
+        const cached = cache2.get(memoKey);
         if (cached) {
           return cached;
         }
@@ -44012,7 +44012,7 @@ var require_range2 = __commonJS({
           rangeMap.delete("");
         }
         const result = [...rangeMap.values()];
-        cache.set(memoKey, result);
+        cache2.set(memoKey, result);
         return result;
       }
       intersects(range, options) {
@@ -44051,7 +44051,7 @@ var require_range2 = __commonJS({
     };
     module.exports = Range;
     var LRU = require_lrucache();
-    var cache = new LRU();
+    var cache2 = new LRU();
     var parseOptions = require_parse_options();
     var Comparator = require_comparator();
     var debug = require_debug2();
@@ -71196,7 +71196,7 @@ var require_multer = __commonJS({
 });
 
 // src/app.ts
-var import_express19 = __toESM(require_express2(), 1);
+var import_express20 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_compression = __toESM(require_compression(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
@@ -71204,7 +71204,7 @@ import path2 from "path";
 import { fileURLToPath as fileURLToPath2 } from "url";
 
 // src/routes/index.ts
-var import_express18 = __toESM(require_express2(), 1);
+var import_express19 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -94376,30 +94376,105 @@ router17.get("/tracker/growth", requireAuth, requireAdmin, async (_req, res) => 
 });
 var tracker_default = router17;
 
-// src/routes/index.ts
+// src/routes/youtube.ts
+var import_express18 = __toESM(require_express2(), 1);
 var router18 = (0, import_express18.Router)();
-router18.use(health_default);
-router18.use(public_default);
-router18.use(auth_default);
-router18.use(users_default);
-router18.use(courses_default);
-router18.use(lessons_default);
-router18.use(enrollments_default);
-router18.use(posts_default);
-router18.use(dashboard_default);
-router18.use(notifications_default);
-router18.use(upload_default);
-router18.use(messages_default);
-router18.use(maintenance_default);
-router18.use(tools_default);
-router18.use(settings_default);
-router18.use(admin_actions_default);
-router18.use(tracker_default);
-var routes_default = router18;
+var cache = /* @__PURE__ */ new Map();
+var CACHE_TTL_MS = 60 * 60 * 1e3;
+function extractYouTubeId(url) {
+  const patterns = [
+    /[?&]v=([^&#\s]+)/,
+    /youtu\.be\/([^?&#\s]+)/,
+    /youtube\.com\/embed\/([^?&#\s]+)/,
+    /youtube\.com\/shorts\/([^?&#\s]+)/
+  ];
+  for (const re of patterns) {
+    const m = url.match(re);
+    if (m?.[1]) return m[1];
+  }
+  return null;
+}
+function parseDuration(iso) {
+  const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!m) return "";
+  const h = parseInt(m[1] ?? "0", 10);
+  const min = parseInt(m[2] ?? "0", 10);
+  const sec = parseInt(m[3] ?? "0", 10);
+  if (h > 0) {
+    return `${h}:${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  }
+  return `${min}:${String(sec).padStart(2, "0")}`;
+}
+router18.get("/youtube-duration", async (req, res) => {
+  const url = req.query.url;
+  if (!url) {
+    res.status(400).json({ error: "url query param required" });
+    return;
+  }
+  const videoId = extractYouTubeId(url);
+  if (!videoId) {
+    res.status(400).json({ error: "Not a valid YouTube URL" });
+    return;
+  }
+  const cached = cache.get(videoId);
+  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+    res.json({ duration: cached.duration, videoId });
+    return;
+  }
+  try {
+    const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+        "Accept-Language": "en-US,en;q=0.9"
+      }
+    });
+    const html = await response.text();
+    const match = html.match(/<meta\s+itemprop="duration"\s+content="([^"]+)"/) || html.match(/"approxDurationMs":"(\d+)"/) || html.match(/"lengthSeconds":"(\d+)"/);
+    let duration = "";
+    if (match?.[1]) {
+      if (match[1].startsWith("PT")) {
+        duration = parseDuration(match[1]);
+      } else if (/^\d+$/.test(match[1])) {
+        const totalSec = Math.round(parseInt(match[1], 10) / 1e3);
+        const h = Math.floor(totalSec / 3600);
+        const min = Math.floor(totalSec % 3600 / 60);
+        const sec = totalSec % 60;
+        duration = h > 0 ? `${h}:${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}` : `${min}:${String(sec).padStart(2, "0")}`;
+      }
+    }
+    cache.set(videoId, { duration, fetchedAt: Date.now() });
+    res.json({ duration, videoId });
+  } catch {
+    res.status(502).json({ error: "Failed to fetch YouTube metadata" });
+  }
+});
+var youtube_default = router18;
+
+// src/routes/index.ts
+var router19 = (0, import_express19.Router)();
+router19.use(health_default);
+router19.use(public_default);
+router19.use(auth_default);
+router19.use(users_default);
+router19.use(courses_default);
+router19.use(lessons_default);
+router19.use(enrollments_default);
+router19.use(posts_default);
+router19.use(dashboard_default);
+router19.use(notifications_default);
+router19.use(upload_default);
+router19.use(messages_default);
+router19.use(maintenance_default);
+router19.use(tools_default);
+router19.use(settings_default);
+router19.use(admin_actions_default);
+router19.use(tracker_default);
+router19.use(youtube_default);
+var routes_default = router19;
 
 // src/app.ts
 var __dirname2 = path2.dirname(fileURLToPath2(import.meta.url));
-var app = (0, import_express19.default)();
+var app = (0, import_express20.default)();
 app.use((0, import_compression.default)());
 app.use(
   (0, import_pino_http.default)({
@@ -94421,12 +94496,12 @@ app.use(
   })
 );
 app.use((0, import_cors.default)());
-app.use(import_express19.default.json());
-app.use(import_express19.default.urlencoded({ extended: true }));
+app.use(import_express20.default.json());
+app.use(import_express20.default.urlencoded({ extended: true }));
 app.use("/api", routes_default);
 if (process.env["NODE_ENV"] === "production") {
   const staticPath = process.env["STATIC_PATH"] ? path2.resolve(process.cwd(), process.env["STATIC_PATH"]) : path2.resolve(__dirname2, "../../lms/dist/public");
-  app.use(import_express19.default.static(staticPath, {
+  app.use(import_express20.default.static(staticPath, {
     maxAge: "1y",
     setHeaders(res, filePath) {
       if (filePath.endsWith(".html")) {
