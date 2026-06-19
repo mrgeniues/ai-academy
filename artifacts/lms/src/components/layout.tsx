@@ -30,6 +30,7 @@ const navItems = [
 ];
 
 const adminNavItems = [
+  { href: "/admin", label: "Tracker", icon: TrendingUp, tab: "tracker" },
   { href: "/admin", label: "Approvals", icon: UserCheck, tab: "approvals" },
   { href: "/admin", label: "Courses", icon: BookOpen, tab: "courses" },
   { href: "/admin", label: "Users", icon: Users, tab: "users" },
@@ -92,6 +93,7 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
 
   // Map sidebar admin nav labels to tab values
   const adminTabMap: Record<string, string> = {
+    "Tracker": "tracker",
     "Approvals": "pending",
     "Courses": "course-approval",
     "Users": "users",
