@@ -58,6 +58,7 @@ export default function CourseDetailPage() {
   const { toast } = useToast();
   const [selectedLesson, setSelectedLesson] = useState<number | null>(null);
   const [addLessonOpen, setAddLessonOpen] = useState(false);
+  const [addLessonEditorKey, setAddLessonEditorKey] = useState(0);
   const [lessonTitle, setLessonTitle] = useState("");
   const [lessonDesc, setLessonDesc] = useState("");
   const [lessonVideoUrl, setLessonVideoUrl] = useState("");
@@ -439,7 +440,7 @@ export default function CourseDetailPage() {
 
             {/* Admin controls */}
             {isAdmin && (
-              <Dialog open={addLessonOpen} onOpenChange={v => { setAddLessonOpen(v); if (!v) { setLessonTitle(""); setLessonDesc(""); setLessonVideoUrl(""); setLessonVisibility("public"); } }}>
+              <Dialog open={addLessonOpen} onOpenChange={v => { setAddLessonOpen(v); if (v) { setAddLessonEditorKey(k => k + 1); setLessonTitle(""); setLessonDesc(""); setLessonVideoUrl(""); setLessonVisibility("public"); } }}>
                 <DialogTrigger asChild>
                   <Button data-testid="button-add-lesson" variant="outline" size="sm" className="gap-2">
                     <Plus className="w-4 h-4" /> Add Lesson
@@ -456,6 +457,7 @@ export default function CourseDetailPage() {
                       <Label>Description</Label>
                       <div className="mt-1">
                         <RichTextEditor
+                          key={addLessonEditorKey}
                           value={lessonDesc}
                           onChange={setLessonDesc}
                           placeholder="What will students learn in this lesson?"
@@ -722,6 +724,7 @@ export default function CourseDetailPage() {
               <Label>Description</Label>
               <div className="mt-1">
                 <RichTextEditor
+                  key={editLesson?.id ?? 0}
                   value={editDesc}
                   onChange={setEditDesc}
                   placeholder="What will students learn in this lesson?"
