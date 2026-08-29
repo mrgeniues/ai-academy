@@ -1,10 +1,21 @@
 import { useEffect, useRef } from "react";
 
-const HEARTBEAT_INTERVAL = 2 * 60 * 1000;
+const HEARTBEAT_INTERVAL = 60 * 1000;
 
 export function useHeartbeat(token: string | null) {
   const tokenRef = useRef(token);
   tokenRef.current = token;
+  const sessionKeyRef = useRef<string>("");
+
+  if (!sessionKeyRef.current) {
+    try {
+      const existing = sessionStorage.getItem("lms_presence_session");
+      sessionKeyRef.current = existing ?? crypto.randomUUID();
+      sessionStorage.setItem("lms_presence_session", sessionKeyRef.current);
+    } catch {
+      sessionKeyRef.current = `session-${Math.random().toString(36).slice(2)}`;
+    }
+  }
 
   useEffect(() => {
     if (!tokenRef.current) return;
@@ -13,7 +24,8 @@ export function useHeartbeat(token: string | null) {
       if (!tokenRef.current) return;
       fetch("/api/auth/heartbeat", {
         method: "POST",
-        headers: { Authorization: `Bearer ${tokenRef.current}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokenRef.current}` },
+        body: JSON.stringify({ sessionKey: sessionKeyRef.current }),
       }).catch(() => {});
     };
 
@@ -21,7 +33,7 @@ export function useHeartbeat(token: string | null) {
       if (!tokenRef.current) return;
       navigator.sendBeacon(
         "/api/auth/offline",
-        new Blob([JSON.stringify({ token: tokenRef.current })], { type: "application/json" })
+        new Blob([JSON.stringify({ token: tokenRef.current, sessionKey: sessionKeyRef.current })], { type: "application/json" })
       );
     };
 

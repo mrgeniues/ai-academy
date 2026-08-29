@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useListUsers, useUpdateUserRole, useListCourses, useDeleteCourse, useListPosts, useDeletePost, useGetDashboardStats, getListUsersQueryKey, getListCoursesQueryKey, getListPostsQueryKey, getGetDashboardStatsQueryKey, type Course } from "@workspace/api-client-react";
+import { useListUsers, useUpdateUserRole, useListCourses, useDeleteCourse, useListPosts, useDeletePost, useGetDashboardStats, useGetPresenceOverview, getListUsersQueryKey, getListCoursesQueryKey, getListPostsQueryKey, getGetDashboardStatsQueryKey, getGetPresenceOverviewQueryKey, type Course } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trash2, Users, BookOpen, MessageSquare, TrendingUp, Shield, Ban, CheckCircle, Clock, Calendar, GraduationCap, Wrench, XCircle, ScrollText, Database, Users2, User, ImageIcon, ExternalLink, Plus, Pencil } from "lucide-react";
+import { Trash2, Users, BookOpen, MessageSquare, TrendingUp, Shield, Ban, CheckCircle, Clock, Calendar, GraduationCap, Wrench, XCircle, ScrollText, Database, Users2, User, ImageIcon, ExternalLink, Plus, Pencil, Radio, RefreshCw, Wifi, WifiOff, TimerReset, Activity, AlertCircle } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -76,6 +76,45 @@ function UndoCountdownAction({ onUndo, duration = 5 }: { onUndo: () => void; dur
       Undo ({secondsLeft}s)
     </ToastAction>
   );
+}
+
+function formatDuration(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+
+  if (hours > 0) return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+  if (minutes > 0) return `${minutes}m ${String(remainingSeconds).padStart(2, "0")}s`;
+  return `${remainingSeconds}s`;
+}
+
+function formatTimestamp(timestamp?: string | null): string {
+  if (!timestamp) return "Not recorded";
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "Not recorded";
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function formatRelativePresence(timestamp?: string | null): string {
+  if (!timestamp) return "No activity recorded";
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "No activity recorded";
+  return formatDistanceToNow(date, { addSuffix: true });
+}
+
+function presenceInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase() || "U";
+}
+
+function roleLabel(role: string): string {
+  return role.replace(/[_-]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 export default function AdminPage() {
@@ -193,6 +232,18 @@ export default function AdminPage() {
   });
   const { data: stats } = useGetDashboardStats({
     query: { queryKey: getGetDashboardStatsQueryKey() }
+  });
+  const {
+    data: presence,
+    isLoading: presenceLoading,
+    isError: presenceError,
+    refetch: refetchPresence,
+    isFetching: presenceFetching,
+  } = useGetPresenceOverview({
+    query: {
+      queryKey: getGetPresenceOverviewQueryKey(),
+      refetchInterval: 15_000,
+    },
   });
 
   const updateRoleMutation = useUpdateUserRole();
@@ -877,10 +928,30 @@ export default function AdminPage() {
 
           {/* ── Tracker tab ───────────────────────────────────────────── */}
           <TabsContent value="tracker" className="mt-4">
-            <div className="space-y-4">
-              <div>
-                <h2 className="text-lg font-semibold mb-1">Overview</h2>
-                <p className="text-sm text-muted-foreground">Live stats for your platform</p>
+            <div className="space-y-5">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-semibold tracking-tight">Operations overview</h2>
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-emerald-700">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Live
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">Know who is learning now, then follow the time behind the activity.</p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 bg-card"
+                  onClick={() => void refetchPresence()}
+                  disabled={presenceFetching}
+                  data-testid="button-refresh-presence"
+                  aria-label="Refresh presence data"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${presenceFetching ? "animate-spin" : ""}`} />
+                  Refresh
+                </Button>
               </div>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
@@ -958,6 +1029,214 @@ export default function AdminPage() {
                   )}
                 </div>
               )}
+
+              <section
+                className="rounded-xl border border-slate-200 bg-card shadow-sm overflow-hidden"
+                aria-labelledby="presence-heading"
+                data-testid="presence-section"
+              >
+                <div className="border-b border-slate-200 bg-slate-50/70 px-5 py-4 sm:px-6">
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                        <Radio className="h-4 w-4" aria-hidden="true" />
+                      </div>
+                      <div>
+                        <h3 id="presence-heading" className="font-semibold text-slate-900">Presence monitor</h3>
+                        <p className="text-xs text-slate-500 mt-0.5">A rolling view of the community heartbeat.</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-500" data-testid="presence-last-updated">
+                      {presence?.asOf ? `Updated ${formatRelativePresence(presence.asOf)}` : "Waiting for first update"}
+                    </p>
+                  </div>
+                </div>
+
+                {presenceLoading ? (
+                  <div className="p-5 sm:p-6 space-y-5" data-testid="presence-loading">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-20 rounded-lg" />)}
+                    </div>
+                    <Skeleton className="h-12 w-full" />
+                    <div className="space-y-2">
+                      {Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-16 w-full" />)}
+                    </div>
+                  </div>
+                ) : presenceError ? (
+                  <div className="flex flex-col items-center justify-center px-6 py-12 text-center" role="alert" data-testid="presence-error">
+                    <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-rose-50 text-rose-600">
+                      <AlertCircle className="h-5 w-5" aria-hidden="true" />
+                    </div>
+                    <p className="font-medium text-slate-900">Presence data is unavailable</p>
+                    <p className="mt-1 max-w-sm text-sm text-slate-500">The live monitor could not reach the tracker. Your other admin tools are still available.</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-4"
+                      onClick={() => void refetchPresence()}
+                      data-testid="button-retry-presence"
+                    >
+                      Try again
+                    </Button>
+                  </div>
+                ) : !presence ? (
+                  <div className="flex flex-col items-center justify-center px-6 py-12 text-center" data-testid="presence-empty">
+                    <Activity className="mb-3 h-8 w-8 text-slate-300" aria-hidden="true" />
+                    <p className="font-medium text-slate-900">No presence snapshot yet</p>
+                    <p className="mt-1 text-sm text-slate-500">Live activity will appear here as soon as tracking starts.</p>
+                  </div>
+                ) : (
+                  <div className="p-5 sm:p-6 space-y-6">
+                     {presence.migrationRequired && (
+                       <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900" role="status" data-testid="presence-migration-notice">
+                         <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+                         <div>
+                           <p className="text-sm font-semibold">Detailed time tracking needs one database update</p>
+                           <p className="mt-1 text-xs text-amber-800/80">
+                             Live status is available, but online/offline history will start after the
+                             <span className="font-mono"> user_presence_sessions </span>
+                             table is added from the latest Supabase setup SQL.
+                           </p>
+                         </div>
+                       </div>
+                     )}
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3" aria-label="Presence totals">
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-4" data-testid="presence-stat-online">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-800">Live now</p>
+                          <Wifi className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+                        </div>
+                        <p className="mt-2 font-mono text-3xl font-bold tracking-tight text-emerald-950">{presence.onlineCount}</p>
+                        <p className="mt-1 text-xs text-emerald-800/75">of {presence.totalUsers} members</p>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-4" data-testid="presence-stat-tracked">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">Tracked today</p>
+                          <TimerReset className="h-4 w-4 text-slate-500" aria-hidden="true" />
+                        </div>
+                        <p className="mt-2 font-mono text-3xl font-bold tracking-tight text-slate-900">{presence.trackedToday}</p>
+                        <p className="mt-1 text-xs text-slate-500">members with activity</p>
+                      </div>
+                      <div className="col-span-2 md:col-span-1 rounded-lg border border-slate-200 bg-white p-4">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">Snapshot</p>
+                          <Activity className="h-4 w-4 text-slate-500" aria-hidden="true" />
+                        </div>
+                        <p className="mt-2 font-mono text-xl font-bold tracking-tight text-slate-900">{formatTimestamp(presence.asOf)}</p>
+                        <p className="mt-1 text-xs text-slate-500">Refreshes every 15 seconds</p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="mb-3 flex items-end justify-between gap-3">
+                        <div>
+                          <h4 className="font-semibold text-slate-900">People live right now</h4>
+                          <p className="text-xs text-slate-500 mt-0.5">Active sessions and their current duration.</p>
+                        </div>
+                        <span className="font-mono text-xs font-bold text-emerald-700" data-testid="live-user-count-label">
+                          {presence.liveUsers.length} {presence.liveUsers.length === 1 ? "person" : "people"}
+                        </span>
+                      </div>
+                      {presence.liveUsers.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/60 px-5 py-8 text-center" data-testid="live-users-empty">
+                          <WifiOff className="mx-auto h-6 w-6 text-slate-400" aria-hidden="true" />
+                          <p className="mt-2 text-sm font-medium text-slate-700">The community is quiet right now</p>
+                          <p className="mt-1 text-xs text-slate-500">No active sessions in the latest snapshot.</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3" data-testid="live-users-list">
+                          {presence.liveUsers.map((liveUser) => (
+                            <div
+                              key={liveUser.id}
+                              className="group flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 transition-transform duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-sm"
+                              data-testid={`live-user-${liveUser.id}`}
+                            >
+                              <div className="relative shrink-0">
+                                <Avatar className="h-10 w-10 border-2 border-white shadow-sm">
+                                  <AvatarImage src={liveUser.avatar ?? undefined} alt={`${liveUser.name} avatar`} />
+                                  <AvatarFallback className="bg-slate-100 text-xs font-bold text-slate-600">{presenceInitials(liveUser.name)}</AvatarFallback>
+                                </Avatar>
+                                <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" aria-label="Online" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <p className="truncate text-sm font-semibold text-slate-900" data-testid={`text-live-user-name-${liveUser.id}`}>{liveUser.name}</p>
+                                  <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">{roleLabel(liveUser.role)}</span>
+                                </div>
+                                <p className="truncate text-xs text-slate-500">{liveUser.email}</p>
+                                <p className="mt-1 text-[11px] text-slate-500">
+                                  Started {formatTimestamp(liveUser.startedAt)} · Seen {formatRelativePresence(liveUser.lastSeen)}
+                                </p>
+                              </div>
+                              <div className="shrink-0 text-right">
+                                <p className="font-mono text-sm font-bold text-emerald-700" data-testid={`text-live-duration-${liveUser.id}`}>{formatDuration(liveUser.currentSeconds)}</p>
+                                <p className="text-[10px] uppercase tracking-wider text-slate-400">this session</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="mb-3">
+                        <h4 className="font-semibold text-slate-900">Daily time ledger</h4>
+                        <p className="text-xs text-slate-500 mt-0.5">Online and offline time for every tracked member, today.</p>
+                      </div>
+                      {presence.users.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-slate-300 px-5 py-8 text-center text-sm text-slate-500" data-testid="time-ledger-empty">
+                          No user time records are available for today.
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto rounded-lg border border-slate-200" data-testid="time-ledger">
+                          <div className="min-w-[760px]">
+                            <div className="grid grid-cols-[minmax(220px,1.5fr)_minmax(120px,0.8fr)_minmax(120px,0.8fr)_80px_minmax(130px,0.9fr)] gap-3 bg-slate-50 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                              <span>Member</span>
+                              <span>Online today</span>
+                              <span>Offline today</span>
+                              <span>Sessions</span>
+                              <span>Last activity</span>
+                            </div>
+                            <div className="divide-y divide-slate-200">
+                              {presence.users.map((summaryUser) => (
+                                <div key={summaryUser.id} className="grid grid-cols-[minmax(220px,1.5fr)_minmax(120px,0.8fr)_minmax(120px,0.8fr)_80px_minmax(130px,0.9fr)] items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-50/80" data-testid={`presence-user-row-${summaryUser.id}`}>
+                                  <div className="flex min-w-0 items-center gap-3">
+                                    <div className="relative shrink-0">
+                                      <Avatar className="h-8 w-8">
+                                        <AvatarImage src={summaryUser.avatar ?? undefined} alt={`${summaryUser.name} avatar`} />
+                                        <AvatarFallback className="bg-slate-100 text-[10px] font-bold text-slate-600">{presenceInitials(summaryUser.name)}</AvatarFallback>
+                                      </Avatar>
+                                      <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white ${summaryUser.isOnline ? "bg-emerald-500" : "bg-slate-300"}`} aria-label={summaryUser.isOnline ? "Online" : "Offline"} />
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        <p className="truncate text-sm font-medium text-slate-900">{summaryUser.name}</p>
+                                        <span className={`shrink-0 text-[10px] font-semibold uppercase tracking-wide ${summaryUser.isOnline ? "text-emerald-700" : "text-slate-400"}`}>{summaryUser.isOnline ? "Online" : "Offline"}</span>
+                                      </div>
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <p className="truncate text-xs text-slate-500">{summaryUser.email}</p>
+                                        <span className="shrink-0 text-[10px] text-slate-400">{roleLabel(summaryUser.role)}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <p className="font-mono text-xs font-semibold text-emerald-700" data-testid={`online-time-${summaryUser.id}`}>{formatDuration(summaryUser.onlineSecondsToday)}</p>
+                                  <p className="font-mono text-xs text-slate-600" data-testid={`offline-time-${summaryUser.id}`}>{formatDuration(summaryUser.offlineSecondsToday)}</p>
+                                  <p className="font-mono text-xs text-slate-700" data-testid={`session-count-${summaryUser.id}`}>{summaryUser.sessionsToday}</p>
+                                  <div className="text-xs text-slate-500">
+                                    <p>{summaryUser.isOnline ? formatRelativePresence(summaryUser.lastSeen) : formatRelativePresence(summaryUser.lastOfflineAt)}</p>
+                                    <p className="mt-0.5 text-[10px] text-slate-400">Online {formatTimestamp(summaryUser.lastOnlineAt)}</p>
+                                    <p className="text-[10px] text-slate-400">Offline {formatTimestamp(summaryUser.lastOfflineAt)}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </section>
             </div>
           </TabsContent>
 

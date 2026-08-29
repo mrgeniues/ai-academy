@@ -21,7 +21,12 @@ export const SignupBody = zod.object({
   email: zod.string(),
   password: zod.string(),
   name: zod.string(),
-  invite_code: zod.string().optional(),
+  invite_code: zod
+    .string()
+    .optional()
+    .describe(
+      "Optional community invite code — bypasses global admin approval and auto-adds to community as pending member",
+    ),
 });
 
 /**
@@ -62,6 +67,30 @@ export const LoginResponse = zod.object({
  */
 export const LogoutResponse = zod.object({
   message: zod.string(),
+});
+
+/**
+ * @summary Keep the authenticated user's presence session alive
+ */
+
+export const HeartbeatBody = zod.object({
+  sessionKey: zod.string().min(1).optional(),
+});
+
+export const HeartbeatResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Close a browser presence session
+ */
+export const MarkOfflineBody = zod.object({
+  token: zod.string(),
+  sessionKey: zod.string().optional(),
+});
+
+export const MarkOfflineResponse = zod.object({
+  ok: zod.boolean(),
 });
 
 /**
@@ -573,3 +602,43 @@ export const GetRecentActivityResponseItem = zod.object({
 export const GetRecentActivityResponse = zod.array(
   GetRecentActivityResponseItem,
 );
+
+/**
+ * @summary Get live users and presence history (admin)
+ */
+export const GetPresenceOverviewResponse = zod.object({
+  onlineCount: zod.number(),
+  totalUsers: zod.number(),
+  trackedToday: zod.number(),
+  asOf: zod.string(),
+  trackingAvailable: zod.boolean(),
+  migrationRequired: zod.boolean(),
+  liveUsers: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      email: zod.string(),
+      avatar: zod.string().nullish(),
+      role: zod.string(),
+      startedAt: zod.string(),
+      lastSeen: zod.string(),
+      currentSeconds: zod.number(),
+    }),
+  ),
+  users: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      email: zod.string(),
+      avatar: zod.string().nullish(),
+      role: zod.string(),
+      isOnline: zod.boolean(),
+      lastSeen: zod.string().nullish(),
+      lastOnlineAt: zod.string().nullish(),
+      lastOfflineAt: zod.string().nullish(),
+      onlineSecondsToday: zod.number(),
+      offlineSecondsToday: zod.number(),
+      sessionsToday: zod.number(),
+    }),
+  ),
+});

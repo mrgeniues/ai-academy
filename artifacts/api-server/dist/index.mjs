@@ -75258,7 +75258,9 @@ var SignupBody = objectType({
   email: stringType(),
   password: stringType(),
   name: stringType(),
-  invite_code: stringType().optional()
+  invite_code: stringType().optional().describe(
+    "Optional community invite code \u2014 bypasses global admin approval and auto-adds to community as pending member"
+  )
 });
 var LoginBody = objectType({
   email: stringType(),
@@ -75288,6 +75290,19 @@ var LoginResponse = objectType({
 });
 var LogoutResponse = objectType({
   message: stringType()
+});
+var HeartbeatBody = objectType({
+  sessionKey: stringType().min(1).optional()
+});
+var HeartbeatResponse = objectType({
+  ok: booleanType()
+});
+var MarkOfflineBody = objectType({
+  token: stringType(),
+  sessionKey: stringType().optional()
+});
+var MarkOfflineResponse = objectType({
+  ok: booleanType()
 });
 var GetMeResponse = objectType({
   id: numberType(),
@@ -75662,6 +75677,42 @@ var GetRecentActivityResponseItem = objectType({
 var GetRecentActivityResponse = arrayType(
   GetRecentActivityResponseItem
 );
+var GetPresenceOverviewResponse = objectType({
+  onlineCount: numberType(),
+  totalUsers: numberType(),
+  trackedToday: numberType(),
+  asOf: stringType(),
+  trackingAvailable: booleanType(),
+  migrationRequired: booleanType(),
+  liveUsers: arrayType(
+    objectType({
+      id: numberType(),
+      name: stringType(),
+      email: stringType(),
+      avatar: stringType().nullish(),
+      role: stringType(),
+      startedAt: stringType(),
+      lastSeen: stringType(),
+      currentSeconds: numberType()
+    })
+  ),
+  users: arrayType(
+    objectType({
+      id: numberType(),
+      name: stringType(),
+      email: stringType(),
+      avatar: stringType().nullish(),
+      role: stringType(),
+      isOnline: booleanType(),
+      lastSeen: stringType().nullish(),
+      lastOnlineAt: stringType().nullish(),
+      lastOfflineAt: stringType().nullish(),
+      onlineSecondsToday: numberType(),
+      offlineSecondsToday: numberType(),
+      sessionsToday: numberType()
+    })
+  )
+});
 
 // src/routes/health.ts
 var router = (0, import_express.Router)();
@@ -91359,6 +91410,46 @@ Happy learning!${footerText}`
   }
 }
 
+// src/lib/presence.ts
+var PRESENCE_STALE_MS = 3 * 60 * 1e3;
+function isFreshPresence(lastSeen, now = Date.now()) {
+  if (!lastSeen) return false;
+  return now - new Date(lastSeen).getTime() <= PRESENCE_STALE_MS;
+}
+async function touchPresenceSession(userId, sessionKey) {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  try {
+    const { data: activeSession, error: lookupError } = await supabase.from("user_presence_sessions").select("id").eq("user_id", userId).eq("session_key", sessionKey).is("ended_at", null).order("started_at", { ascending: false }).limit(1).maybeSingle();
+    if (lookupError) return false;
+    if (activeSession) {
+      await supabase.from("user_presence_sessions").update({ last_seen: now }).eq("id", activeSession.id);
+    } else {
+      const { error: insertError } = await supabase.from("user_presence_sessions").insert({ user_id: userId, session_key: sessionKey, started_at: now, last_seen: now });
+      if (insertError) return false;
+    }
+    const { error: userError } = await supabase.from("users").update({ is_online: true, last_seen: now }).eq("id", userId);
+    return !userError;
+  } catch {
+    return false;
+  }
+}
+async function closePresenceSession(userId, sessionKey) {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  try {
+    let query = supabase.from("user_presence_sessions").update({ ended_at: now, last_seen: now }).eq("user_id", userId).is("ended_at", null);
+    if (sessionKey) query = query.eq("session_key", sessionKey);
+    const { error } = await query;
+    if (error) return false;
+    const { data: otherActiveSessions } = await supabase.from("user_presence_sessions").select("id").eq("user_id", userId).is("ended_at", null).limit(1);
+    if (!otherActiveSessions || otherActiveSessions.length === 0) {
+      await supabase.from("users").update({ is_online: false, last_seen: now, last_logout: now }).eq("id", userId);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // src/routes/auth.ts
 var RESET_SECRET = process.env.SESSION_SECRET ?? process.env.JWT_SECRET ?? "fallback-reset-secret";
 function signResetToken(userId, pwPrint) {
@@ -91471,19 +91562,31 @@ router4.post("/auth/login", async (req, res) => {
   res.json({ user: formatUser(user), token });
 });
 router4.post("/auth/logout", requireAuth, async (req, res) => {
+  const body = req.body;
   await supabase.from("users").update({ last_logout: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", req.userId);
-  void trySetOnlineStatus(req.userId, false);
+  const closed = await closePresenceSession(req.userId, body?.sessionKey);
+  if (!closed) void trySetOnlineStatus(req.userId, false);
   res.json({ message: "Logged out successfully" });
 });
 router4.post("/auth/heartbeat", requireAuth, async (req, res) => {
-  void trySetOnlineStatus(req.userId, true);
+  const body = req.body;
+  const sessionKey = typeof body?.sessionKey === "string" && body.sessionKey.length > 0 ? body.sessionKey.slice(0, 120) : null;
+  if (sessionKey) {
+    const tracked = await touchPresenceSession(req.userId, sessionKey);
+    if (!tracked) void trySetOnlineStatus(req.userId, true);
+  } else {
+    void trySetOnlineStatus(req.userId, true);
+  }
   res.json({ ok: true });
 });
 router4.post("/auth/offline", async (req, res) => {
   const body = req.body;
   if (body?.token) {
     const payload = verifyToken(body.token);
-    if (payload?.userId) void trySetOnlineStatus(payload.userId, false);
+    if (payload?.userId) {
+      const closed = await closePresenceSession(payload.userId, body.sessionKey);
+      if (!closed) void trySetOnlineStatus(payload.userId, false);
+    }
   }
   res.json({ ok: true });
 });
@@ -94263,6 +94366,116 @@ var admin_actions_default = router16;
 // src/routes/tracker.ts
 var import_express17 = __toESM(require_express2(), 1);
 var router17 = (0, import_express17.Router)();
+function mergeIntervals(intervals) {
+  const sorted = intervals.filter(([start, end]) => end > start).sort((a, b) => a[0] - b[0]);
+  let total = 0;
+  let current = null;
+  for (const interval of sorted) {
+    if (!current) {
+      current = interval;
+    } else if (interval[0] <= current[1]) {
+      current[1] = Math.max(current[1], interval[1]);
+    } else {
+      total += current[1] - current[0];
+      current = interval;
+    }
+  }
+  if (current) total += current[1] - current[0];
+  return Math.floor(total / 1e3);
+}
+router17.get("/tracker/presence", requireAuth, requireAdmin, async (req, res) => {
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+  const dayStart = /* @__PURE__ */ new Date();
+  dayStart.setHours(0, 0, 0, 0);
+  const dayStartMs = dayStart.getTime();
+  const staleBefore = new Date(now - PRESENCE_STALE_MS).toISOString();
+  const [{ data: rawUsers, error: usersError }, { data: rawSessions, error: sessionsError }] = await Promise.all([
+    supabase.from("users").select("id, name, email, avatar, role, is_online, last_seen, last_login, last_logout, created_at").order("name", { ascending: true }),
+    supabase.from("user_presence_sessions").select("id, user_id, started_at, last_seen, ended_at").gte("last_seen", dayStart.toISOString()).order("started_at", { ascending: true })
+  ]);
+  if (usersError) {
+    req.log.error({ error: usersError.message }, "Failed to fetch presence users");
+    res.status(500).json({ error: "Failed to fetch presence data" });
+    return;
+  }
+  const users = rawUsers ?? [];
+  const trackingAvailable = !sessionsError;
+  const sessions = trackingAvailable ? rawSessions ?? [] : [];
+  const sessionsByUser = /* @__PURE__ */ new Map();
+  for (const session of sessions) {
+    const existing = sessionsByUser.get(session.user_id) ?? [];
+    existing.push(session);
+    sessionsByUser.set(session.user_id, existing);
+  }
+  const liveUsers = [];
+  const summaries = users.map((u) => {
+    const userSessions = sessionsByUser.get(u.id) ?? [];
+    const liveSessions = userSessions.filter(
+      (session) => !session.ended_at && new Date(session.last_seen).getTime() >= now - PRESENCE_STALE_MS
+    );
+    const legacyLive = liveSessions.length === 0 && !trackingAvailable && Boolean(u.is_online) && isFreshPresence(u.last_seen, now);
+    const isOnline = liveSessions.length > 0 || legacyLive;
+    const onlineIntervals = [];
+    for (const session of userSessions) {
+      const started = new Date(session.started_at).getTime();
+      const ended = session.ended_at ? new Date(session.ended_at).getTime() : Math.min(new Date(session.last_seen).getTime(), now);
+      onlineIntervals.push([Math.max(started, dayStartMs), Math.min(ended, now)]);
+    }
+    const onlineSecondsToday = mergeIntervals(onlineIntervals);
+    const accountStart = Math.max(dayStartMs, new Date(u.created_at).getTime());
+    const offlineSecondsToday = Math.max(0, Math.floor((now - accountStart) / 1e3) - onlineSecondsToday);
+    const latestSession = userSessions[userSessions.length - 1];
+    const lastSeen = u.last_seen ?? latestSession?.last_seen ?? null;
+    const lastOnlineAt = userSessions.length > 0 ? userSessions.reduce((latest, session) => session.started_at > latest ? session.started_at : latest, userSessions[0].started_at) : u.last_login;
+    const lastOfflineAt = userSessions.filter((session) => session.ended_at).reduce((latest, session) => !latest || session.ended_at > latest ? session.ended_at : latest, u.last_logout);
+    if (isOnline) {
+      const startedAt = liveSessions.length > 0 ? liveSessions.reduce((earliest, session) => session.started_at < earliest ? session.started_at : earliest, liveSessions[0].started_at) : u.last_login ?? lastSeen ?? nowIso;
+      const liveLastSeen = liveSessions.length > 0 ? liveSessions.reduce((latest, session) => session.last_seen > latest ? session.last_seen : latest, liveSessions[0].last_seen) : lastSeen ?? nowIso;
+      liveUsers.push({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        avatar: u.avatar,
+        role: u.role,
+        startedAt,
+        lastSeen: liveLastSeen,
+        currentSeconds: Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1e3))
+      });
+    }
+    return {
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      avatar: u.avatar,
+      role: u.role,
+      isOnline,
+      lastSeen,
+      lastOnlineAt,
+      lastOfflineAt,
+      onlineSecondsToday,
+      offlineSecondsToday,
+      sessionsToday: userSessions.length
+    };
+  });
+  void Promise.all(users.filter((u) => u.is_online && !liveUsers.some((live) => live.id === u.id)).map(
+    (u) => supabase.from("users").update({ is_online: false }).eq("id", u.id).lt("last_seen", staleBefore)
+  ));
+  if (sessionsError) {
+    req.log.warn({ error: sessionsError.message }, "Presence sessions table is unavailable; showing legacy presence only");
+  }
+  liveUsers.sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime());
+  res.json({
+    onlineCount: liveUsers.length,
+    totalUsers: users.length,
+    trackedToday: summaries.filter((summary) => summary.sessionsToday > 0).length,
+    asOf: nowIso,
+    trackingAvailable,
+    migrationRequired: !trackingAvailable,
+    liveUsers,
+    users: summaries
+  });
+});
 router17.get("/tracker/overview", requireAuth, requireAdmin, async (_req, res) => {
   const [
     { count: totalUsers },
@@ -94528,6 +94741,14 @@ async function checkRejectionTables() {
     );
   }
 }
+async function checkPresenceTables() {
+  const { error } = await supabase.from("user_presence_sessions").select("id").limit(1);
+  if (error && (error.code === "42P01" || error.message.includes("user_presence_sessions"))) {
+    logger.warn(
+      "user_presence_sessions table not found \u2014 live duration history is disabled. Run the latest SQL in artifacts/api-server/supabase-setup.sql to enable it."
+    );
+  }
+}
 async function initializeDatabase() {
   logger.info("Checking database connectivity...");
   const exists = await tablesExist();
@@ -94542,6 +94763,7 @@ async function initializeDatabase() {
     return;
   }
   await checkRejectionTables();
+  await checkPresenceTables();
   logger.info("Database ready \u2713");
 }
 

@@ -32,11 +32,15 @@ import type {
   EnrollmentWithCourse,
   ErrorResponse,
   HealthStatus,
+  HeartbeatResponse,
   Lesson,
   LikeResponse,
   LoginBody,
   MessageResponse,
+  OfflineSessionInput,
   PostWithAuthor,
+  PresenceOverview,
+  PresenceSessionInput,
   SignupBody,
   UpdateCourseBody,
   UpdateLessonBody,
@@ -381,6 +385,178 @@ export const useLogout = <
   TContext
 > => {
   return useMutation(getLogoutMutationOptions(options));
+};
+
+/**
+ * @summary Keep the authenticated user's presence session alive
+ */
+export const getHeartbeatUrl = () => {
+  return `/api/auth/heartbeat`;
+};
+
+export const heartbeat = async (
+  presenceSessionInput: PresenceSessionInput,
+  options?: RequestInit,
+): Promise<HeartbeatResponse> => {
+  return customFetch<HeartbeatResponse>(getHeartbeatUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(presenceSessionInput),
+  });
+};
+
+export const getHeartbeatMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof heartbeat>>,
+    TError,
+    { data: BodyType<PresenceSessionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof heartbeat>>,
+  TError,
+  { data: BodyType<PresenceSessionInput> },
+  TContext
+> => {
+  const mutationKey = ["heartbeat"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof heartbeat>>,
+    { data: BodyType<PresenceSessionInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return heartbeat(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type HeartbeatMutationResult = NonNullable<
+  Awaited<ReturnType<typeof heartbeat>>
+>;
+export type HeartbeatMutationBody = BodyType<PresenceSessionInput>;
+export type HeartbeatMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Keep the authenticated user's presence session alive
+ */
+export const useHeartbeat = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof heartbeat>>,
+    TError,
+    { data: BodyType<PresenceSessionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof heartbeat>>,
+  TError,
+  { data: BodyType<PresenceSessionInput> },
+  TContext
+> => {
+  return useMutation(getHeartbeatMutationOptions(options));
+};
+
+/**
+ * @summary Close a browser presence session
+ */
+export const getMarkOfflineUrl = () => {
+  return `/api/auth/offline`;
+};
+
+export const markOffline = async (
+  offlineSessionInput: OfflineSessionInput,
+  options?: RequestInit,
+): Promise<HeartbeatResponse> => {
+  return customFetch<HeartbeatResponse>(getMarkOfflineUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(offlineSessionInput),
+  });
+};
+
+export const getMarkOfflineMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markOffline>>,
+    TError,
+    { data: BodyType<OfflineSessionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof markOffline>>,
+  TError,
+  { data: BodyType<OfflineSessionInput> },
+  TContext
+> => {
+  const mutationKey = ["markOffline"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof markOffline>>,
+    { data: BodyType<OfflineSessionInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return markOffline(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type MarkOfflineMutationResult = NonNullable<
+  Awaited<ReturnType<typeof markOffline>>
+>;
+export type MarkOfflineMutationBody = BodyType<OfflineSessionInput>;
+export type MarkOfflineMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Close a browser presence session
+ */
+export const useMarkOffline = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markOffline>>,
+    TError,
+    { data: BodyType<OfflineSessionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof markOffline>>,
+  TError,
+  { data: BodyType<OfflineSessionInput> },
+  TContext
+> => {
+  return useMutation(getMarkOfflineMutationOptions(options));
 };
 
 /**
@@ -2491,6 +2667,81 @@ export function useGetRecentActivity<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetRecentActivityQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get live users and presence history (admin)
+ */
+export const getGetPresenceOverviewUrl = () => {
+  return `/api/tracker/presence`;
+};
+
+export const getPresenceOverview = async (
+  options?: RequestInit,
+): Promise<PresenceOverview> => {
+  return customFetch<PresenceOverview>(getGetPresenceOverviewUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPresenceOverviewQueryKey = () => {
+  return [`/api/tracker/presence`] as const;
+};
+
+export const getGetPresenceOverviewQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPresenceOverview>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPresenceOverview>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPresenceOverviewQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPresenceOverview>>
+  > = ({ signal }) => getPresenceOverview({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPresenceOverview>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPresenceOverviewQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPresenceOverview>>
+>;
+export type GetPresenceOverviewQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get live users and presence history (admin)
+ */
+
+export function useGetPresenceOverview<
+  TData = Awaited<ReturnType<typeof getPresenceOverview>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPresenceOverview>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPresenceOverviewQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

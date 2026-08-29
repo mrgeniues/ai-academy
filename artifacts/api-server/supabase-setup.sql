@@ -53,6 +53,23 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS bio              TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar           TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
+-- Browser presence sessions power the admin live-user and online/offline duration tracker.
+-- A session is considered live while its last heartbeat is less than three minutes old.
+CREATE TABLE IF NOT EXISTS user_presence_sessions (
+  id           BIGSERIAL PRIMARY KEY,
+  user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  session_key  TEXT NOT NULL,
+  started_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ended_at     TIMESTAMPTZ
+);
+ALTER TABLE user_presence_sessions DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS user_presence_sessions_user_id_idx ON user_presence_sessions(user_id);
+CREATE INDEX IF NOT EXISTS user_presence_sessions_last_seen_idx ON user_presence_sessions(last_seen);
+CREATE INDEX IF NOT EXISTS user_presence_sessions_active_idx
+  ON user_presence_sessions(user_id, session_key)
+  WHERE ended_at IS NULL;
+
 -- Auto-approve admins on insert/update
 CREATE OR REPLACE FUNCTION auto_approve_admin()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$

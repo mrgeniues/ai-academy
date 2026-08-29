@@ -32,6 +32,22 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Browser presence sessions (powers the Admin Tracker live view and time ledger)
+CREATE TABLE IF NOT EXISTS user_presence_sessions (
+  id BIGSERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  session_key TEXT NOT NULL,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ended_at TIMESTAMPTZ
+);
+ALTER TABLE user_presence_sessions DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS user_presence_sessions_user_id_idx ON user_presence_sessions(user_id);
+CREATE INDEX IF NOT EXISTS user_presence_sessions_last_seen_idx ON user_presence_sessions(last_seen);
+CREATE INDEX IF NOT EXISTS user_presence_sessions_active_idx
+  ON user_presence_sessions(user_id, session_key)
+  WHERE ended_at IS NULL;
+
 -- Courses table
 CREATE TABLE IF NOT EXISTS courses (
   id SERIAL PRIMARY KEY,

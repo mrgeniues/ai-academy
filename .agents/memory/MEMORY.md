@@ -1,0 +1,1 @@
+- [Supabase migration access](supabase-migration-access.md) — external Postgres DDL may require the provider SQL Editor when workspace DNS cannot resolve the direct host.

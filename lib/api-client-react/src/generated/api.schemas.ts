@@ -17,10 +17,68 @@ export interface MessageResponse {
   message: string;
 }
 
+export interface PresenceSessionInput {
+  /** @minLength 1 */
+  sessionKey?: string;
+}
+
+export interface OfflineSessionInput {
+  token: string;
+  sessionKey?: string;
+}
+
+export interface HeartbeatResponse {
+  ok: boolean;
+}
+
+export interface PresenceLiveUser {
+  id: number;
+  name: string;
+  email: string;
+  /** @nullable */
+  avatar?: string | null;
+  role: string;
+  startedAt: string;
+  lastSeen: string;
+  currentSeconds: number;
+}
+
+export interface PresenceUserSummary {
+  id: number;
+  name: string;
+  email: string;
+  /** @nullable */
+  avatar?: string | null;
+  role: string;
+  isOnline: boolean;
+  /** @nullable */
+  lastSeen?: string | null;
+  /** @nullable */
+  lastOnlineAt?: string | null;
+  /** @nullable */
+  lastOfflineAt?: string | null;
+  onlineSecondsToday: number;
+  offlineSecondsToday: number;
+  sessionsToday: number;
+}
+
+export interface PresenceOverview {
+  onlineCount: number;
+  totalUsers: number;
+  trackedToday: number;
+  asOf: string;
+  trackingAvailable: boolean;
+  migrationRequired: boolean;
+  liveUsers: PresenceLiveUser[];
+  users: PresenceUserSummary[];
+}
+
 export interface SignupBody {
   email: string;
   password: string;
   name: string;
+  /** Optional community invite code — bypasses global admin approval and auto-adds to community as pending member */
+  invite_code?: string;
 }
 
 export interface LoginBody {

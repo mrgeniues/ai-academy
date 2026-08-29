@@ -103,6 +103,44 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
 
+  /auth/heartbeat:
+    post:
+      operationId: heartbeat
+      tags: [auth]
+      summary: Keep the authenticated user's presence session alive
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PresenceSessionInput"
+      responses:
+        "200":
+          description: Presence updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HeartbeatResponse"
+
+  /auth/offline:
+    post:
+      operationId: markOffline
+      tags: [auth]
+      summary: Close a browser presence session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OfflineSessionInput"
+      responses:
+        "200":
+          description: Presence session closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HeartbeatResponse"
+
   /auth/me:
     get:
       operationId: getMe
@@ -602,6 +640,19 @@ paths:
                 items:
                   $ref: "#/components/schemas/ActivityItem"
 
+  /tracker/presence:
+    get:
+      operationId: getPresenceOverview
+      tags: [dashboard]
+      summary: Get live users and presence history (admin)
+      responses:
+        "200":
+          description: Presence overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PresenceOverview"
+
 components:
   schemas:
     HealthStatus:
@@ -624,6 +675,104 @@ components:
         message:
           type: string
       required: [message]
+
+    PresenceSessionInput:
+      type: object
+      properties:
+        sessionKey:
+          type: string
+          minLength: 1
+
+    OfflineSessionInput:
+      type: object
+      properties:
+        token:
+          type: string
+        sessionKey:
+          type: string
+      required: [token]
+
+    HeartbeatResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+      required: [ok]
+
+    PresenceLiveUser:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        avatar:
+          type: ["string", "null"]
+        role:
+          type: string
+        startedAt:
+          type: string
+        lastSeen:
+          type: string
+        currentSeconds:
+          type: integer
+      required: [id, name, email, role, startedAt, lastSeen, currentSeconds]
+
+    PresenceUserSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        avatar:
+          type: ["string", "null"]
+        role:
+          type: string
+        isOnline:
+          type: boolean
+        lastSeen:
+          type: ["string", "null"]
+        lastOnlineAt:
+          type: ["string", "null"]
+        lastOfflineAt:
+          type: ["string", "null"]
+        onlineSecondsToday:
+          type: integer
+        offlineSecondsToday:
+          type: integer
+        sessionsToday:
+          type: integer
+      required: [id, name, email, role, isOnline, onlineSecondsToday, offlineSecondsToday, sessionsToday]
+
+    PresenceOverview:
+      type: object
+      properties:
+        onlineCount:
+          type: integer
+        totalUsers:
+          type: integer
+        trackedToday:
+          type: integer
+        asOf:
+          type: string
+        trackingAvailable:
+          type: boolean
+        migrationRequired:
+          type: boolean
+        liveUsers:
+          type: array
+          items:
+            $ref: "#/components/schemas/PresenceLiveUser"
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/PresenceUserSummary"
+      required: [onlineCount, totalUsers, trackedToday, asOf, trackingAvailable, migrationRequired, liveUsers, users]
 
     SignupBody:
       type: object

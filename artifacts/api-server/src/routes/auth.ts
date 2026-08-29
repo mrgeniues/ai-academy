@@ -5,6 +5,7 @@ import { signToken, requireAuth, verifyToken } from "../lib/auth";
 import { SignupBody, LoginBody } from "@workspace/api-zod";
 import { supabase } from "../lib/supabase";
 import { sendPasswordResetEmail } from "../lib/email";
+import { closePresenceSession, touchPresenceSession } from "../lib/presence";
 
 const RESET_SECRET = process.env.SESSION_SECRET ?? process.env.JWT_SECRET ?? "fallback-reset-secret";
 
@@ -203,25 +204,39 @@ router.post("/auth/login", async (req, res): Promise<void> => {
 });
 
 router.post("/auth/logout", requireAuth, async (req, res): Promise<void> => {
+  const body = req.body as { sessionKey?: string } | undefined;
   await supabase
     .from("users")
     .update({ last_logout: new Date().toISOString() })
     .eq("id", req.userId!);
-  void trySetOnlineStatus(req.userId!, false);
+  const closed = await closePresenceSession(req.userId!, body?.sessionKey);
+  if (!closed) void trySetOnlineStatus(req.userId!, false);
 
   res.json({ message: "Logged out successfully" });
 });
 
 router.post("/auth/heartbeat", requireAuth, async (req, res): Promise<void> => {
-  void trySetOnlineStatus(req.userId!, true);
+  const body = req.body as { sessionKey?: string } | undefined;
+  const sessionKey = typeof body?.sessionKey === "string" && body.sessionKey.length > 0
+    ? body.sessionKey.slice(0, 120)
+    : null;
+  if (sessionKey) {
+    const tracked = await touchPresenceSession(req.userId!, sessionKey);
+    if (!tracked) void trySetOnlineStatus(req.userId!, true);
+  } else {
+    void trySetOnlineStatus(req.userId!, true);
+  }
   res.json({ ok: true });
 });
 
 router.post("/auth/offline", async (req, res): Promise<void> => {
-  const body = req.body as { token?: string };
+  const body = req.body as { token?: string; sessionKey?: string };
   if (body?.token) {
     const payload = verifyToken(body.token);
-    if (payload?.userId) void trySetOnlineStatus(payload.userId, false);
+    if (payload?.userId) {
+      const closed = await closePresenceSession(payload.userId, body.sessionKey);
+      if (!closed) void trySetOnlineStatus(payload.userId, false);
+    }
   }
   res.json({ ok: true });
 });

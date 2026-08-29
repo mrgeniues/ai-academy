@@ -16,6 +16,16 @@ async function checkRejectionTables(): Promise<void> {
   }
 }
 
+async function checkPresenceTables(): Promise<void> {
+  const { error } = await supabase.from("user_presence_sessions").select("id").limit(1);
+  if (error && (error.code === "42P01" || error.message.includes("user_presence_sessions"))) {
+    logger.warn(
+      "user_presence_sessions table not found — live duration history is disabled. " +
+      "Run the latest SQL in artifacts/api-server/supabase-setup.sql to enable it."
+    );
+  }
+}
+
 export async function initializeDatabase(): Promise<void> {
   logger.info("Checking database connectivity...");
 
@@ -37,5 +47,6 @@ export async function initializeDatabase(): Promise<void> {
   }
 
   await checkRejectionTables();
+  await checkPresenceTables();
   logger.info("Database ready ✓");
 }
