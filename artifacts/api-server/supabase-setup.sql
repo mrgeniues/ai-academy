@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS courses (
   description     TEXT,
   thumbnail       TEXT,
   external_url    TEXT,
+  language        TEXT NOT NULL DEFAULT 'english',              -- 'english' | 'hindi'
   visibility      TEXT NOT NULL DEFAULT 'public',              -- 'public' | 'private'
   enrollment_mode TEXT NOT NULL DEFAULT 'approval_required',   -- 'open' | 'approval_required'
   created_by      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -102,6 +103,7 @@ CREATE TABLE IF NOT EXISTS courses (
 ALTER TABLE courses DISABLE ROW LEVEL SECURITY;
 
 ALTER TABLE courses ADD COLUMN IF NOT EXISTS external_url    TEXT;
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS language        TEXT NOT NULL DEFAULT 'english';
 ALTER TABLE courses ADD COLUMN IF NOT EXISTS visibility      TEXT NOT NULL DEFAULT 'public';
 ALTER TABLE courses ADD COLUMN IF NOT EXISTS enrollment_mode TEXT NOT NULL DEFAULT 'approval_required';
 ALTER TABLE courses ADD COLUMN IF NOT EXISTS updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW();

@@ -259,6 +259,7 @@ export const ListCoursesResponseItem = zod.object({
   title: zod.string(),
   description: zod.string().nullish(),
   thumbnail: zod.string().nullish(),
+  language: zod.enum(["english", "hindi"]).optional(),
   createdBy: zod.number(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -275,6 +276,7 @@ export const CreateCourseBody = zod.object({
   title: zod.string(),
   description: zod.string().nullish(),
   thumbnail: zod.string().nullish(),
+  language: zod.enum(["english", "hindi"]).optional(),
 });
 
 /**
@@ -289,6 +291,7 @@ export const GetCourseResponse = zod.object({
   title: zod.string(),
   description: zod.string().nullish(),
   thumbnail: zod.string().nullish(),
+  language: zod.enum(["english", "hindi"]).optional(),
   createdBy: zod.number(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -320,6 +323,7 @@ export const UpdateCourseBody = zod.object({
   title: zod.string().optional(),
   description: zod.string().nullish(),
   thumbnail: zod.string().nullish(),
+  language: zod.enum(["english", "hindi"]).optional(),
 });
 
 export const UpdateCourseResponse = zod.object({
@@ -327,6 +331,7 @@ export const UpdateCourseResponse = zod.object({
   title: zod.string(),
   description: zod.string().nullish(),
   thumbnail: zod.string().nullish(),
+  language: zod.enum(["english", "hindi"]).optional(),
   createdBy: zod.number(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -419,6 +424,7 @@ export const ListMyEnrollmentsResponseItem = zod.object({
     title: zod.string(),
     description: zod.string().nullish(),
     thumbnail: zod.string().nullish(),
+    language: zod.enum(["english", "hindi"]).optional(),
     createdBy: zod.number(),
     createdAt: zod.string(),
     updatedAt: zod.string(),

@@ -5,6 +5,7 @@
  * LMS Platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { CourseWithLessonsLanguage } from "./courseWithLessonsLanguage";
 import type { Lesson } from "./lesson";
 
 export interface CourseWithLessons {
@@ -14,6 +15,7 @@ export interface CourseWithLessons {
   description?: string | null;
   /** @nullable */
   thumbnail?: string | null;
+  language?: CourseWithLessonsLanguage;
   createdBy: number;
   createdAt: string;
   updatedAt: string;

@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { BookOpen, Users, Plus, GraduationCap, Lock, Globe, Trash2, ImageIcon, X, MessageCircle, Link as LinkIcon, Pencil, Zap, Clock, CheckCircle2 } from "lucide-react";
+import { BookOpen, Users, Plus, GraduationCap, Lock, Globe, Trash2, ImageIcon, X, MessageCircle, Link as LinkIcon, Pencil, Zap, Clock, CheckCircle2, Languages } from "lucide-react";
 import { Link, useSearch, useLocation } from "wouter";
 
 const COURSE_PALETTE = ["#6366f1","#10b981","#f97316","#8b5cf6","#06b6d4","#ec4899","#3b82f6","#f59e0b"];
@@ -27,6 +27,7 @@ type CourseWithExtras = {
   description?: string | null;
   thumbnail?: string | null;
   externalUrl?: string | null;
+  language?: "english" | "hindi";
   visibility?: string;
   enrollmentMode?: "open" | "approval_required";
   lessonCount: number;
@@ -56,6 +57,7 @@ export default function CoursesPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [externalUrl, setExternalUrl] = useState("");
+  const [language, setLanguage] = useState<"english" | "hindi">("english");
   const [visibility, setVisibility] = useState<"public" | "private">("public");
   const [lessonDrafts, setLessonDrafts] = useState<LessonDraft[]>([emptyLesson()]);
   const [enrollmentMode, setEnrollmentMode] = useState<"open" | "approval_required">("approval_required");
@@ -67,6 +69,7 @@ export default function CoursesPage() {
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editExternalUrl, setEditExternalUrl] = useState("");
+  const [editLanguage, setEditLanguage] = useState<"english" | "hindi">("english");
   const [editVisibility, setEditVisibility] = useState<"public" | "private">("public");
   const [editEnrollmentMode, setEditEnrollmentMode] = useState<"open" | "approval_required">("approval_required");
   const [editImageFile, setEditImageFile] = useState<File | null>(null);
@@ -107,6 +110,21 @@ export default function CoursesPage() {
     setLocation(`/courses${qs ? `?${qs}` : ""}`, { replace: false });
   };
 
+  // ── Language filter (persisted in URL query string) ─────────────────────
+  const validLanguages = ["all", "english", "hindi"] as const;
+  type LanguageFilterValue = typeof validLanguages[number];
+  const rawLanguageFilter = new URLSearchParams(search).get("language") ?? "all";
+  const languageFilter: LanguageFilterValue = (validLanguages as readonly string[]).includes(rawLanguageFilter)
+    ? (rawLanguageFilter as LanguageFilterValue)
+    : "all";
+  const setLanguageFilter = (value: LanguageFilterValue) => {
+    const params = new URLSearchParams(search);
+    if (value === "all") params.delete("language");
+    else params.set("language", value);
+    const qs = params.toString();
+    setLocation(`/courses${qs ? `?${qs}` : ""}`, { replace: false });
+  };
+
   // ── Sort (persisted in URL query string) ─────────────────────────────────
   const validSorts = ["newest", "most_enrolled", "az"] as const;
   type SortValue = typeof validSorts[number];
@@ -140,7 +158,7 @@ export default function CoursesPage() {
   // ── Create form helpers ──────────────────────────────────────────────────
   const resetForm = () => {
     setTitle(""); setDescription(""); setImageFile(null); setImagePreview(null); setExternalUrl("");
-    setVisibility("public"); setEnrollmentMode("approval_required"); setLessonDrafts([emptyLesson()]);
+    setLanguage("english"); setVisibility("public"); setEnrollmentMode("approval_required"); setLessonDrafts([emptyLesson()]);
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -195,6 +213,7 @@ export default function CoursesPage() {
           description: description.trim(),
           thumbnail: uploadedImageUrl,
           externalUrl: externalUrl.trim() || null,
+          language,
           visibility,
           enrollmentMode,
           lessons: validLessons.map(l => ({
@@ -225,6 +244,7 @@ export default function CoursesPage() {
     setEditTitle(course.title);
     setEditDescription(course.description ?? "");
     setEditExternalUrl(course.externalUrl ?? "");
+    setEditLanguage(course.language ?? "english");
     setEditVisibility((course.visibility as "public" | "private") ?? "public");
     setEditEnrollmentMode(course.enrollmentMode ?? "approval_required");
     setEditImageFile(null);
@@ -275,6 +295,7 @@ export default function CoursesPage() {
         title: editTitle.trim(),
         description: editDescription.trim() || null,
         externalUrl: editExternalUrl.trim() || null,
+        language: editLanguage,
         visibility: editVisibility,
         enrollmentMode: editEnrollmentMode,
       };
@@ -347,6 +368,19 @@ export default function CoursesPage() {
                     <div>
                       <Label>Description <span className="text-destructive">*</span></Label>
                       <Textarea className="mt-1" placeholder="What will students learn?" value={description} onChange={e => setDescription(e.target.value)} rows={3} />
+                    </div>
+                    <div>
+                      <Label>Course Language</Label>
+                      <Select value={language} onValueChange={(v: "english" | "hindi") => setLanguage(v)}>
+                        <SelectTrigger className="mt-1" data-testid="select-course-language">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="english">English</SelectItem>
+                          <SelectItem value="hindi">Hindi</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground mt-1">Only admins can assign or change a course language.</p>
                     </div>
                     <div>
                       <Label>Course Image</Label>
@@ -455,6 +489,17 @@ export default function CoursesPage() {
                 {label}
               </button>
             ))}
+            <Select value={languageFilter} onValueChange={(v) => setLanguageFilter(v as LanguageFilterValue)}>
+              <SelectTrigger data-testid="select-language-filter" className="h-8 text-xs w-36">
+                <Languages className="w-3.5 h-3.5 mr-1.5" />
+                <SelectValue placeholder="All Languages" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Languages</SelectItem>
+                <SelectItem value="english">English</SelectItem>
+                <SelectItem value="hindi">Hindi</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex items-center gap-2 ml-auto">
             <span className="text-sm text-muted-foreground font-medium">Sort:</span>
@@ -481,7 +526,8 @@ export default function CoursesPage() {
         ) : courses && courses.length > 0 ? (() => {
           const filteredCourses = sortCourses(
             (courses as CourseWithExtras[]).filter(course =>
-              enrollmentFilter === "all" || course.enrollmentMode === enrollmentFilter
+              (enrollmentFilter === "all" || course.enrollmentMode === enrollmentFilter) &&
+              (languageFilter === "all" || (course.language ?? "english") === languageFilter)
             )
           );
           return filteredCourses.length === 0 ? (
@@ -544,15 +590,20 @@ export default function CoursesPage() {
                     </div>
                     {/* Visibility badge */}
                     <div className="absolute top-2 right-2">
-                      {isPrivate ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-red-500/85 text-white">
-                          <Lock className="w-2.5 h-2.5" /> Private
+                      <div className="flex items-center gap-1.5">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-black/45 text-white backdrop-blur-sm">
+                          <Languages className="w-2.5 h-2.5" /> {(course.language ?? "english") === "hindi" ? "Hindi" : "English"}
                         </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/85 text-white">
-                          <Globe className="w-2.5 h-2.5" /> Public
-                        </span>
-                      )}
+                        {isPrivate ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-red-500/85 text-white">
+                            <Lock className="w-2.5 h-2.5" /> Private
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/85 text-white">
+                            <Globe className="w-2.5 h-2.5" /> Public
+                          </span>
+                        )}
+                      </div>
                     </div>
                     {/* Admin edit */}
                     {isAdmin && (
@@ -690,6 +741,19 @@ export default function CoursesPage() {
             <div>
               <Label>Description</Label>
               <Textarea className="mt-1" placeholder="What will students learn?" value={editDescription} onChange={e => setEditDescription(e.target.value)} rows={3} />
+            </div>
+            <div>
+              <Label>Course Language</Label>
+              <Select value={editLanguage} onValueChange={(v: "english" | "hindi") => setEditLanguage(v)}>
+                <SelectTrigger className="mt-1" data-testid="select-edit-course-language">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="english">English</SelectItem>
+                  <SelectItem value="hindi">Hindi</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">Only admins can change this course language.</p>
             </div>
             <div>
               <Label>Course Image</Label>

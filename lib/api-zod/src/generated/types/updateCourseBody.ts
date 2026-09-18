@@ -5,6 +5,7 @@
  * LMS Platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { UpdateCourseBodyLanguage } from "./updateCourseBodyLanguage";
 
 export interface UpdateCourseBody {
   title?: string;
@@ -12,4 +13,5 @@ export interface UpdateCourseBody {
   description?: string | null;
   /** @nullable */
   thumbnail?: string | null;
+  language?: UpdateCourseBodyLanguage;
 }

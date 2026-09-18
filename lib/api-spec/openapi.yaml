@@ -877,6 +877,9 @@ components:
           type: ["string", "null"]
         thumbnail:
           type: ["string", "null"]
+        language:
+          type: string
+          enum: ["english", "hindi"]
         createdBy:
           type: integer
         createdAt:
@@ -903,6 +906,9 @@ components:
           type: ["string", "null"]
         thumbnail:
           type: ["string", "null"]
+        language:
+          type: string
+          enum: ["english", "hindi"]
         createdBy:
           type: integer
         createdAt:
@@ -932,6 +938,9 @@ components:
           type: ["string", "null"]
         thumbnail:
           type: ["string", "null"]
+        language:
+          type: string
+          enum: ["english", "hindi"]
       required: [title]
 
     UpdateCourseBody:
@@ -943,6 +952,9 @@ components:
           type: ["string", "null"]
         thumbnail:
           type: ["string", "null"]
+        language:
+          type: string
+          enum: ["english", "hindi"]
 
     Lesson:
       type: object

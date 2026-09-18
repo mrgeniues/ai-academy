@@ -13,6 +13,7 @@ const CreateCourseBodyExtended = z.object({
   description: z.string().optional().nullable(),
   thumbnail: z.string().optional().nullable(),
   externalUrl: z.string().optional().nullable(),
+  language: z.enum(["english", "hindi"]).default("english"),
   visibility: z.enum(["public", "private"]).default("public"),
   enrollmentMode: z.enum(["open", "approval_required"]).optional(),
   lessons: z.array(z.object({
@@ -27,6 +28,7 @@ const UpdateCourseBodyExtended = z.object({
   description: z.string().optional().nullable(),
   thumbnail: z.string().optional().nullable(),
   externalUrl: z.string().optional().nullable(),
+  language: z.enum(["english", "hindi"]).optional(),
   visibility: z.enum(["public", "private"]).optional(),
   enrollmentMode: z.enum(["open", "approval_required"]).optional(),
 });
@@ -37,6 +39,7 @@ type DbCourse = {
   description: string | null;
   thumbnail: string | null;
   external_url: string | null;
+  language: string | null;
   visibility: string;
   enrollment_mode: string | null;
   created_by: number;
@@ -51,6 +54,7 @@ function formatCourse(course: DbCourse, lessonCount: number, enrollmentCount: nu
     description: course.description ?? null,
     thumbnail: course.thumbnail ?? null,
     externalUrl: course.external_url ?? null,
+    language: (course.language ?? "english") as "english" | "hindi",
     visibility: course.visibility ?? "public",
     enrollmentMode: (course.enrollment_mode ?? "approval_required") as "open" | "approval_required",
     createdBy: course.created_by,
@@ -108,7 +112,7 @@ router.post("/courses", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { title, description, thumbnail, externalUrl, visibility, lessons } = parsed.data;
+  const { title, description, thumbnail, externalUrl, language, visibility, lessons } = parsed.data;
 
   const enrollmentMode = parsed.data.enrollmentMode ?? await getDefaultEnrollmentModeSetting();
 
@@ -121,6 +125,7 @@ router.post("/courses", requireAuth, async (req, res): Promise<void> => {
   if (thumbnail != null) coursePayload.thumbnail = thumbnail;
   if (externalUrl != null) coursePayload.external_url = externalUrl;
   coursePayload.visibility = visibility;
+  coursePayload.language = language;
   coursePayload.enrollment_mode = enrollmentMode;
 
   let { data: course, error } = await supabase
@@ -130,7 +135,7 @@ router.post("/courses", requireAuth, async (req, res): Promise<void> => {
     .single();
 
   // If optional columns don't exist yet (pending migration), retry with only the core columns
-  if (error && (error.message.includes("visibility") || error.message.includes("external_url") || error.message.includes("enrollment_mode"))) {
+  if (error && (error.message.includes("visibility") || error.message.includes("external_url") || error.message.includes("language") || error.message.includes("enrollment_mode"))) {
     console.warn("[POST /courses] Optional column missing, retrying with core fields only:", error.message);
     const fallbackPayload = {
       title: coursePayload.title,
@@ -276,6 +281,7 @@ router.patch("/courses/:id", requireAuth, async (req, res): Promise<void> => {
   if (parsed.data.description !== undefined) updates.description = parsed.data.description;
   if (parsed.data.thumbnail !== undefined) updates.thumbnail = parsed.data.thumbnail;
   if (parsed.data.externalUrl !== undefined) updates.external_url = parsed.data.externalUrl;
+  if (parsed.data.language !== undefined) updates.language = parsed.data.language;
   if (parsed.data.visibility !== undefined) updates.visibility = parsed.data.visibility;
   if (parsed.data.enrollmentMode !== undefined) updates.enrollment_mode = parsed.data.enrollmentMode;
 
@@ -313,8 +319,10 @@ router.patch("/courses/:id", requireAuth, async (req, res): Promise<void> => {
 
   // If enrollment_mode column doesn't exist yet, retry without it
   let updateSucceeded = !updateError;
-  if (updateError && updateError.message.includes("enrollment_mode")) {
-    const { enrollment_mode: _omit, ...fallbackUpdates } = updates as Record<string, unknown> & { enrollment_mode?: unknown };
+  if (updateError && (updateError.message.includes("enrollment_mode") || updateError.message.includes("language"))) {
+    const fallbackUpdates = { ...updates };
+    if (updateError.message.includes("enrollment_mode")) delete fallbackUpdates.enrollment_mode;
+    if (updateError.message.includes("language")) delete fallbackUpdates.language;
     const { error: fallbackError } = await supabase.from("courses").update(fallbackUpdates).eq("id", id);
     updateSucceeded = !fallbackError;
   }

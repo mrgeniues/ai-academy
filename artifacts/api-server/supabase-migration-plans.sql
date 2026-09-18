@@ -4,6 +4,10 @@
 -- Safe to run multiple times — all statements use IF NOT EXISTS / IF EXISTS
 -- ================================================================
 
+-- ── COURSE LANGUAGE ───────────────────────────────────────────────
+-- Existing courses default to English; admins can change them to Hindi.
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'english';
+
 -- ── 0. USER PRESENCE SESSIONS ────────────────────────────────────
 -- Powers the admin live-user list and online/offline duration history.
 CREATE TABLE IF NOT EXISTS user_presence_sessions (

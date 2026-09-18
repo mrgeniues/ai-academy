@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CourseEnrollmentMode } from "./courseEnrollmentMode";
+import type { CourseLanguage } from "./courseLanguage";
 
 export interface Course {
   id: number;
@@ -14,6 +15,7 @@ export interface Course {
   description?: string | null;
   /** @nullable */
   thumbnail?: string | null;
+  language?: CourseLanguage;
   createdBy: number;
   createdAt: string;
   updatedAt: string;

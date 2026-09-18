@@ -75430,6 +75430,7 @@ var ListCoursesResponseItem = objectType({
   title: stringType(),
   description: stringType().nullish(),
   thumbnail: stringType().nullish(),
+  language: enumType(["english", "hindi"]).optional(),
   createdBy: numberType(),
   createdAt: stringType(),
   updatedAt: stringType(),
@@ -75441,7 +75442,8 @@ var ListCoursesResponse = arrayType(ListCoursesResponseItem);
 var CreateCourseBody = objectType({
   title: stringType(),
   description: stringType().nullish(),
-  thumbnail: stringType().nullish()
+  thumbnail: stringType().nullish(),
+  language: enumType(["english", "hindi"]).optional()
 });
 var GetCourseParams = objectType({
   id: coerce.number()
@@ -75451,6 +75453,7 @@ var GetCourseResponse = objectType({
   title: stringType(),
   description: stringType().nullish(),
   thumbnail: stringType().nullish(),
+  language: enumType(["english", "hindi"]).optional(),
   createdBy: numberType(),
   createdAt: stringType(),
   updatedAt: stringType(),
@@ -75476,13 +75479,15 @@ var UpdateCourseParams = objectType({
 var UpdateCourseBody = objectType({
   title: stringType().optional(),
   description: stringType().nullish(),
-  thumbnail: stringType().nullish()
+  thumbnail: stringType().nullish(),
+  language: enumType(["english", "hindi"]).optional()
 });
 var UpdateCourseResponse = objectType({
   id: numberType(),
   title: stringType(),
   description: stringType().nullish(),
   thumbnail: stringType().nullish(),
+  language: enumType(["english", "hindi"]).optional(),
   createdBy: numberType(),
   createdAt: stringType(),
   updatedAt: stringType(),
@@ -75547,6 +75552,7 @@ var ListMyEnrollmentsResponseItem = objectType({
     title: stringType(),
     description: stringType().nullish(),
     thumbnail: stringType().nullish(),
+    language: enumType(["english", "hindi"]).optional(),
     createdBy: numberType(),
     createdAt: stringType(),
     updatedAt: stringType(),
@@ -92206,6 +92212,7 @@ var CreateCourseBodyExtended = external_exports.object({
   description: external_exports.string().optional().nullable(),
   thumbnail: external_exports.string().optional().nullable(),
   externalUrl: external_exports.string().optional().nullable(),
+  language: external_exports.enum(["english", "hindi"]).default("english"),
   visibility: external_exports.enum(["public", "private"]).default("public"),
   enrollmentMode: external_exports.enum(["open", "approval_required"]).optional(),
   lessons: external_exports.array(external_exports.object({
@@ -92219,6 +92226,7 @@ var UpdateCourseBodyExtended = external_exports.object({
   description: external_exports.string().optional().nullable(),
   thumbnail: external_exports.string().optional().nullable(),
   externalUrl: external_exports.string().optional().nullable(),
+  language: external_exports.enum(["english", "hindi"]).optional(),
   visibility: external_exports.enum(["public", "private"]).optional(),
   enrollmentMode: external_exports.enum(["open", "approval_required"]).optional()
 });
@@ -92229,6 +92237,7 @@ function formatCourse(course, lessonCount, enrollmentCount) {
     description: course.description ?? null,
     thumbnail: course.thumbnail ?? null,
     externalUrl: course.external_url ?? null,
+    language: course.language ?? "english",
     visibility: course.visibility ?? "public",
     enrollmentMode: course.enrollment_mode ?? "approval_required",
     createdBy: course.created_by,
@@ -92274,7 +92283,7 @@ router6.post("/courses", requireAuth, async (req, res) => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { title, description, thumbnail, externalUrl, visibility, lessons } = parsed.data;
+  const { title, description, thumbnail, externalUrl, language, visibility, lessons } = parsed.data;
   const enrollmentMode = parsed.data.enrollmentMode ?? await getDefaultEnrollmentModeSetting();
   const coursePayload = {
     title,
@@ -92284,9 +92293,10 @@ router6.post("/courses", requireAuth, async (req, res) => {
   if (thumbnail != null) coursePayload.thumbnail = thumbnail;
   if (externalUrl != null) coursePayload.external_url = externalUrl;
   coursePayload.visibility = visibility;
+  coursePayload.language = language;
   coursePayload.enrollment_mode = enrollmentMode;
   let { data: course, error } = await supabase.from("courses").insert(coursePayload).select().single();
-  if (error && (error.message.includes("visibility") || error.message.includes("external_url") || error.message.includes("enrollment_mode"))) {
+  if (error && (error.message.includes("visibility") || error.message.includes("external_url") || error.message.includes("language") || error.message.includes("enrollment_mode"))) {
     console.warn("[POST /courses] Optional column missing, retrying with core fields only:", error.message);
     const fallbackPayload = {
       title: coursePayload.title,
@@ -92414,6 +92424,7 @@ router6.patch("/courses/:id", requireAuth, async (req, res) => {
   if (parsed.data.description !== void 0) updates.description = parsed.data.description;
   if (parsed.data.thumbnail !== void 0) updates.thumbnail = parsed.data.thumbnail;
   if (parsed.data.externalUrl !== void 0) updates.external_url = parsed.data.externalUrl;
+  if (parsed.data.language !== void 0) updates.language = parsed.data.language;
   if (parsed.data.visibility !== void 0) updates.visibility = parsed.data.visibility;
   if (parsed.data.enrollmentMode !== void 0) updates.enrollment_mode = parsed.data.enrollmentMode;
   const previousMode = existingCourse.enrollment_mode ?? "approval_required";
@@ -92434,8 +92445,10 @@ router6.patch("/courses/:id", requireAuth, async (req, res) => {
   }
   const { error: updateError } = await supabase.from("courses").update(updates).eq("id", id);
   let updateSucceeded = !updateError;
-  if (updateError && updateError.message.includes("enrollment_mode")) {
-    const { enrollment_mode: _omit, ...fallbackUpdates } = updates;
+  if (updateError && (updateError.message.includes("enrollment_mode") || updateError.message.includes("language"))) {
+    const fallbackUpdates = { ...updates };
+    if (updateError.message.includes("enrollment_mode")) delete fallbackUpdates.enrollment_mode;
+    if (updateError.message.includes("language")) delete fallbackUpdates.language;
     const { error: fallbackError } = await supabase.from("courses").update(fallbackUpdates).eq("id", id);
     updateSucceeded = !fallbackError;
   }

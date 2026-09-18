@@ -136,6 +136,14 @@ export interface UpdateRoleBody {
   role: string;
 }
 
+export type CourseLanguage =
+  (typeof CourseLanguage)[keyof typeof CourseLanguage];
+
+export const CourseLanguage = {
+  english: "english",
+  hindi: "hindi",
+} as const;
+
 export type CourseEnrollmentMode =
   (typeof CourseEnrollmentMode)[keyof typeof CourseEnrollmentMode];
 
@@ -151,6 +159,7 @@ export interface Course {
   description?: string | null;
   /** @nullable */
   thumbnail?: string | null;
+  language?: CourseLanguage;
   createdBy: number;
   createdAt: string;
   updatedAt: string;
@@ -158,6 +167,14 @@ export interface Course {
   enrollmentCount: number;
   enrollmentMode?: CourseEnrollmentMode;
 }
+
+export type CourseWithLessonsLanguage =
+  (typeof CourseWithLessonsLanguage)[keyof typeof CourseWithLessonsLanguage];
+
+export const CourseWithLessonsLanguage = {
+  english: "english",
+  hindi: "hindi",
+} as const;
 
 export interface Lesson {
   id: number;
@@ -178,6 +195,7 @@ export interface CourseWithLessons {
   description?: string | null;
   /** @nullable */
   thumbnail?: string | null;
+  language?: CourseWithLessonsLanguage;
   createdBy: number;
   createdAt: string;
   updatedAt: string;
@@ -189,13 +207,30 @@ export interface CourseWithLessons {
   progress?: number | null;
 }
 
+export type CreateCourseBodyLanguage =
+  (typeof CreateCourseBodyLanguage)[keyof typeof CreateCourseBodyLanguage];
+
+export const CreateCourseBodyLanguage = {
+  english: "english",
+  hindi: "hindi",
+} as const;
+
 export interface CreateCourseBody {
   title: string;
   /** @nullable */
   description?: string | null;
   /** @nullable */
   thumbnail?: string | null;
+  language?: CreateCourseBodyLanguage;
 }
+
+export type UpdateCourseBodyLanguage =
+  (typeof UpdateCourseBodyLanguage)[keyof typeof UpdateCourseBodyLanguage];
+
+export const UpdateCourseBodyLanguage = {
+  english: "english",
+  hindi: "hindi",
+} as const;
 
 export interface UpdateCourseBody {
   title?: string;
@@ -203,6 +238,7 @@ export interface UpdateCourseBody {
   description?: string | null;
   /** @nullable */
   thumbnail?: string | null;
+  language?: UpdateCourseBodyLanguage;
 }
 
 export interface CreateLessonBody {

@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS courses (
   description TEXT,
   thumbnail TEXT,
   external_url TEXT,
+  language TEXT NOT NULL DEFAULT 'english',
   visibility TEXT NOT NULL DEFAULT 'public',
   created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -208,6 +209,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS theme TEXT NOT NULL DEFAULT 'light';
 -- ============================================================
 ALTER TABLE courses ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'public';
 ALTER TABLE courses ADD COLUMN IF NOT EXISTS external_url TEXT;
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'english';
 
 -- ============================================================
 -- Enrollment mode column (open = auto-approved, approval_required = needs admin)
